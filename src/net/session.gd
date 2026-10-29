@@ -14,6 +14,8 @@ enum Mode { NONE, SINGLE, HOST, CLIENT }
 
 const DEFAULT_PORT := 47820
 const MAX_PLAYERS := 3
+## 죽은 뒤 되살아나기까지의 시간(초). 저장 시스템(M6)이 생기면 사망 처리를 다시 정한다.
+const RESPAWN_DELAY := 3.0
 const PLAYER_SCENE := preload("res://src/player/player.tscn")
 
 @export var zone_scene: PackedScene = preload("res://src/zones/test_range/test_range.tscn")
@@ -141,9 +143,25 @@ func _spawn_player(data: Variant) -> Node:
 	var player := PLAYER_SCENE.instantiate() as Player
 	player.name = str(peer_id)
 	player.set_multiplayer_authority(peer_id)
+	# 체력은 호스트가 판정하므로, 체력과 그 동기화만 호스트 권한으로 되돌린다.
+	player.get_node("Health").set_multiplayer_authority(1)
+	player.get_node("HealthSync").set_multiplayer_authority(1)
 	player.position = info["position"]
 	player.use_device_input = use_device_input
+	var health := player.get_node("Health") as Health
+	health.died.connect(func(_info: DamageInfo) -> void: _on_player_died(peer_id))
 	return player
+
+
+func _on_player_died(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	await get_tree().create_timer(RESPAWN_DELAY, false).timeout
+	var player := get_player(peer_id)
+	if player == null or mode == Mode.NONE:
+		return
+	player.respawn_at.rpc_id(peer_id, _next_spawn_position())
+	player.health.revive()
 
 
 func _on_spawned(node: Node) -> void:

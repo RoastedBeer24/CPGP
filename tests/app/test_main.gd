@@ -68,3 +68,13 @@ func test_invalid_join_address_shows_error() -> void:
 	assert_eq(main.session, null)
 	assert_true(main.menu.visible)
 	assert_ne(main.menu.status_label.text, "", "오류 메시지가 보여야 함")
+
+
+func test_hud_shows_health_and_weapon() -> void:
+	main.start_session(Session.Mode.SINGLE)
+	await tree.process_frame
+	await tree.process_frame
+	assert_eq(main.hud.health_label.text, "100")
+	assert_eq(main.hud.ammo_label.text, "12 / 12")
+	assert_eq(main.hud.weapon_label.text, "1  권총")
+	assert_false(main.hud.death_overlay.visible)

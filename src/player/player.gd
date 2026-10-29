@@ -1,14 +1,26 @@
 class_name Player
 extends CharacterBody3D
-## 1인칭 플레이어. 걷기, 달리기, 웅크리기, 슬라이딩, 점프, 턱 오르기를 처리한다.
+## 1인칭 플레이어. 걷기, 달리기, 웅크리기, 슬라이딩, 점프, 턱 오르기, 회피를 처리하고,
+## 무기(WeaponHolder)와 체력(Health)을 가진다. 체력은 호스트가 관리한다.
 ##
 ## 네트워크: 이 플레이어를 조종하는 피어(멀티플레이 권한자)만 이동을 계산한다.
 ## 다른 피어에서는 MultiplayerSynchronizer가 위치와 시점을 받아 보여 주기만 한다.
 ## 이동은 반응성을 위해 각자 계산하고, 피해·AI 같은 결과 판정은 호스트가 맡는다.
 
 signal mantled
+signal dodged
 
-enum State { GROUND, AIR, SLIDE, MANTLE }
+enum State { GROUND, AIR, SLIDE, MANTLE, DODGE }
+
+## 모든 플레이어가 들어가는 그룹. 적이 목표를 찾을 때 쓴다.
+const GROUP := &"players"
+
+const MOVE_ACTIONS := {
+	&"move_forward": Vector2(0, 1),
+	&"move_back": Vector2(0, -1),
+	&"move_left": Vector2(-1, 0),
+	&"move_right": Vector2(1, 0),
+}
 
 @export var config: MovementConfig = preload("res://data/player/default_movement.tres")
 ## false면 키보드·마우스를 읽지 않는다. 테스트나 원격 플레이어용.
@@ -28,20 +40,33 @@ var _mantle_from := Vector3.ZERO
 var _mantle_to := Vector3.ZERO
 var _mantle_elapsed := 0.0
 var _mantle_duration := 0.0
+var _dodge_time := 0.0
+var _dodge_cooldown := 0.0
+var _last_tap_msec: Dictionary = {}
+var _pending_dodge := Vector2.ZERO
+var _pending_cycle := 0
 
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
 @onready var collision: CollisionShape3D = $CollisionShape3D
 @onready var body_mesh: Node3D = $Body
 @onready var _capsule: CapsuleShape3D = collision.shape
+@onready var health: Health = $Health
+@onready var weapons: WeaponHolder = $Head/WeaponHolder
+@onready var head_hitbox: Hitbox = $HeadHitbox
+@onready var body_hitbox: Hitbox = $BodyHitbox
+@onready var _body_hitbox_shape: CapsuleShape3D = ($BodyHitbox/Shape as CollisionShape3D).shape
 
 
 func _ready() -> void:
+	add_to_group(GROUP)
 	var local := is_multiplayer_authority()
 	camera.current = local and use_device_input
 	# 1인칭이므로 자기 몸은 안 보이게 하고, 다른 사람 눈에만 보이게 한다.
 	body_mesh.visible = not local
 	camera.fov = config.base_fov
+	health.died.connect(_on_died)
+	health.revived.connect(_on_revived)
 	_apply_crouch_shape()
 
 
@@ -53,6 +78,28 @@ func _unhandled_input(event: InputEvent) -> void:
 	var motion := event as InputEventMouseMotion
 	if motion != null:
 		look(motion.relative * config.mouse_sensitivity)
+		return
+	if event.is_action_pressed(InputActions.WEAPON_NEXT):
+		_pending_cycle += 1
+	elif event.is_action_pressed(InputActions.WEAPON_PREV):
+		_pending_cycle -= 1
+	_detect_double_tap(event)
+
+
+## 같은 방향키를 짧은 간격으로 두 번 누르면 그 방향으로 회피한다 (사이버펑크 2077 방식).
+func _detect_double_tap(event: InputEvent) -> void:
+	if event.is_echo() or not event.is_pressed():
+		return
+	for action: StringName in MOVE_ACTIONS:
+		if not event.is_action(action):
+			continue
+		var now := Time.get_ticks_msec()
+		var last: int = _last_tap_msec.get(action, -100000)
+		if now - last <= int(config.dodge_double_tap_window * 1000.0):
+			_pending_dodge = MOVE_ACTIONS[action]
+			_last_tap_msec[action] = -100000
+		else:
+			_last_tap_msec[action] = now
 
 
 ## 시점을 돌린다. x는 좌우(라디안), y는 상하(라디안).
@@ -71,27 +118,39 @@ func _physics_process(delta: float) -> void:
 	if not is_multiplayer_authority():
 		return
 	var intent := _read_intent()
+	if not health.is_alive():
+		intent = PlayerIntent.new()
+	# 쏘거나 조준하면 달리기가 풀린다.
+	if intent.fire_held or intent.aim_held:
+		intent.sprint = false
 
 	if state == State.MANTLE:
 		_process_mantle(delta)
+		weapons.tick(delta, intent, false)
 		return
 
 	_update_timers(delta, intent)
 	_update_crouch(intent, delta)
+	if intent.dodge != Vector2.ZERO:
+		_try_dodge(intent.dodge)
 
 	match state:
 		State.SLIDE:
 			_process_slide(delta, intent)
+		State.DODGE:
+			_process_dodge(delta)
 		_:
 			_process_walk(delta, intent)
 
 	move_and_slide()
 
-	if state != State.SLIDE:
+	if state != State.SLIDE and state != State.DODGE:
 		state = State.GROUND if is_on_floor() else State.AIR
 	if state == State.AIR and intent.jump_held and intent.move.y > 0.3:
 		_try_mantle()
 
+	var sprinting := intent.sprint and intent.move.y > 0.3 and not crouched
+	weapons.tick(delta, intent, health.is_alive() and not sprinting)
 	_update_fov(delta, intent)
 
 
@@ -116,21 +175,21 @@ func can_stand() -> bool:
 
 func _read_intent() -> PlayerIntent:
 	if intent_override != null:
-		var copy := PlayerIntent.new()
-		copy.move = intent_override.move
-		copy.sprint = intent_override.sprint
-		copy.jump_held = intent_override.jump_held
-		copy.jump_pressed = intent_override.jump_pressed
-		copy.crouch_held = intent_override.crouch_held
-		copy.crouch_pressed = intent_override.crouch_pressed
+		var copied := intent_override.copy()
 		intent_override.consume_edges()
-		return copy
-	if use_device_input:
-		return PlayerIntent.from_device()
-	return PlayerIntent.new()
+		return copied
+	if not use_device_input:
+		return PlayerIntent.new()
+	var intent := PlayerIntent.from_device()
+	intent.dodge = _pending_dodge
+	intent.weapon_cycle = signi(_pending_cycle)
+	_pending_dodge = Vector2.ZERO
+	_pending_cycle = 0
+	return intent
 
 
 func _update_timers(delta: float, intent: PlayerIntent) -> void:
+	_dodge_cooldown = maxf(_dodge_cooldown - delta, 0.0)
 	_time_since_floor = 0.0 if is_on_floor() else _time_since_floor + delta
 	_jump_buffer = config.jump_buffer_time if intent.jump_pressed else maxf(_jump_buffer - delta, 0.0)
 
@@ -174,6 +233,11 @@ func _apply_crouch_shape() -> void:
 	head.position.y = lerpf(config.stand_eye_height, config.crouch_eye_height, crouch_blend)
 	body_mesh.scale.y = height / config.stand_height
 	body_mesh.position.y = height * 0.5
+	# 피격 판정: 머리는 눈높이에, 몸통은 머리 아래를 채운다.
+	head_hitbox.position.y = head.position.y
+	var body_height := maxf(head.position.y - 0.15, 0.6)
+	_body_hitbox_shape.height = body_height
+	body_hitbox.position.y = body_height * 0.5
 
 
 func _process_walk(delta: float, intent: PlayerIntent) -> void:
@@ -251,11 +315,65 @@ func _wish_direction(intent: PlayerIntent) -> Vector3:
 
 
 func _target_speed(intent: PlayerIntent) -> float:
+	var speed := config.walk_speed
 	if crouched:
-		return config.crouch_speed
-	if intent.sprint and intent.move.y > 0.3:
-		return config.sprint_speed
-	return config.walk_speed
+		speed = config.crouch_speed
+	elif intent.sprint and intent.move.y > 0.3:
+		speed = config.sprint_speed
+	if weapons.aiming:
+		speed *= config.aim_speed_multiplier
+	return speed
+
+
+## 지면에서 지정한 방향(로컬, 앞이 +y)으로 짧게 돌진한다.
+func _try_dodge(direction: Vector2) -> bool:
+	if _dodge_cooldown > 0.0 or not is_on_floor() or state == State.SLIDE or state == State.DODGE:
+		return false
+	var world_direction := (global_basis * Vector3(direction.x, 0.0, -direction.y)).normalized()
+	velocity.x = world_direction.x * config.dodge_speed
+	velocity.z = world_direction.z * config.dodge_speed
+	state = State.DODGE
+	_dodge_time = 0.0
+	_dodge_cooldown = config.dodge_cooldown
+	dodged.emit()
+	return true
+
+
+func _process_dodge(delta: float) -> void:
+	_dodge_time += delta
+	if not is_on_floor():
+		velocity.y -= config.gravity * delta
+	if _dodge_time >= config.dodge_duration:
+		state = State.GROUND if is_on_floor() else State.AIR
+		var horizontal := Vector3(velocity.x, 0.0, velocity.z).limit_length(config.walk_speed)
+		velocity.x = horizontal.x
+		velocity.z = horizontal.z
+
+
+## 호스트가 부활 위치로 옮길 때 부른다.
+@rpc("any_peer", "call_local", "reliable")
+func respawn_at(spawn_position: Vector3) -> void:
+	if multiplayer.get_remote_sender_id() != 1:
+		return
+	global_position = spawn_position
+	velocity = Vector3.ZERO
+	state = State.GROUND
+	crouched = false
+
+
+func _on_died(_info: DamageInfo) -> void:
+	if not is_multiplayer_authority():
+		body_mesh.visible = false
+	# 죽은 뒤에는 맞지 않는다. 몸 충돌은 남겨 둬야 바닥 아래로 떨어지지 않는다.
+	head_hitbox.set_deferred("collision_layer", 0)
+	body_hitbox.set_deferred("collision_layer", 0)
+
+
+func _on_revived() -> void:
+	if not is_multiplayer_authority():
+		body_mesh.visible = true
+	head_hitbox.set_deferred("collision_layer", Hitbox.LAYER)
+	body_hitbox.set_deferred("collision_layer", Hitbox.LAYER)
 
 
 ## 앞쪽에 오를 수 있는 턱이 있으면 턱 오르기를 시작한다.
@@ -334,7 +452,9 @@ func _raycast(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> D
 
 func _update_fov(delta: float, intent: PlayerIntent) -> void:
 	var target := config.base_fov
-	if state == State.SLIDE:
+	if weapons.aiming:
+		target = weapons.current_weapon().aim_fov
+	elif state == State.SLIDE:
 		target += config.slide_fov_bonus
 	elif intent.sprint and horizontal_speed() > config.walk_speed + 0.5:
 		target += config.sprint_fov_bonus

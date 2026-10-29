@@ -49,6 +49,17 @@ extends Resource
 @export var mantle_base_duration := 0.22
 @export var mantle_duration_per_meter := 0.12
 
+@export_group("회피")
+## 같은 방향키를 이 시간(초) 안에 두 번 누르면 회피
+@export var dodge_double_tap_window := 0.25
+@export var dodge_speed := 11.0
+@export var dodge_duration := 0.18
+@export var dodge_cooldown := 0.9
+
+@export_group("전투 중 이동")
+## 조준 중 이동 속도 배율
+@export var aim_speed_multiplier := 0.6
+
 @export_group("시점")
 @export var mouse_sensitivity := 0.0025
 @export var base_fov := 80.0

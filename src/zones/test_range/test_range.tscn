@@ -1,4 +1,7 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="PackedScene" path="res://src/enemies/training_dummy.tscn" id="dummy"]
+[ext_resource type="PackedScene" path="res://src/enemies/grunt.tscn" id="grunt"]
 
 [sub_resource type="StandardMaterial3D" id="mat_floor"]
 albedo_color = Color(0.26, 0.27, 0.32, 1)
@@ -370,3 +373,95 @@ transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 14, 5, -9.75)
 light_color = Color(0.1, 0.9, 1, 1)
 light_energy = 3.0
 omni_range = 14.0
+
+[node name="ShootingRange" type="Node3D" parent="."]
+
+[node name="FiringLine" type="CSGBox3D" parent="ShootingRange"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -4, 0.01, 13)
+size = Vector3(14, 0.02, 0.15)
+material = SubResource("mat_neon_cyan")
+
+[node name="RangeLabel" type="Label3D" parent="ShootingRange"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -4, 2.6, 13)
+billboard = 1
+font_size = 110
+outline_size = 8
+text = "사격장"
+
+[node name="Dummy1" parent="ShootingRange" instance=ExtResource("dummy")]
+transform = Transform3D(-1, 0, 1.22465e-16, 0, 1, -0, -1.22465e-16, -0, -1, -9, 0, 18)
+
+[node name="DistLabel1" type="Label3D" parent="ShootingRange"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -9, 2.9, 18)
+billboard = 1
+font_size = 80
+outline_size = 8
+text = "5m"
+
+[node name="Dummy2" parent="ShootingRange" instance=ExtResource("dummy")]
+transform = Transform3D(-1, 0, 1.22465e-16, 0, 1, -0, -1.22465e-16, -0, -1, -5, 0, 23)
+
+[node name="DistLabel2" type="Label3D" parent="ShootingRange"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -5, 2.9, 23)
+billboard = 1
+font_size = 80
+outline_size = 8
+text = "10m"
+
+[node name="Dummy3" parent="ShootingRange" instance=ExtResource("dummy")]
+transform = Transform3D(-1, 0, 1.22465e-16, 0, 1, -0, -1.22465e-16, -0, -1, -1, 0, 28)
+
+[node name="DistLabel3" type="Label3D" parent="ShootingRange"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -1, 2.9, 28)
+billboard = 1
+font_size = 80
+outline_size = 8
+text = "15m"
+
+[node name="Dummy4" parent="ShootingRange" instance=ExtResource("dummy")]
+transform = Transform3D(-1, 0, 1.22465e-16, 0, 1, -0, -1.22465e-16, -0, -1, 2, 0, 19)
+armor = 100.0
+
+[node name="DistLabel4" type="Label3D" parent="ShootingRange"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 2, 2.9, 19)
+billboard = 1
+font_size = 80
+outline_size = 8
+text = "6m 장갑"
+
+[node name="Arena" type="Node3D" parent="."]
+
+[node name="ArenaLabel" type="Label3D" parent="Arena"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 17, 3.2, 12)
+billboard = 1
+font_size = 110
+outline_size = 8
+text = "경비병 구역"
+
+[node name="Grunt1" parent="Arena" instance=ExtResource("grunt")]
+transform = Transform3D(-0.707107, 0, 0.707107, 0, 1, -0, -0.707107, -0, -0.707107, 22, 0, 22)
+respawn_delay = 10.0
+sight_range = 15.0
+
+[node name="Grunt2" parent="Arena" instance=ExtResource("grunt")]
+transform = Transform3D(-0.707107, 0, 0.707107, 0, 1, -0, -0.707107, -0, -0.707107, 26, 0, 18)
+respawn_delay = 10.0
+sight_range = 15.0
+
+[node name="ArenaCover1" type="CSGBox3D" parent="Arena"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 19, 0.55, 16)
+use_collision = true
+size = Vector3(3, 1.1, 1)
+material = SubResource("mat_cover")
+
+[node name="ArenaCover2" type="CSGBox3D" parent="Arena"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 23, 1, 14)
+use_collision = true
+size = Vector3(1, 2.0, 1)
+material = SubResource("mat_cover")
+
+[node name="ArenaCover3" type="CSGBox3D" parent="Arena"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 16, 0.8, 20)
+use_collision = true
+size = Vector3(1, 1.6, 1)
+material = SubResource("mat_cover")

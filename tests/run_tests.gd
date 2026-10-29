@@ -100,9 +100,9 @@ func _run_test(script: GDScript, path: String, method_name: String) -> void:
 
 	test.tree = self
 	_capture.take()
-	test.before_each()
+	await test.before_each()
 	await test.call(method_name)
-	test.after_each()
+	await test.after_each()
 	test.free_autofree_nodes()
 	await process_frame
 

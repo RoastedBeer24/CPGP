@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/combat/weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"shotgun"
+display_name = "산탄총"
+damage = 12.0
+headshot_multiplier = 1.5
+falloff_start = 6.0
+falloff_min_ratio = 0.2
+max_range = 30.0
+pellets = 9
+spread_degrees = 5.5
+aim_spread_ratio = 0.7
+fire_interval = 0.8
+magazine_size = 6
+reload_time = 2.2
+recoil_pitch = 5.0
+recoil_yaw = 1.2
+recoil_recovery = 0.5
+aim_fov = 65.0

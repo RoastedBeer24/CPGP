@@ -11,6 +11,14 @@ const SPRINT := &"sprint"
 const CROUCH := &"crouch"
 const PAUSE := &"pause"
 const DEBUG_OVERLAY := &"debug_overlay"
+const FIRE := &"fire"
+const AIM := &"aim"
+const RELOAD := &"reload"
+const WEAPON_1 := &"weapon_1"
+const WEAPON_2 := &"weapon_2"
+const WEAPON_3 := &"weapon_3"
+const WEAPON_NEXT := &"weapon_next"
+const WEAPON_PREV := &"weapon_prev"
 
 const DEFAULT_KEYS := {
 	MOVE_FORWARD: [KEY_W],
@@ -22,6 +30,17 @@ const DEFAULT_KEYS := {
 	CROUCH: [KEY_CTRL, KEY_C],
 	PAUSE: [KEY_ESCAPE],
 	DEBUG_OVERLAY: [KEY_F3],
+	RELOAD: [KEY_R],
+	WEAPON_1: [KEY_1],
+	WEAPON_2: [KEY_2],
+	WEAPON_3: [KEY_3],
+}
+
+const DEFAULT_MOUSE_BUTTONS := {
+	FIRE: [MOUSE_BUTTON_LEFT],
+	AIM: [MOUSE_BUTTON_RIGHT],
+	WEAPON_NEXT: [MOUSE_BUTTON_WHEEL_DOWN],
+	WEAPON_PREV: [MOUSE_BUTTON_WHEEL_UP],
 }
 
 
@@ -38,4 +57,12 @@ static func register_defaults() -> void:
 		for keycode: Key in DEFAULT_KEYS[action]:
 			var event := InputEventKey.new()
 			event.physical_keycode = keycode
+			InputMap.action_add_event(action, event)
+	for action: StringName in DEFAULT_MOUSE_BUTTONS:
+		if InputMap.has_action(action):
+			continue
+		InputMap.add_action(action)
+		for button: MouseButton in DEFAULT_MOUSE_BUTTONS[action]:
+			var event := InputEventMouseButton.new()
+			event.button_index = button
 			InputMap.action_add_event(action, event)

@@ -12,7 +12,7 @@ var _failures: PackedStringArray = []
 var _autofree_nodes: Array[Node] = []
 
 
-## 각 테스트 직전에 호출된다.
+## 각 테스트 직전에 호출된다. 안에서 await를 써도 끝날 때까지 기다린 뒤 테스트를 시작한다.
 func before_each() -> void:
 	pass
 
