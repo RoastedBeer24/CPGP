@@ -1,0 +1,6 @@
+# Godot 캐시와 임시 파일
+.godot/
+/android/
+
+# 내보내기 결과물
+/build/
