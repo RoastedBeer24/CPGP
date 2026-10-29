@@ -74,6 +74,7 @@ func test_enemy_spawns_in_tree() -> void:
 godot --path . -- --single                # 혼자 하기
 godot --path . -- --host                  # 방 만들기
 godot --path . -- --join=192.168.0.12     # 참여하기
+godot --path . -- --single --third-person # 3인칭으로 시작 (다른 옵션과 함께 씀)
 ```
 한 PC에서 창 두 개로 코옵을 시험하려면 한 창은 `--host`, 다른 창은 `--join=127.0.0.1`로 띄웁니다.
 
@@ -82,6 +83,7 @@ godot --path . -- --join=192.168.0.12     # 참여하기
 tools/screenshot.sh                                   # 메인 씬
 tools/screenshot.sh res://src/boot/main.tscn 30 build/screenshots/boot.png
 tools/screenshot.sh "" 30 build/screenshots/game.png --single   # 4번째 인자부터는 게임 옵션
+tools/screenshot.sh "" 90 build/screenshots/tp.png --single --third-person   # 3인칭 화면
 ```
 - 가상 화면(Xvfb)에서 씬을 정해진 프레임 수만큼 실행하고, 마지막 프레임을 PNG로 저장합니다.
 - GPU가 없는 환경에서는 OpenGL(Compatibility) 렌더러로 대체됩니다. 배치와 UI는 확인할 수 있지만, 조명과 후처리는 실제 PC 화면과 다를 수 있습니다.

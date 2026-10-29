@@ -1,10 +1,11 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://src/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://src/combat/health.gd" id="2_health"]
 [ext_resource type="Script" path="res://src/combat/hitbox.gd" id="3_hitbox"]
 [ext_resource type="Script" path="res://src/combat/weapon_holder.gd" id="4_weapons"]
 [ext_resource type="Script" path="res://src/combat/viewmodel.gd" id="5_viewmodel"]
+[ext_resource type="Script" path="res://src/player/player_body.gd" id="6_body"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
 resource_local_to_scene = true
@@ -42,6 +43,9 @@ properties/2/replication_mode = 1
 properties/3/path = NodePath(".:crouch_blend")
 properties/3/spawn = true
 properties/3/replication_mode = 1
+properties/4/path = NodePath("Head/WeaponHolder:current_index")
+properties/4/spawn = true
+properties/4/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_health"]
 properties/0/path = NodePath("Health:current")
@@ -49,6 +53,9 @@ properties/0/spawn = true
 properties/0/replication_mode = 2
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_head"]
+radius = 0.2
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_camera"]
 radius = 0.2
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_hitbox"]
@@ -66,18 +73,26 @@ script = ExtResource("1_player")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 shape = SubResource("CapsuleShape3D_body")
 
-[node name="Body" type="MeshInstance3D" parent="."]
+[node name="Body" type="Node3D" parent="."]
+script = ExtResource("6_body")
+
+[node name="Placeholder" type="MeshInstance3D" parent="Body"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 mesh = SubResource("CapsuleMesh_body")
 
-[node name="Visor" type="MeshInstance3D" parent="Body"]
+[node name="Visor" type="MeshInstance3D" parent="Body/Placeholder"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, -0.28)
 mesh = SubResource("BoxMesh_visor")
 
 [node name="Head" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 
-[node name="Camera3D" type="Camera3D" parent="Head"]
+[node name="CameraArm" type="SpringArm3D" parent="Head"]
+collision_mask = 1
+shape = SubResource("SphereShape3D_camera")
+spring_length = 0.0
+
+[node name="Camera3D" type="Camera3D" parent="Head/CameraArm"]
 fov = 80.0
 
 [node name="Synchronizer" type="MultiplayerSynchronizer" parent="."]

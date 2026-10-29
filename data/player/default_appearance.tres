@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="CharacterAppearance" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/player/character_appearance.gd" id="1_appearance"]
+
+[resource]
+script = ExtResource("1_appearance")
+model_path = "res://assets/characters/endministrator_f/endministrator_f.glb"

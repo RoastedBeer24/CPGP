@@ -28,6 +28,7 @@
 | M0 기반 | 완료 | Godot 프로젝트, 테스트 러너, 도구 스크립트 |
 | M1 이동 + 네트워크 | 완료 | 1인칭 이동, 시험장, 싱글·LAN 코옵(최대 3명), 메뉴 |
 | M2 전투 기초 | 완료 | 무기 3종, 체력·장갑, 허수아비, 단순한 경비병, 전투 HUD, 사망·부활 |
+| 3인칭과 캐릭터 모델 | 완료 | V로 1인칭/3인칭 전환, 캐릭터 모델에 코드로 만든 자세, 든 무기 동기화 (`docs/dev/review/third-person.md`) |
 | **M3 적 AI와 잠입** | **다음 작업** | 아래 계획 참고 |
 | M4 해킹 ~ M8 폴리싱 | 예정 | 구상서 §9 |
 
@@ -51,7 +52,7 @@ tools/test.sh weapons         # 이름에 weapons가 들어간 테스트만
 tools/screenshot.sh "" 40 build/screenshots/game.png --single   # 게임 화면 캡처
 tools/export_windows.sh       # build/CyberUniverse-windows.zip 생성
 python3 tools/gen_test_range.py   # 그레이박스 시험장 씬 다시 생성
-godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --join=주소)
+godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --join=주소, --third-person)
 ```
 - 푸시하면 GitHub Actions(`.github/workflows/build.yml`)가 테스트를 돌리고 Windows 실행 파일을 Artifacts로 올린다.
 
@@ -71,3 +72,6 @@ godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --joi
 - **tscn의 Transform3D:** 기저 행렬은 행 우선으로 적는다. 생성 스크립트에서 한 번 전치 실수를 했다.
 - **피격 판정:** 물리 레이어 1 world, 2 character, 3 hitbox. 총알은 world와 hitbox만 맞고, 같은 팀의 Hitbox는 통과한다.
 - **죽었을 때:** 몸 충돌을 끄면 바닥 아래로 떨어진다. Hitbox의 collision_layer만 0으로 만든다.
+- **저장소에 없는 캐릭터 모델:** `assets/characters/endministrator_f/`는 재배포 불가라 gitignore 대상이다(`docs/assets.md`). CI와 다른 PC에는 없으므로, 모델이 필요한 테스트는 `has_model`이 false면 건너뛰고, 모델 없이도 전체 테스트가 통과해야 한다. `data/player/default_appearance.tres`의 경로를 잠시 바꿔서 확인한다.
+- **조준 판정:** 무기는 `player.camera`가 아니라 `aim_origin()`/`aim_direction()`을 쓴다. 3인칭 카메라 위치에서 쏘면 캐릭터 뒤의 물체를 맞힌다.
+- **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped, 뼈대 공간은 Z가 위)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.

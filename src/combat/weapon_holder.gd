@@ -122,8 +122,8 @@ func _fire(weapon: WeaponData) -> void:
 	_ammo[current_index] -= 1
 	ammo_changed.emit(_ammo[current_index], weapon.magazine_size)
 
-	var origin := player.camera.global_position
-	var direction := -player.camera.global_basis.z
+	var origin := player.aim_origin()
+	var direction := player.aim_direction()
 	var spread := weapon.spread_degrees * (weapon.aim_spread_ratio if aiming else 1.0)
 	_shot_counter += 1
 	var shot_seed := hash([multiplayer.get_unique_id(), _shot_counter, Time.get_ticks_usec()])
@@ -131,7 +131,7 @@ func _fire(weapon: WeaponData) -> void:
 	# 효과는 바로 보여 주고, 판정은 호스트에 맡긴다.
 	var ends := _trace_pellets(origin, direction, weapon, spread, shot_seed)
 	viewmodel.play_fire(weapon)
-	_spawn_tracers(viewmodel.muzzle_position(), ends)
+	_spawn_tracers(viewmodel.muzzle_position() if viewmodel.visible else muzzle_for_others(origin, direction), ends)
 	_kick(weapon)
 	fired.emit(weapon)
 	_host_fire.rpc_id(1, current_index, origin, direction, spread, shot_seed)
@@ -141,7 +141,7 @@ func _attack_melee(weapon: WeaponData) -> void:
 	_cooldown = weapon.fire_interval
 	viewmodel.play_swing()
 	fired.emit(weapon)
-	_host_melee.rpc_id(1, current_index, player.camera.global_position, -player.camera.global_basis.z)
+	_host_melee.rpc_id(1, current_index, player.aim_origin(), player.aim_direction())
 
 
 func _kick(weapon: WeaponData) -> void:
@@ -256,8 +256,11 @@ func _sender_is_owner() -> bool:
 	return sender == get_multiplayer_authority()
 
 
-## 다른 피어에서 보이는 탄 궤적의 시작점. 1인칭 무기 모델은 본인에게만 있으므로 눈앞에서 시작한다.
+## 다른 피어와 3인칭에서 보이는 탄 궤적의 시작점. 몸 모델이 든 총의 총구에서 시작하고,
+## 몸 모델이 없으면(캡슐 몸) 눈앞에서 시작한다. 1인칭 무기 모델은 본인에게만 있다.
 func muzzle_for_others(origin: Vector3, direction: Vector3) -> Vector3:
+	if player.body.has_muzzle():
+		return player.body.muzzle_position()
 	return origin + direction * 0.6 + Vector3.DOWN * 0.25
 
 

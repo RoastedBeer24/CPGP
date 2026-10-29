@@ -1,7 +1,8 @@
 class_name Player
 extends CharacterBody3D
-## 1인칭 플레이어. 걷기, 달리기, 웅크리기, 슬라이딩, 점프, 턱 오르기, 회피를 처리하고,
+## 플레이어. 걷기, 달리기, 웅크리기, 슬라이딩, 점프, 턱 오르기, 회피를 처리하고,
 ## 무기(WeaponHolder)와 체력(Health)을 가진다. 체력은 호스트가 관리한다.
+## 기본은 1인칭이고, V로 어깨 너머 3인칭과 바꿀 수 있다. 시점은 각자 화면에만 적용된다.
 ##
 ## 네트워크: 이 플레이어를 조종하는 피어(멀티플레이 권한자)만 이동을 계산한다.
 ## 다른 피어에서는 MultiplayerSynchronizer가 위치와 시점을 받아 보여 주기만 한다.
@@ -9,6 +10,7 @@ extends CharacterBody3D
 
 signal mantled
 signal dodged
+signal camera_mode_changed(third_person: bool)
 
 enum State { GROUND, AIR, SLIDE, MANTLE, DODGE }
 
@@ -22,6 +24,9 @@ const MOVE_ACTIONS := {
 	&"move_right": Vector2(1, 0),
 }
 
+## 3인칭 조준점을 찾을 때 카메라에서 쏘는 광선의 길이(m)
+const AIM_PROBE_RANGE := 200.0
+
 @export var config: MovementConfig = preload("res://data/player/default_movement.tres")
 ## false면 키보드·마우스를 읽지 않는다. 테스트나 원격 플레이어용.
 @export var use_device_input := true
@@ -30,6 +35,10 @@ var state := State.GROUND
 var crouched := false
 ## 0이면 선 자세, 1이면 웅크린 자세. 원격 피어에도 동기화된다.
 var crouch_blend := 0.0
+## true면 어깨 너머 3인칭. 조종하는 피어의 화면에만 영향을 주므로 동기화하지 않는다.
+var third_person := false
+## 0이면 1인칭, 1이면 3인칭 카메라 위치. 전환할 때 부드럽게 움직인다.
+var camera_blend := 0.0
 ## 테스트에서 입력을 직접 넣을 때 쓴다. 설정되어 있으면 장치 입력 대신 이것을 읽는다.
 var intent_override: PlayerIntent
 
@@ -47,9 +56,10 @@ var _pending_dodge := Vector2.ZERO
 var _pending_cycle := 0
 
 @onready var head: Node3D = $Head
-@onready var camera: Camera3D = $Head/Camera3D
+@onready var camera_arm: SpringArm3D = $Head/CameraArm
+@onready var camera: Camera3D = $Head/CameraArm/Camera3D
 @onready var collision: CollisionShape3D = $CollisionShape3D
-@onready var body_mesh: Node3D = $Body
+@onready var body: PlayerBody = $Body
 @onready var _capsule: CapsuleShape3D = collision.shape
 @onready var health: Health = $Health
 @onready var weapons: WeaponHolder = $Head/WeaponHolder
@@ -62,12 +72,13 @@ func _ready() -> void:
 	add_to_group(GROUP)
 	var local := is_multiplayer_authority()
 	camera.current = local and use_device_input
-	# 1인칭이므로 자기 몸은 안 보이게 하고, 다른 사람 눈에만 보이게 한다.
-	body_mesh.visible = not local
 	camera.fov = config.base_fov
+	# 3인칭 카메라가 내 몸에 걸려 당겨지지 않게 한다.
+	camera_arm.add_excluded_object(get_rid())
 	health.died.connect(_on_died)
 	health.revived.connect(_on_revived)
 	_apply_crouch_shape()
+	_apply_view()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -78,6 +89,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	var motion := event as InputEventMouseMotion
 	if motion != null:
 		look(motion.relative * config.mouse_sensitivity)
+		return
+	if event.is_action_pressed(InputActions.CAMERA_TOGGLE):
+		set_third_person(not third_person)
 		return
 	if event.is_action_pressed(InputActions.WEAPON_NEXT):
 		_pending_cycle += 1
@@ -108,10 +122,65 @@ func look(delta_radians: Vector2) -> void:
 	head.rotation.x = clampf(head.rotation.x - delta_radians.y, deg_to_rad(-89.0), deg_to_rad(89.0))
 
 
-func _process(_delta: float) -> void:
+## 1인칭과 3인칭을 바꾼다. 내 화면에서만 바뀌고 다른 사람에게는 영향이 없다.
+func set_third_person(enabled: bool) -> void:
+	if third_person == enabled:
+		return
+	third_person = enabled
+	_apply_view()
+	camera_mode_changed.emit(third_person)
+
+
+## 공격 판정의 시작점. 시점과 관계없이 눈에서 쏜다. 3인칭 카메라 위치에서 쏘면
+## 캐릭터 뒤의 물체에 맞거나, 캐릭터가 볼 수 없는 곳을 맞히게 되기 때문이다.
+func aim_origin() -> Vector3:
+	return head.global_position
+
+
+## 공격 방향. 1인칭은 카메라가 보는 방향이고, 3인칭은 화면 가운데 조준점이 가리키는 곳을 향한다.
+func aim_direction() -> Vector3:
+	var forward := -camera.global_basis.z
+	if camera_blend <= 0.0:
+		return forward
+	# 카메라와 머리 사이에 있는 물체는 무시하도록, 광선을 머리 옆에서부터 쏜다.
+	var cam := camera.global_position
+	var start := cam + forward * maxf(forward.dot(head.global_position - cam), 0.0)
+	var hit := CombatQuery.trace(get_world_3d().direct_space_state, start, forward, AIM_PROBE_RANGE, WeaponHolder.TEAM)
+	var target := hit.position if hit != null else start + forward * AIM_PROBE_RANGE
+	var to_target := target - aim_origin()
+	# 조준점이 눈보다 뒤나 바로 앞이면(벽에 붙어 있을 때) 카메라 방향을 그대로 쓴다.
+	if to_target.length() < 0.5 or to_target.normalized().dot(forward) < 0.5:
+		return forward
+	return to_target.normalized()
+
+
+func _process(delta: float) -> void:
 	if not is_multiplayer_authority():
 		# 원격 플레이어는 동기화된 crouch_blend로 몸 높이만 맞춘다.
 		_apply_crouch_shape()
+		return
+	_update_camera_arm(delta)
+
+
+func _update_camera_arm(delta: float) -> void:
+	var target := 1.0 if third_person else 0.0
+	camera_blend = move_toward(camera_blend, target, config.camera_switch_speed * delta)
+	var t := ease(camera_blend, -2.0)
+	camera_arm.spring_length = config.third_person_distance * t
+	camera_arm.position = Vector3(config.third_person_shoulder.x, config.third_person_shoulder.y, 0.0) * t
+
+
+## 시점과 생사에 따라 몸과 1인칭 무기 모델을 보이거나 숨긴다.
+func _apply_view() -> void:
+	var local := is_multiplayer_authority()
+	if not health.is_alive():
+		body.set_view_mode(PlayerBody.ViewMode.HIDDEN)
+	elif local and not third_person:
+		# 1인칭에서는 내 몸이 카메라를 가리지 않게 그림자만 남긴다.
+		body.set_view_mode(PlayerBody.ViewMode.SHADOW_ONLY)
+	else:
+		body.set_view_mode(PlayerBody.ViewMode.VISIBLE)
+	weapons.viewmodel.visible = local and not third_person
 
 
 func _physics_process(delta: float) -> void:
@@ -231,8 +300,6 @@ func _apply_crouch_shape() -> void:
 	_capsule.height = height
 	collision.position.y = height * 0.5
 	head.position.y = lerpf(config.stand_eye_height, config.crouch_eye_height, crouch_blend)
-	body_mesh.scale.y = height / config.stand_height
-	body_mesh.position.y = height * 0.5
 	# 피격 판정: 머리는 눈높이에, 몸통은 머리 아래를 채운다.
 	head_hitbox.position.y = head.position.y
 	var body_height := maxf(head.position.y - 0.15, 0.6)
@@ -362,16 +429,14 @@ func respawn_at(spawn_position: Vector3) -> void:
 
 
 func _on_died(_info: DamageInfo) -> void:
-	if not is_multiplayer_authority():
-		body_mesh.visible = false
+	_apply_view()
 	# 죽은 뒤에는 맞지 않는다. 몸 충돌은 남겨 둬야 바닥 아래로 떨어지지 않는다.
 	head_hitbox.set_deferred("collision_layer", 0)
 	body_hitbox.set_deferred("collision_layer", 0)
 
 
 func _on_revived() -> void:
-	if not is_multiplayer_authority():
-		body_mesh.visible = true
+	_apply_view()
 	head_hitbox.set_deferred("collision_layer", Hitbox.LAYER)
 	body_hitbox.set_deferred("collision_layer", Hitbox.LAYER)
 

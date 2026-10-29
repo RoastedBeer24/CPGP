@@ -4,7 +4,7 @@
 
 현재 단계: **M2 (전투 기초) 완료**, 다음은 M3 (적 AI와 잠입)
 
-- 검수 체크리스트: [M1](docs/dev/review/m1.md), [M2](docs/dev/review/m2.md)
+- 검수 체크리스트: [M1](docs/dev/review/m1.md), [M2](docs/dev/review/m2.md), [3인칭과 캐릭터 모델](docs/dev/review/third-person.md)
 
 ## 기획 문서
 - 기초 구상서: [docs/design/00-foundation.md](docs/design/00-foundation.md)
@@ -19,5 +19,6 @@
 ## 빠른 시작
 - **실행 파일로 플레이 (Windows):** GitHub의 **Actions** 탭에서 가장 최근의 "테스트와 Windows 빌드" 실행을 열고, 아래쪽 **Artifacts**의 `CyberUniverse-windows`를 받아 압축을 풀고 `CyberUniverse.exe`를 실행합니다. 푸시할 때마다 자동으로 새로 만들어집니다.
 - 에디터로 플레이: Godot 4.5.1 표준판으로 `project.godot`를 열고 F5
+- 캐릭터 모델은 저장소에 없습니다. 넣는 방법은 [docs/assets.md](docs/assets.md)의 "저장소에 없는 에셋"을 봅니다. 없으면 캡슐 몸으로 돌아갑니다.
 - 테스트: `tools/test.sh`
 - 실행 파일 직접 만들기: `tools/export_windows.sh` → `build/CyberUniverse-windows.zip`

@@ -5,10 +5,13 @@ extends Node
 ##   godot --path . -- --single
 ##   godot --path . -- --host
 ##   godot --path . -- --join=192.168.0.12
+##   godot --path . -- --single --third-person   # 3인칭으로 시작
 
 const SESSION_SCENE := preload("res://src/net/session.tscn")
 
 var session: Session
+## true면 내 플레이어가 생길 때 3인칭으로 바꾼다 (명령줄 --third-person).
+var start_in_third_person := false
 
 @onready var menu: MainMenu = $MainMenu
 @onready var pause_menu: PauseMenu = $PauseMenu
@@ -53,6 +56,7 @@ func start_session(mode: Session.Mode, address: String = "") -> void:
 	session.process_mode = Node.PROCESS_MODE_PAUSABLE
 	session.started.connect(_on_session_started)
 	session.ended.connect(_on_session_ended)
+	session.player_spawned.connect(_on_player_spawned)
 	add_child(session)
 
 	var error := OK
@@ -96,6 +100,11 @@ func _on_session_started() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
+func _on_player_spawned(player: Player) -> void:
+	if start_in_third_person and player.is_multiplayer_authority():
+		player.set_third_person(true)
+
+
 func _on_session_ended(reason: String) -> void:
 	_close_session(reason)
 
@@ -114,7 +123,9 @@ func _close_session(message: String) -> void:
 
 
 func _apply_command_line() -> void:
-	for arg in OS.get_cmdline_user_args():
+	var args := OS.get_cmdline_user_args()
+	start_in_third_person = args.has("--third-person")
+	for arg in args:
 		if arg == "--single":
 			start_session(Session.Mode.SINGLE)
 		elif arg == "--host":

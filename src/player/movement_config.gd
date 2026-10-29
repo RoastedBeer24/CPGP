@@ -67,6 +67,14 @@ extends Resource
 @export var slide_fov_bonus := 10.0
 @export var fov_transition_speed := 8.0
 
+@export_group("3인칭 시점")
+## 머리에서 카메라까지의 거리(m). 벽에 막히면 그 앞까지 당겨진다.
+@export var third_person_distance := 2.2
+## 카메라를 오른쪽(x)과 위(y)로 옮기는 정도(m). 조준점이 캐릭터에 가리지 않게 어깨 너머로 본다.
+@export var third_person_shoulder := Vector2(0.5, 0.15)
+## 1인칭과 3인칭 사이를 바꾸는 속도 (초당 비율)
+@export var camera_switch_speed := 6.0
+
 
 func jump_velocity() -> float:
 	return sqrt(2.0 * gravity * jump_height)
