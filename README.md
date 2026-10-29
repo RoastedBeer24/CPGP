@@ -4,3 +4,4 @@
 
 - 기초 구상서: [docs/design/00-foundation.md](docs/design/00-foundation.md)
 - 세계관: [docs/design/01-world.md](docs/design/01-world.md)
+- 네오 부산과 세력: [docs/design/02-city-factions.md](docs/design/02-city-factions.md)
