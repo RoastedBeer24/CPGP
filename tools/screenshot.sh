@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 씬을 가상 화면(Xvfb)에서 실행하고 마지막 프레임을 PNG로 저장한다. 화면 확인용.
+# 씬을 실행하고 마지막 프레임을 PNG로 저장한다. 화면 확인용. 화면이 없는 리눅스에서는 Xvfb를 쓴다.
 #   tools/screenshot.sh [씬 경로] [프레임 수] [저장 경로]
 #   tools/screenshot.sh res://src/boot/main.tscn 30 build/screenshots/boot.png
 #   tools/screenshot.sh "" 90 build/screenshots/game.png --single   # 4번째 인자부터는 게임에 전달
@@ -23,7 +23,12 @@ trap 'rm -rf "$tmp_dir"' EXIT
 args=(--path "$ROOT" --resolution 1280x720 --write-movie "$tmp_dir/frame.png" --quit-after "$frames")
 [[ -n "$scene" ]] && args+=("$scene")
 [[ ${#game_args[@]} -gt 0 ]] && args+=(-- "${game_args[@]}")
-xvfb-run -a -s "-screen 0 1280x720x24" "$godot_bin" "${args[@]}" >/dev/null 2>&1
+# 화면이 없는 리눅스에서는 가상 화면(Xvfb)을 쓰고, 그 밖에는 그대로 창을 띄운다.
+if command -v xvfb-run >/dev/null 2>&1 && [[ -z "${DISPLAY:-}" ]]; then
+  xvfb-run -a -s "-screen 0 1280x720x24" "$godot_bin" "${args[@]}" >/dev/null 2>&1
+else
+  "$godot_bin" "${args[@]}" >/dev/null 2>&1
+fi
 
 mkdir -p "$(dirname "$out")"
 last_frame="$(ls "$tmp_dir"/frame*.png | sort | tail -n 1)"

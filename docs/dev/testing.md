@@ -23,6 +23,14 @@ tools/test.sh project    # 파일 경로나 테스트 이름에 project가 들�
 - 찾지 못하면 `tools/setup_godot.sh`가 공식 배포본을 내려받고 **SHA-512 체크섬을 검증**한 뒤 씁니다.
 - 실패한 테스트가 있으면 종료 코드 1로 끝납니다.
 
+### Windows (Git Bash)
+`tools/*.sh` 스크립트는 Git Bash에서 그대로 쓸 수 있습니다. Godot 콘솔판 위치를 알려 주면 그것을 씁니다.
+```bash
+export GODOT="/c/Godot/Godot_v4.5.1-stable_win64_console.exe"
+tools/test.sh
+```
+알려 주지 않으면 `tools/setup_godot.sh`가 Windows용 Godot를 내려받아 씁니다.
+
 ### Windows (명령 프롬프트)
 ```bat
 Godot_v4.5.1-stable_win64.exe --headless --path . --import
