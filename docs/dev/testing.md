@@ -7,6 +7,12 @@
 
 마일스톤마다 무엇을 확인하면 되는지는 검수 체크리스트로 따로 드립니다.
 
+## Windows 실행 파일
+- **받기:** 푸시할 때마다 GitHub Actions가 테스트를 돌리고 `CyberUniverse.exe`를 만듭니다. Actions 탭의 실행 결과 아래 Artifacts에서 받습니다(30일 보관).
+- **직접 만들기:** `tools/export_windows.sh`를 실행하면 `build/CyberUniverse-windows.zip`이 생깁니다. 내보내기 템플릿이 없으면 공식 배포본(약 1.3GB)을 받아 체크섬을 검증한 뒤 Windows용만 꺼내 둡니다.
+- 게임 데이터는 exe 안에 들어 있어 파일 하나로 실행됩니다. `CyberUniverse.console.exe`로 실행하면 로그 창이 함께 뜹니다.
+- 서명되지 않은 실행 파일이라 처음 실행할 때 Windows SmartScreen 경고가 뜹니다. [추가 정보] → [실행]을 누릅니다.
+
 ## 자동 테스트
 ### 리눅스, macOS, 개발 환경
 ```bash

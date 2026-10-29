@@ -17,5 +17,7 @@
 - 사용 에셋 목록: [docs/assets.md](docs/assets.md)
 
 ## 빠른 시작
-- 플레이: Godot 4.5.1 표준판으로 `project.godot`를 열고 F5
+- **실행 파일로 플레이 (Windows):** GitHub의 **Actions** 탭에서 가장 최근의 "테스트와 Windows 빌드" 실행을 열고, 아래쪽 **Artifacts**의 `CyberUniverse-windows`를 받아 압축을 풀고 `CyberUniverse.exe`를 실행합니다. 푸시할 때마다 자동으로 새로 만들어집니다.
+- 에디터로 플레이: Godot 4.5.1 표준판으로 `project.godot`를 열고 F5
 - 테스트: `tools/test.sh`
+- 실행 파일 직접 만들기: `tools/export_windows.sh` → `build/CyberUniverse-windows.zip`

@@ -1,0 +1,37 @@
+# 푸시할 때마다 자동 테스트를 돌리고 Windows 실행 파일을 만든다.
+# 만든 파일은 GitHub의 Actions 탭 > 해당 실행 > Artifacts 에서 받을 수 있다.
+name: 테스트와 Windows 빌드
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Godot와 내보내기 템플릿 캐시
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/godot
+            ~/.local/share/godot/export_templates
+          key: godot-4.5.1-stable-windows-templates
+
+      - name: 자동 테스트
+        run: tools/test.sh
+
+      - name: Windows 실행 파일 만들기
+        run: tools/export_windows.sh
+
+      - name: 실행 파일 올리기
+        uses: actions/upload-artifact@v4
+        with:
+          name: CyberUniverse-windows
+          path: |
+            build/windows/CyberUniverse.exe
+            build/windows/CyberUniverse.console.exe
+            build/windows/README.txt
+          retention-days: 30
