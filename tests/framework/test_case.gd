@@ -79,6 +79,9 @@ func _fail(reason: String, message: String) -> void:
 
 
 func _variants_equal(a: Variant, b: Variant) -> bool:
+	# 타입이 붙은 null(예: get_node_or_null의 결과)도 null로 취급한다.
+	if a == null or b == null:
+		return a == null and b == null
 	var numeric := [TYPE_INT, TYPE_FLOAT]
 	if typeof(a) in numeric and typeof(b) in numeric:
 		return float(a) == float(b)

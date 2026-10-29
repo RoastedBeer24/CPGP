@@ -1,6 +1,15 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://src/boot/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://src/ui/main_menu.tscn" id="2_menu"]
+[ext_resource type="PackedScene" path="res://src/ui/pause_menu.tscn" id="3_pause"]
+[ext_resource type="PackedScene" path="res://src/ui/hud.tscn" id="4_hud"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
+
+[node name="Hud" parent="." instance=ExtResource("4_hud")]
+
+[node name="MainMenu" parent="." instance=ExtResource("2_menu")]
+
+[node name="PauseMenu" parent="." instance=ExtResource("3_pause")]

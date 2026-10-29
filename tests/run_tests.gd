@@ -53,6 +53,8 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	# _initialize 시점에는 root가 아직 트리에 들어가지 않았으므로, 첫 프레임 뒤에 시작한다.
+	await process_frame
 	var args := OS.get_cmdline_user_args()
 	var test_filter := args[0] if args.size() > 0 else ""
 

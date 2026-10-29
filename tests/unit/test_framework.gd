@@ -28,3 +28,11 @@ func test_autofree_releases_nodes() -> void:
 	free_autofree_nodes()
 	await tree.process_frame
 	assert_false(is_instance_valid(node))
+
+
+func test_eq_treats_typed_null_as_null() -> void:
+	var probe := TestCase.new()
+	var missing: Node = tree.root.get_node_or_null("DoesNotExist")
+	probe.assert_eq(missing, null)
+	probe.assert_ne(tree.root, null)
+	assert_eq(probe.get_failures().size(), 0)

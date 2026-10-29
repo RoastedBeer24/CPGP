@@ -4,4 +4,4 @@
 
 | 에셋 | 저장소 내 경로 | 출처 (URL) | 작가 | 라이선스 | 비고 |
 |---|---|---|---|---|---|
-| (아직 없음) | | | | | |
+| Noto Sans KR (Regular, Bold) | `assets/fonts/noto_sans_kr/` | https://github.com/notofonts/noto-cjk | Google, Adobe | SIL Open Font License 1.1 (`LICENSE.txt` 동봉) | 게임 기본 한글 폰트 |
