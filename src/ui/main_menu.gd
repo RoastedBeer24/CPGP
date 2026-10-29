@@ -17,6 +17,7 @@ const SETTINGS_PATH := "user://settings.cfg"
 @onready var address_edit: LineEdit = %AddressEdit
 @onready var status_label: Label = %StatusLabel
 @onready var version_label: Label = %VersionLabel
+@onready var update_label: Label = %UpdateLabel
 
 
 func _ready() -> void:
@@ -26,6 +27,9 @@ func _ready() -> void:
 	address_edit.text_submitted.connect(func(_text: String) -> void: _on_join_pressed())
 	quit_button.pressed.connect(quit_requested.emit)
 	version_label.text = "v%s" % ProjectSettings.get_setting("application/config/version")
+	if BuildInfo.NUMBER > 0:
+		version_label.text += " (빌드 %d)" % BuildInfo.NUMBER
+	update_label.text = ""
 	address_edit.text = _load_last_address()
 
 
@@ -39,6 +43,11 @@ func open(message: String = "") -> void:
 
 func set_status(message: String) -> void:
 	status_label.text = message
+
+
+## 자동 업데이트 진행 상황 (왼쪽 아래 한 줄)
+func set_update_status(message: String) -> void:
+	update_label.text = message
 
 
 ## 연결 중에는 버튼을 잠가 중복 요청을 막는다.

@@ -6,12 +6,19 @@ extends Node
 ##   godot --path . -- --host
 ##   godot --path . -- --join=192.168.0.12
 ##   godot --path . -- --single --third-person   # 3인칭으로 시작
+##   --no-update                                 # 자동 업데이트를 하지 않음
+##   --update-url=http://127.0.0.1:8000/latest   # 업데이트 확인 주소 바꾸기 (시험용)
+##
+## 내보낸 Windows 게임은 켤 때 GitHub 릴리스에서 새 버전을 찾아 받는다(Updater).
+## 메뉴에 있으면 바로 설치하고 다시 시작하고, 게임 중이면 게임을 끝낼 때 설치한다.
 
 const SESSION_SCENE := preload("res://src/net/session.tscn")
 
 var session: Session
 ## true면 내 플레이어가 생길 때 3인칭으로 바꾼다 (명령줄 --third-person).
 var start_in_third_person := false
+## 자동 업데이트. 업데이트할 수 없는 실행 환경이면 null.
+var updater: Updater
 
 @onready var menu: MainMenu = $MainMenu
 @onready var pause_menu: PauseMenu = $PauseMenu
@@ -24,11 +31,12 @@ func _ready() -> void:
 	menu.single_requested.connect(start_session.bind(Session.Mode.SINGLE))
 	menu.host_requested.connect(start_session.bind(Session.Mode.HOST))
 	menu.join_requested.connect(func(address: String) -> void: start_session(Session.Mode.CLIENT, address))
-	menu.quit_requested.connect(get_tree().quit)
+	menu.quit_requested.connect(quit_game)
 	pause_menu.resume_requested.connect(resume)
 	pause_menu.leave_requested.connect(leave_session)
 	hud.hide()
 	menu.open()
+	_start_updater()
 	_apply_command_line()
 
 
@@ -46,6 +54,15 @@ func _notification(what: int) -> void:
 	# 창이 포커스를 잃으면 마우스를 풀어 준다.
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and session != null and not pause_menu.visible:
 		open_pause_menu()
+	# 창을 닫을 때 받아 둔 업데이트가 있으면 설치한다.
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_install_pending_update(false)
+
+
+## 게임을 끝낸다. 받아 둔 업데이트가 있으면 설치하고 끝낸다.
+func quit_game() -> void:
+	_install_pending_update(false)
+	get_tree().quit()
 
 
 func start_session(mode: Session.Mode, address: String = "") -> void:
@@ -120,6 +137,47 @@ func _close_session(message: String) -> void:
 	hud.hide()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	menu.open(message)
+	# 게임 중에 받아 둔 업데이트는 메뉴로 돌아왔을 때 설치한다.
+	if updater != null and updater.state == Updater.State.READY:
+		_on_update_ready()
+
+
+func _start_updater() -> void:
+	var args := OS.get_cmdline_user_args()
+	var custom_url := ""
+	for arg in args:
+		if arg.begins_with("--update-url="):
+			custom_url = arg.trim_prefix("--update-url=")
+	if args.has("--no-update") or not Updater.can_self_update():
+		return
+	updater = Updater.new()
+	updater.name = "Updater"
+	if not custom_url.is_empty():
+		updater.release_url = custom_url
+	add_child(updater)
+	updater.status_changed.connect(menu.set_update_status)
+	updater.update_ready.connect(_on_update_ready)
+	updater.check()
+
+
+func _on_update_ready() -> void:
+	if session != null:
+		menu.set_update_status("새 버전이 준비되었습니다. 메뉴로 돌아오거나 게임을 끝내면 설치됩니다.")
+		return
+	menu.set_update_status("새 버전을 설치하고 다시 시작합니다...")
+	await get_tree().create_timer(1.5).timeout
+	# 기다리는 사이에 게임을 시작했으면 나중에 설치한다.
+	if session != null:
+		return
+	if updater.apply(true) == OK:
+		get_tree().quit()
+	else:
+		menu.set_update_status("업데이트를 설치하지 못했습니다. 다음에 켤 때 다시 시도합니다.")
+
+
+func _install_pending_update(relaunch: bool) -> void:
+	if updater != null and updater.state == Updater.State.READY:
+		updater.apply(relaunch)
 
 
 func _apply_command_line() -> void:

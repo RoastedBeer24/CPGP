@@ -5,3 +5,4 @@
 [resource]
 script = ExtResource("1_appearance")
 model_path = "res://assets/characters/endministrator_f/endministrator_f.glb"
+external_model_file = "characters/endministrator_f.glb"

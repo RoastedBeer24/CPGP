@@ -29,6 +29,7 @@
 | M1 이동 + 네트워크 | 완료 | 1인칭 이동, 시험장, 싱글·LAN 코옵(최대 3명), 메뉴 |
 | M2 전투 기초 | 완료 | 무기 3종, 체력·장갑, 허수아비, 단순한 경비병, 전투 HUD, 사망·부활 |
 | 3인칭과 캐릭터 모델 | 완료 | V로 1인칭/3인칭 전환, 캐릭터 모델에 코드로 만든 자세, 든 무기 동기화 (`docs/dev/review/third-person.md`) |
+| 릴리스와 자동 업데이트 | 완료 | 기본 브랜치 푸시 → GitHub 릴리스 `build-<커밋 수>`, 게임이 켤 때 스스로 업데이트 (`docs/dev/testing.md`) |
 | **M3 적 AI와 잠입** | **다음 작업** | 아래 계획 참고 |
 | M4 해킹 ~ M8 폴리싱 | 예정 | 구상서 §9 |
 
@@ -74,4 +75,8 @@ godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --joi
 - **죽었을 때:** 몸 충돌을 끄면 바닥 아래로 떨어진다. Hitbox의 collision_layer만 0으로 만든다.
 - **저장소에 없는 캐릭터 모델:** `assets/characters/endministrator_f/`는 재배포 불가라 gitignore 대상이다(`docs/assets.md`). CI와 다른 PC에는 없으므로, 모델이 필요한 테스트는 `has_model`이 false면 건너뛰고, 모델 없이도 전체 테스트가 통과해야 한다. `data/player/default_appearance.tres`의 경로를 잠시 바꿔서 확인한다.
 - **조준 판정:** 무기는 `player.camera`가 아니라 `aim_origin()`/`aim_direction()`을 쓴다. 3인칭 카메라 위치에서 쏘면 캐릭터 뒤의 물체를 맞힌다.
+- **자동 업데이트:** 빌드 번호는 커밋 수다. `src/core/build_info.gd`의 `NUMBER`는 저장소에서 항상 0이어야 한다(내보낼 때만 바뀜, 테스트가 확인함). 실행 중인 exe는 덮어쓸 수 없어 PowerShell 스크립트가 종료를 기다렸다 바꾼다. `CyberUniverse.console.exe`는 게임이 도는 동안 잠겨 있으므로 내용이 같은 파일은 건너뛴다. 설치 스크립트는 영어로만 쓴다(PowerShell 5.1이 BOM 없는 파일을 시스템 코드 페이지로 읽음).
+- **업데이트 실패는 조용히:** `JSON.parse_string`은 실패하면 엔진 오류를 남기므로 `JSON.new().parse()`를 쓴다. 릴리스가 없을 때의 404는 "받을 것 없음"으로 처리한다.
+- **내보내기와 자체 포함 Godot:** 옆에 `_sc_` 파일이 있는 Godot는 템플릿을 자기 폴더에서만 찾는다. `tools/export_windows.sh`가 알아서 표준 Godot를 받아 쓴다.
+- **캐릭터 모델은 exe에 넣지 않는다:** `export_presets.cfg`에서 `assets/characters/*`를 뺀다. 내보낸 게임은 exe 옆 `characters/`에서 실행 중에 glTF를 읽는다(`CharacterAppearance.load_gltf_file`).
 - **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped, 뼈대 공간은 Z가 위)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.

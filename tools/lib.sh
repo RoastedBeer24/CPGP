@@ -64,13 +64,13 @@ extract_zip() {
 }
 
 # 폴더 안의 파일들을 zip으로 묶는다. Windows Git Bash에는 zip이 없을 수 있어 PowerShell로 대신한다.
-#   make_zip <zip> <폴더> <파일...>
+#   make_zip <zip> <폴더> <파일 또는 하위 폴더...>   (하위 폴더는 폴더째 들어간다)
 make_zip() {
   local zip="$1" dir="$2"
   shift 2
   rm -f "$zip"
   if command -v zip >/dev/null 2>&1; then
-    (cd "$dir" && zip -q -9 "$zip" "$@")
+    (cd "$dir" && zip -q -9 -r "$zip" "$@")
     return
   fi
   local paths=()

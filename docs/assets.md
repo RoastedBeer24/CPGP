@@ -10,8 +10,12 @@
 ## 저장소에 없는 에셋
 공개 저장소에 올릴 수 없는 에셋입니다(구상서 §7.3). 각자 PC에 직접 넣고, `.gitignore`로 커밋에서 뺍니다.
 파일이 없으면 게임은 대신할 것(캡슐 몸 등)으로 그대로 돌아가고, 자동 테스트도 모두 통과합니다.
-GitHub Actions가 만드는 실행 파일에도 들어가지 않으므로, 모델이 들어간 실행 파일은 이 파일이 있는 PC에서 `tools/export_windows.sh`로 만듭니다.
+실행 파일(exe)에도 넣지 않습니다(`export_presets.cfg`에서 제외). 공개 릴리스에 섞여 나가지 않게 하고, 자동 업데이트가 exe만 바꿔도 각자 넣어 둔 모델이 남게 하기 위함입니다.
 
-| 에셋 | 넣는 곳 | 넣는 방법 |
+| 에셋 | 개발할 때 넣는 곳 | 실행 파일로 할 때 넣는 곳 |
 |---|---|---|
-| 플레이어 캐릭터 모델 | `assets/characters/endministrator_f/endministrator_f.glb` | 받은 `Endministrator_F.glb`를 이 이름으로 복사합니다. 텍스처는 glb 안에 들어 있어 따로 넣지 않아도 됩니다. 에디터를 열거나 `tools/test.sh`를 돌리면 Godot가 자동으로 가져옵니다. |
+| 플레이어 캐릭터 모델 | `assets/characters/endministrator_f/endministrator_f.glb` | `CyberUniverse.exe`가 있는 폴더의 `characters/endministrator_f.glb` |
+
+- 받은 `Endministrator_F.glb`를 위 이름으로 복사합니다. 텍스처는 glb 안에 들어 있어 따로 넣지 않아도 됩니다.
+- 개발용 위치에 넣으면 에디터를 열거나 `tools/test.sh`를 돌릴 때 Godot가 자동으로 가져옵니다.
+- 실행 파일은 켤 때 `characters/` 폴더의 모델을 직접 읽습니다. 모델이 있는 PC에서 `tools/export_windows.sh`를 돌리면 모델까지 넣은 `build/CyberUniverse-windows-with-model.zip`이 생기므로, 가족 PC에 처음 설치할 때는 이것을 풀면 됩니다. 이 zip은 어디에도 올리지 않습니다.

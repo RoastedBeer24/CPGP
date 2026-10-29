@@ -8,9 +8,12 @@
 마일스톤마다 무엇을 확인하면 되는지는 검수 체크리스트로 따로 드립니다.
 
 ## Windows 실행 파일
-- **받기:** 푸시할 때마다 GitHub Actions가 테스트를 돌리고 `CyberUniverse.exe`를 만듭니다. Actions 탭의 실행 결과 아래 Artifacts에서 받습니다(30일 보관).
+- **받기:** 기본 브랜치에 푸시하면 GitHub Actions가 테스트를 돌리고, 통과하면 `CyberUniverse-windows.zip`을 **릴리스**(`build-<커밋 수>`)로 올립니다. 릴리스는 최근 5개만 남깁니다. 다른 브랜치의 푸시는 Actions 탭의 Artifacts에만 올라갑니다(30일 보관).
+- **자동 업데이트:** 내보낸 게임은 켤 때 최신 릴리스의 빌드 번호를 보고, 자기보다 크면 받아서 바꿉니다(`src/core/updater.gd`). 메뉴에서는 바로 설치하고 다시 시작하고, 게임 중이면 메뉴로 돌아오거나 끝낼 때 설치합니다. 실행 중인 exe는 스스로 덮어쓸 수 없으므로 PowerShell 스크립트가 게임 종료를 기다렸다가 파일을 바꿉니다. 설치 기록: `%APPDATA%\Godot\app_userdata\CyberUniverse\update\apply_update.log`
+- **빌드 번호:** 커밋 수(`git rev-list --count HEAD`)입니다. `tools/export_windows.sh`가 내보내는 동안만 `src/core/build_info.gd`에 써 넣고 되돌립니다. 저장소의 값은 항상 0이고, 0인 실행 파일(에디터, 개발 실행)은 업데이트하지 않습니다.
 - **직접 만들기:** `tools/export_windows.sh`를 실행하면 `build/CyberUniverse-windows.zip`이 생깁니다. 내보내기 템플릿이 없으면 공식 배포본(약 1.3GB)을 받아 체크섬을 검증한 뒤 Windows용만 꺼내 둡니다.
-- 게임 데이터는 exe 안에 들어 있어 파일 하나로 실행됩니다. `CyberUniverse.console.exe`로 실행하면 로그 창이 함께 뜹니다.
+- 게임 데이터는 exe 안에 들어 있어 파일 하나로 실행됩니다(캐릭터 모델만 `characters/` 폴더에 따로). `CyberUniverse.console.exe`로 실행하면 로그 창이 함께 뜹니다.
+- 자체 포함 모드 Godot(옆에 `_sc_` 파일이 있는 것)는 내보내기 템플릿을 자기 폴더에서만 찾습니다. 그런 Godot면 `tools/export_windows.sh`가 내보내기용 표준 Godot를 `tools/setup_godot.sh`로 받아 씁니다.
 - 서명되지 않은 실행 파일이라 처음 실행할 때 Windows SmartScreen 경고가 뜹니다. [추가 정보] → [실행]을 누릅니다.
 
 ## 자동 테스트
@@ -75,7 +78,15 @@ godot --path . -- --single                # 혼자 하기
 godot --path . -- --host                  # 방 만들기
 godot --path . -- --join=192.168.0.12     # 참여하기
 godot --path . -- --single --third-person # 3인칭으로 시작 (다른 옵션과 함께 씀)
+CyberUniverse.exe -- --no-update          # 자동 업데이트 끄기
 ```
+
+## 자동 업데이트 시험하기
+GitHub에 올리지 않고 이 PC에서 업데이트 과정을 끝까지 확인하는 방법입니다.
+1. `tools/export_windows.sh`로 지금 빌드를 만들고 `build/windows/`를 시험용 폴더에 복사합니다(이것이 "설치된 게임").
+2. `src/core/build_info.gd`의 `NUMBER`를 잠시 큰 값(예: 99)으로 바꿔 다른 폴더로 내보낸 뒤 되돌리고, 그 exe들을 `CyberUniverse-windows.zip`으로 묶습니다.
+3. zip과 함께 `latest.json`(`{"tag_name": "build-99", "assets": [{"name": "CyberUniverse-windows.zip", "browser_download_url": "http://127.0.0.1:8765/CyberUniverse-windows.zip"}]}`)을 한 폴더에 두고 `python -m http.server 8765 --bind 127.0.0.1`로 띄웁니다.
+4. 설치된 게임을 `CyberUniverse.exe -- --update-url=http://127.0.0.1:8765/latest.json`으로 실행합니다. 메뉴에서 받고, 설치하고, 다시 켜지면 성공입니다. `apply_update.log`에 `ok`가 남고 exe가 바뀌며, `characters/` 폴더는 그대로여야 합니다.
 한 PC에서 창 두 개로 코옵을 시험하려면 한 창은 `--host`, 다른 창은 `--join=127.0.0.1`로 띄웁니다.
 
 ## 화면 확인 (스크린샷)

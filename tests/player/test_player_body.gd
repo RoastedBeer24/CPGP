@@ -88,6 +88,31 @@ func test_blade_has_no_muzzle() -> void:
 	assert_false(player.body.has_muzzle())
 
 
+func test_model_next_to_executable_is_read_at_runtime() -> void:
+	# 내보낸 게임은 모델을 실행 파일 옆에서 실행 중에 읽는다. 프로젝트 안의 원본 파일로 그 경로를 흉내 낸다.
+	var source := ProjectSettings.globalize_path((load(PlayerBody.DEFAULT_APPEARANCE) as CharacterAppearance).model_path)
+	if not FileAccess.file_exists(source):
+		print("    (캐릭터 모델이 없어 건너뜀)")
+		return
+	var appearance := CharacterAppearance.new()
+	appearance.external_model_file = source
+	await _spawn(appearance)
+	assert_true(player.body.has_model, "실행 중에 glTF를 읽어 몸으로 씀")
+	player.set_third_person(true)
+	intent.crouch_pressed = true
+	await _frames(40)
+	assert_true(_head_height() < 1.2, "읽어 온 모델도 자세를 만듦: %s" % _head_height())
+
+
+func test_runtime_model_is_read_only_once() -> void:
+	var source := ProjectSettings.globalize_path((load(PlayerBody.DEFAULT_APPEARANCE) as CharacterAppearance).model_path)
+	if not FileAccess.file_exists(source):
+		return
+	var first := CharacterAppearance.load_gltf_file(source)
+	assert_not_null(first)
+	assert_true(CharacterAppearance.load_gltf_file(source) == first, "같은 파일은 다시 읽지 않음")
+
+
 func _spawn(appearance: CharacterAppearance) -> void:
 	player = PLAYER_SCENE.instantiate()
 	player.use_device_input = false

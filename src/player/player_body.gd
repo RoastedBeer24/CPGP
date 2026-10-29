@@ -8,6 +8,7 @@ extends Node3D
 ## 움직임은 위치 변화로 잰다. 원격 플레이어는 속도가 동기화되지 않기 때문이다.
 ##
 ## 모델 파일이 없으면(재배포할 수 없는 모델이라 저장소에 없다) 캡슐 몸으로 대신한다.
+## 모델을 어디서 찾는지는 CharacterAppearance에 있다.
 
 enum ViewMode { VISIBLE, SHADOW_ONLY, HIDDEN }
 
@@ -57,8 +58,9 @@ func _ready() -> void:
 	if appearance == null:
 		# Player와 서로 참조하는 중에 리소스를 미리 불러오면 깨지므로 실행 시점에 불러온다.
 		appearance = load(DEFAULT_APPEARANCE) as CharacterAppearance
-	if appearance != null and appearance.has_model_file():
-		_load_model()
+	var scene := appearance.load_model_scene() if appearance != null else null
+	if scene != null:
+		_load_model(scene)
 	_last_position = global_position
 
 
@@ -117,10 +119,7 @@ func _pose_placeholder() -> void:
 
 # ---- 모델 불러오기 ----
 
-func _load_model() -> void:
-	var scene := load(appearance.model_path) as PackedScene
-	if scene == null:
-		return
+func _load_model(scene: PackedScene) -> void:
 	_model = scene.instantiate() as Node3D
 	_model.name = "Model"
 	_model.scale = Vector3.ONE * appearance.model_scale
