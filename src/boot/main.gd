@@ -19,6 +19,7 @@ var session: Session
 var start_in_third_person := false
 ## 자동 업데이트. 업데이트할 수 없는 실행 환경이면 null.
 var updater: Updater
+var settings_menu: SettingsMenu
 
 @onready var menu: MainMenu = $MainMenu
 @onready var pause_menu: PauseMenu = $PauseMenu
@@ -32,6 +33,15 @@ func _ready() -> void:
 	menu.host_requested.connect(start_session.bind(Session.Mode.HOST))
 	menu.join_requested.connect(func(address: String) -> void: start_session(Session.Mode.CLIENT, address))
 	menu.quit_requested.connect(quit_game)
+	menu.settings_requested.connect(open_settings)
+	pause_menu.settings_requested.connect(open_settings)
+	# 사용자 설정을 가장 먼저 적용한다 (창 크기, 소리, 키).
+	GameSettings.load_settings()
+	GameSettings.apply_all(get_tree().root)
+	settings_menu = SettingsMenu.new()
+	settings_menu.name = "SettingsMenu"
+	settings_menu.closed.connect(_on_settings_closed)
+	add_child(settings_menu)
 	pause_menu.resume_requested.connect(resume)
 	pause_menu.leave_requested.connect(leave_session)
 	hud.hide()
@@ -41,7 +51,7 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if session == null or not event.is_action_pressed(InputActions.PAUSE):
+	if session == null or settings_menu.visible or not event.is_action_pressed(InputActions.PAUSE):
 		return
 	if pause_menu.visible:
 		resume()
@@ -100,6 +110,18 @@ func open_pause_menu() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
+## 설정 화면을 연다. 메인 메뉴나 일시정지 메뉴 위에 겹쳐 뜬다.
+func open_settings() -> void:
+	settings_menu.open()
+
+
+func _on_settings_closed() -> void:
+	if pause_menu.visible:
+		pause_menu.resume_button.grab_focus()
+	elif menu.visible:
+		menu.settings_button.grab_focus()
+
+
 func resume() -> void:
 	pause_menu.close()
 	get_tree().paused = false
@@ -118,7 +140,7 @@ func _on_session_started() -> void:
 
 
 func _on_player_spawned(player: Player) -> void:
-	if start_in_third_person and player.is_multiplayer_authority():
+	if (start_in_third_person or GameSettings.start_third_person) and player.is_multiplayer_authority():
 		player.set_third_person(true)
 
 
@@ -148,7 +170,7 @@ func _start_updater() -> void:
 	for arg in args:
 		if arg.begins_with("--update-url="):
 			custom_url = arg.trim_prefix("--update-url=")
-	if args.has("--no-update") or not Updater.can_self_update():
+	if args.has("--no-update") or not GameSettings.auto_update or not Updater.can_self_update():
 		return
 	updater = Updater.new()
 	updater.name = "Updater"

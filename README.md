@@ -4,7 +4,7 @@
 
 현재 단계: **M2 (전투 기초) 완료**, 다음은 M3 (적 AI와 잠입)
 
-- 검수 체크리스트: [M1](docs/dev/review/m1.md), [M2](docs/dev/review/m2.md), [3인칭과 캐릭터 모델](docs/dev/review/third-person.md)
+- 검수 체크리스트: [M1](docs/dev/review/m1.md), [M2](docs/dev/review/m2.md), [3인칭과 캐릭터 모델](docs/dev/review/third-person.md), [설정](docs/dev/review/settings.md)
 
 ## 기획 문서
 - 기초 구상서: [docs/design/00-foundation.md](docs/design/00-foundation.md)

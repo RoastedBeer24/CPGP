@@ -121,6 +121,7 @@ func get_local_player() -> Player:
 
 func _load_zone() -> void:
 	world.add_child(zone_scene.instantiate())
+	GameSettings.apply_brightness(get_viewport())
 
 
 func _spawn_for(peer_id: int) -> void:

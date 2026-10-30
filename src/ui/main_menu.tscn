@@ -78,6 +78,12 @@ custom_minimum_size = Vector2(120, 44)
 layout_mode = 2
 text = "참여하기"
 
+[node name="SettingsButton" type="Button" parent="Center/Panel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "설정"
+
 [node name="QuitButton" type="Button" parent="Center/Panel"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)

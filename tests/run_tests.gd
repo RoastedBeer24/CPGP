@@ -55,6 +55,10 @@ func _initialize() -> void:
 func _run() -> void:
 	# _initialize 시점에는 root가 아직 트리에 들어가지 않았으므로, 첫 프레임 뒤에 시작한다.
 	await process_frame
+	# 사용자의 실제 설정 파일을 읽거나 덮어쓰지 않도록 테스트용 파일을 쓴다.
+	GameSettings.path = "user://test_settings.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(GameSettings.path))
+	GameSettings.reset_to_defaults()
 	var args := OS.get_cmdline_user_args()
 	var test_filter := args[0] if args.size() > 0 else ""
 

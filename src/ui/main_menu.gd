@@ -6,14 +6,14 @@ extends Control
 signal single_requested
 signal host_requested
 signal join_requested(address: String)
+signal settings_requested
 signal quit_requested
-
-const SETTINGS_PATH := "user://settings.cfg"
 
 @onready var single_button: Button = %SingleButton
 @onready var host_button: Button = %HostButton
 @onready var join_button: Button = %JoinButton
 @onready var quit_button: Button = %QuitButton
+@onready var settings_button: Button = %SettingsButton
 @onready var address_edit: LineEdit = %AddressEdit
 @onready var status_label: Label = %StatusLabel
 @onready var version_label: Label = %VersionLabel
@@ -26,6 +26,7 @@ func _ready() -> void:
 	join_button.pressed.connect(_on_join_pressed)
 	address_edit.text_submitted.connect(func(_text: String) -> void: _on_join_pressed())
 	quit_button.pressed.connect(quit_requested.emit)
+	settings_button.pressed.connect(settings_requested.emit)
 	version_label.text = "v%s" % ProjectSettings.get_setting("application/config/version")
 	if BuildInfo.NUMBER > 0:
 		version_label.text += " (빌드 %d)" % BuildInfo.NUMBER
@@ -68,13 +69,13 @@ func _on_join_pressed() -> void:
 
 func _load_last_address() -> String:
 	var config := ConfigFile.new()
-	if config.load(SETTINGS_PATH) != OK:
+	if config.load(GameSettings.path) != OK:
 		return ""
 	return str(config.get_value("network", "last_address", ""))
 
 
 func _save_last_address(address: String) -> void:
 	var config := ConfigFile.new()
-	config.load(SETTINGS_PATH)
+	config.load(GameSettings.path)
 	config.set_value("network", "last_address", address)
-	config.save(SETTINGS_PATH)
+	config.save(GameSettings.path)

@@ -22,8 +22,6 @@ extends Resource
 @export var jump_buffer_time := 0.12
 
 @export_group("웅크리기")
-## true면 웅크리기 키가 토글, false면 누르고 있는 동안만 웅크림
-@export var crouch_toggle := true
 @export var stand_height := 1.8
 @export var crouch_height := 1.1
 @export var stand_eye_height := 1.6
@@ -60,9 +58,8 @@ extends Resource
 ## 조준 중 이동 속도 배율
 @export var aim_speed_multiplier := 0.6
 
+## 마우스 감도, 기본 시야각, 웅크리기 방식은 사용자 설정(GameSettings)에 있다.
 @export_group("시점")
-@export var mouse_sensitivity := 0.0025
-@export var base_fov := 80.0
 @export var sprint_fov_bonus := 6.0
 @export var slide_fov_bonus := 10.0
 @export var fov_transition_speed := 8.0

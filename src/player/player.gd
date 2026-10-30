@@ -72,7 +72,7 @@ func _ready() -> void:
 	add_to_group(GROUP)
 	var local := is_multiplayer_authority()
 	camera.current = local and use_device_input
-	camera.fov = config.base_fov
+	camera.fov = GameSettings.fov
 	# 3인칭 카메라가 내 몸에 걸려 당겨지지 않게 한다.
 	camera_arm.add_excluded_object(get_rid())
 	health.died.connect(_on_died)
@@ -88,7 +88,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var motion := event as InputEventMouseMotion
 	if motion != null:
-		look(motion.relative * config.mouse_sensitivity)
+		look(GameSettings.look_delta(motion.relative))
 		return
 	if event.is_action_pressed(InputActions.CAMERA_TOGGLE):
 		set_third_person(not third_person)
@@ -265,7 +265,7 @@ func _update_timers(delta: float, intent: PlayerIntent) -> void:
 
 func _update_crouch(intent: PlayerIntent, delta: float) -> void:
 	var want_crouch := crouched
-	if config.crouch_toggle:
+	if GameSettings.crouch_toggle:
 		if intent.crouch_pressed:
 			want_crouch = not crouched
 	else:
@@ -345,14 +345,14 @@ func _process_slide(delta: float, intent: PlayerIntent) -> void:
 		# 슬라이딩 점프: 속도를 유지한 채 뛰어오른다.
 		state = State.AIR
 		_jump()
-		if config.crouch_toggle and can_stand():
+		if GameSettings.crouch_toggle and can_stand():
 			crouched = false
 		return
 
 	var finished := _slide_time >= config.slide_max_duration or horizontal.length() <= config.slide_exit_speed
 	if finished or not is_on_floor():
 		state = State.GROUND if is_on_floor() else State.AIR
-		if not config.crouch_toggle and not intent.crouch_held and can_stand():
+		if not GameSettings.crouch_toggle and not intent.crouch_held and can_stand():
 			crouched = false
 
 
@@ -516,7 +516,7 @@ func _raycast(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> D
 
 
 func _update_fov(delta: float, intent: PlayerIntent) -> void:
-	var target := config.base_fov
+	var target := GameSettings.fov
 	if weapons.aiming:
 		target = weapons.current_weapon().aim_fov
 	elif state == State.SLIDE:

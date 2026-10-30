@@ -5,17 +5,20 @@ extends CanvasLayer
 
 signal resume_requested
 signal leave_requested
+signal settings_requested
 
 @onready var title_label: Label = %TitleLabel
 @onready var info_label: Label = %InfoLabel
 @onready var resume_button: Button = %ResumeButton
 @onready var leave_button: Button = %LeaveButton
+@onready var settings_button: Button = %SettingsButton
 
 
 func _ready() -> void:
 	hide()
 	resume_button.pressed.connect(resume_requested.emit)
 	leave_button.pressed.connect(leave_requested.emit)
+	settings_button.pressed.connect(settings_requested.emit)
 
 
 func open(session: Session) -> void:
