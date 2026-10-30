@@ -35,7 +35,7 @@
   python3 tools/extract_character_fx.py "!File/Endministrator_Extras" F assets/characters/endministrator_f/endministrator_f_fx.zip
   python3 tools/extract_character_fx.py "!File/Endministrator_Extras" M assets/characters/endministrator_m/endministrator_m_fx.zip
   ```
-- **이펙트:** 원작 이펙트 모양(glb)은 zip에 함께 넣어 두었지만 아직 쓰지 않습니다. 모양에 어떤 재질을 쓰는지가 비어 있고 원작 전용 셰이더(VFXBaseV2)가 없어서, 셰이더를 다시 만들어야 합니다. 지금은 칼날 자리에 남는 빛의 띠(`src/player/weapon_trail.gd`)로 대신합니다.
+- **이펙트:** 원작 이펙트 모델(glb)과 파티클 설정(json)도 같은 zip의 `effects/`에 넣습니다. 게임이 원작 셰이더와 파티클 시스템을 다시 만들어 그립니다(`docs/dev/effects.md`). 원작 자료에 이펙트가 없는 동작(궁극기, 대시 공격)은 칼날 자리에 남는 빛의 띠(`src/player/weapon_trail.gd`)로 대신합니다.
 - 개발용 위치에 넣으면 에디터를 열거나 `tools/test.sh`를 돌릴 때 Godot가 자동으로 가져옵니다.
 - 실행 파일은 켤 때 `characters/` 폴더의 모델을 직접 읽습니다. 모델이 있는 PC에서 `tools/export_windows.sh`를 돌리면 모델까지 넣은 `build/Crossfield-windows-with-model.zip`이 생기므로, 가족 PC에 처음 설치할 때는 이것을 풀면 됩니다. 이 zip은 어디에도 올리지 않습니다.
 

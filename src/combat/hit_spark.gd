@@ -5,9 +5,28 @@ extends Node3D
 
 const LIFETIME := 0.25
 
+## 가운데가 밝고 가장자리로 흐려지는 둥근 빛. 그림 없이 판만 그리면 흰 네모로 보였다.
+static var _glow: GradientTexture2D
+
 var _age := 0.0
 var _flash: MeshInstance3D
 var _material: StandardMaterial3D
+
+
+static func _glow_texture() -> GradientTexture2D:
+	if _glow == null:
+		var gradient := Gradient.new()
+		gradient.set_color(0, Color(1, 1, 1, 1))
+		gradient.set_color(1, Color(1, 1, 1, 0))
+		gradient.add_point(0.25, Color(1, 1, 1, 0.85))
+		_glow = GradientTexture2D.new()
+		_glow.gradient = gradient
+		_glow.fill = GradientTexture2D.FILL_RADIAL
+		_glow.fill_from = Vector2(0.5, 0.5)
+		_glow.fill_to = Vector2(1.0, 0.5)
+		_glow.width = 64
+		_glow.height = 64
+	return _glow
 
 
 static func spawn(parent: Node, position: Vector3, effect: HitData.Effect) -> void:
@@ -23,6 +42,8 @@ func _build(effect: HitData.Effect) -> void:
 	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_material.albedo_texture = _glow_texture()
 	_material.no_depth_test = true
 	var color := Color(1.0, 0.95, 0.75)
 	if effect != HitData.Effect.NONE:

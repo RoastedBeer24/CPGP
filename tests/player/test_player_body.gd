@@ -58,7 +58,8 @@ func test_attack_chain_plays_attack_clips_and_draws_sword() -> void:
 	await _frames(6)
 	assert_eq(player.body.dominant_animation(), &"attack_1", "첫 공격 동작")
 	assert_true(player.body.sword_shown(), "공격하면 검을 든다")
-	assert_true(player.body.trail.sample_count() > 1, "휘두르면 칼날 자리에 검기가 남는다")
+	if player.body.fx == null or not player.body.fx.has_effects(&"attack_1"):
+		assert_true(player.body.trail.sample_count() > 1, "원작 이펙트가 없으면 칼날 자리에 검기가 남는다")
 	await _frames(20)
 	intent.attack_pressed = true
 	await _frames(12)

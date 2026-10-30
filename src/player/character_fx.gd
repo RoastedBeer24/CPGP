@@ -1,13 +1,15 @@
 class_name CharacterFx
 extends Node3D
-## 캐릭터 동작에 맞춰 원작의 소리와 보이스를 낸다. 몸(PlayerBody)이 동작을 틀 때 play(동작 이름)를 부른다.
+## 캐릭터 동작에 맞춰 원작의 소리와 보이스, 이펙트를 낸다. 몸(PlayerBody)이 동작을 틀 때 play(동작 이름)를 부른다.
 ##
-## 원본 꾸러미(zip, tools/extract_character_fx.py가 만든다)의 fx.json에 동작마다 "몇 초에 어떤 소리를 낼지"가 있다.
+## 원본 꾸러미(zip, tools/extract_character_fx.py가 만든다)의 fx.json에 동작마다 "몇 초에 무엇을 낼지"가 있다.
 ##   - 소리: 여러 후보 중 하나를 고르고(random) 원본 볼륨대로 낸다. 효과음 버스(SFX).
 ##   - 보이스: 확률·재사용 대기·우선순위가 있다. 설정의 음성 언어로 고르고, 음성 버스(Voice)로 낸다.
 ##     더 높은 우선순위의 보이스가 나오면 지금 보이스를 끊는다.
-## 동작이 끊기고 다음 동작이 시작되면 아직 나지 않은 소리는 버린다(연속 공격에서 앞 동작의 끝소리가 겹치지 않게).
-## zip은 원작 자산이라 저장소에 없다. 없으면 아무 소리도 내지 않는다.
+##   - 이펙트: 원작 이펙트(칼빛·불꽃·연기)를 시각에 맞춰 띄운다(FxEffect). 이펙트 모델과 파티클 설정도 zip에 있다.
+## 동작이 끊기고 다음 동작이 시작되면 아직 나지 않은 것은 버린다(연속 공격에서 앞 동작의 끝소리가 겹치지 않게).
+## 이미 나온 이펙트는 제 끝 시각까지 보인다.
+## zip은 원작 자산이라 저장소에 없다. 없으면 소리와 이펙트 없이 돈다.
 
 ## 원본 볼륨은 원작 믹서 기준이라 그대로 내면 작다. 전체를 이만큼 키운다(dB).
 const GAIN_DB := 6.0
@@ -30,6 +32,8 @@ var _sounds: Array[AudioStreamPlayer3D] = []
 var _voice: AudioStreamPlayer3D
 var _voice_priority := -1
 var _voice_ready_at := 0.0
+## 미리 읽어 둘 이펙트 [glb 파일, 파티클 파일]. 처음 틀 때 멈칫하지 않게 한 프레임에 하나씩 읽는다.
+var _preload: Array[Array] = []
 
 
 ## 꾸러미를 읽는다. 없거나 읽지 못하면 false (소리 없이 돈다).
@@ -45,6 +49,9 @@ func setup(zip_path: String) -> bool:
 	_roles = _loaded[zip_path]["roles"]
 	_streams = _loaded[zip_path]["streams"]
 	_voice = _make_player(&"Voice")
+	for role: String in _roles:
+		for effect: Dictionary in (_roles[role] as Dictionary).get("effects", []):
+			_preload.append([str(effect.get("file", "")), str(effect.get("particles", ""))])
 	return true
 
 
@@ -54,6 +61,12 @@ func has_sounds() -> bool:
 
 func has_role(role: StringName) -> bool:
 	return _roles.has(String(role))
+
+
+## 동작에 원작 이펙트가 있는지 (있으면 몸이 임시 검기를 그리지 않는다)
+func has_effects(role: StringName) -> bool:
+	var info: Dictionary = _roles.get(String(role), {})
+	return not (info.get("effects", []) as Array).is_empty()
 
 
 ## 동작에 딸린 소리를 시작한다. 앞 동작의 아직 나지 않은 소리는 버린다.
@@ -66,6 +79,8 @@ func play(role: StringName) -> void:
 		_pending.append([_clock + float(sound["time"]), "sound", sound])
 	for voice: Dictionary in info.get("voices", []):
 		_pending.append([_clock + float(voice["time"]), "voice", voice])
+	for effect: Dictionary in info.get("effects", []):
+		_pending.append([_clock + float(effect.get("start", 0.0)), "effect", effect])
 	_pending.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
 
 
@@ -77,10 +92,29 @@ func _process(delta: float) -> void:
 	_clock += delta
 	while not _pending.is_empty() and float(_pending[0][0]) <= _clock:
 		var event: Array = _pending.pop_front()
-		if event[1] == "sound":
-			_play_sound(event[2])
-		else:
-			_play_voice(event[2])
+		match event[1]:
+			"sound":
+				_play_sound(event[2])
+			"voice":
+				_play_voice(event[2])
+			"effect":
+				_play_effect(event[2])
+	if not _preload.is_empty():
+		var next: Array = _preload.pop_back()
+		EffectLibrary.load_effect(_source, str(next[0]), str(next[1]))
+
+
+## 원작 이펙트 하나를 띄운다. 붙일 자리(뼈나 모델)는 몸이 알려 준다.
+func _play_effect(info: Dictionary) -> void:
+	var body := get_parent() as PlayerBody
+	if body == null or not body.has_model:
+		return
+	var effect := EffectLibrary.load_effect(_source, str(info.get("file", "")), str(info.get("particles", "")))
+	var mount: Variant = info.get("mount")
+	var anchor := body.effect_anchor(StringName(str(mount)) if mount != null else &"")
+	var spawned := FxEffect.spawn(effect, info, anchor, body.model_root())
+	if spawned != null:
+		spawned.time_scale = body.action_time_scale
 
 
 func _play_sound(sound: Dictionary) -> void:

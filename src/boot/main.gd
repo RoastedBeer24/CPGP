@@ -7,8 +7,10 @@ extends Node
 ##   godot --path . -- --join=192.168.0.12
 ##   godot --path . -- --single --character=endministrator_m   # 캐릭터 고르기
 ##   godot --path . -- --single --autoplay        # 내 플레이어가 저절로 싸운다 (화면 확인용, AutoPilot)
+##   godot --path . -- --single --autoplay=combo  # 로비에서 제자리 공격·배틀 스킬만 되풀이 (이펙트 확인용)
 ##   godot --path . -- --single --character-screen   # 로비에서 캐릭터 화면을 연 채로 시작 (화면 확인용)
 ##   godot --path . -- --single --character-weapon   # 캐릭터 화면에서 무기 보기를 켠 채로 시작 (화면 확인용)
+##   --capture=700,720,740 --capture-dir=폴더    # 그 프레임들의 화면을 PNG로 저장하고 끝냄 (화면 확인용, FrameCapture)
 ##   --no-update                                 # 자동 업데이트를 하지 않음
 ##   --update-url=http://127.0.0.1:8000/latest   # 업데이트 확인 주소 바꾸기 (시험용)
 ##
@@ -74,7 +76,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _notification(what: int) -> void:
 	# 창이 포커스를 잃으면 마우스를 풀어 준다.
 	# 자동 조종과 화면 녹화(--write-movie, tools/screenshot.sh)는 화면 확인용이라 창이 포커스를 잃어도 멈추지 않는다.
-	var recording := not Engine.get_write_movie_path().is_empty()
+	var recording := not Engine.get_write_movie_path().is_empty() or has_node("FrameCapture")
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and session != null and not pause_menu.visible and not autoplay and not recording:
 		open_pause_menu()
 	# 창을 닫을 때 받아 둔 업데이트가 있으면 설치한다.
@@ -168,6 +170,7 @@ func _on_player_spawned(player: Player) -> void:
 		var pilot := AutoPilot.new()
 		pilot.name = "AutoPilot"
 		pilot.player = player
+		pilot.combo_only = OS.get_cmdline_user_args().has("--autoplay=combo")
 		player.add_child(pilot)
 
 
@@ -237,7 +240,11 @@ func _install_pending_update(relaunch: bool) -> void:
 
 func _apply_command_line() -> void:
 	var args := OS.get_cmdline_user_args()
-	autoplay = args.has("--autoplay")
+	autoplay = args.has("--autoplay") or args.has("--autoplay=combo")
+	var capture := FrameCapture.from_command_line(args)
+	if capture != null:
+		capture.name = "FrameCapture"
+		add_child(capture)
 	for arg in args:
 		if arg.begins_with("--character="):
 			command_line_character = StringName(arg.trim_prefix("--character="))

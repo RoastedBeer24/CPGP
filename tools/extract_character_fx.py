@@ -100,9 +100,16 @@ def main(extras, who, target):
             if not os.path.isfile(source):
                 continue
             effect_files[os.path.basename(source)] = source
-            effects.append({"effect": event["effect"], "file": os.path.basename(source), "start": event.get("start", 0.0),
-                            "end": event.get("end", 0.0), "mount": event.get("mount"), "move": event.get("move"),
-                            "rot": event.get("rot"), "pose": event.get("pose"), "scale": event.get("scale"),
+            # 파티클 설정(유니티 파티클 시스템을 옮겨 적은 JSON)도 함께 넣는다. 게임이 이것으로 파티클을 만든다.
+            particles = info.get("particle_data")
+            particle_file = None
+            if particles and os.path.isfile(os.path.join(extras, particles)):
+                particle_file = os.path.basename(particles)
+                effect_files[particle_file] = os.path.join(extras, particles)
+            effects.append({"effect": event["effect"], "file": os.path.basename(source), "particles": particle_file,
+                            "start": event.get("start", 0.0), "end": event.get("end", 0.0), "mount": event.get("mount"),
+                            "move": event.get("move"), "rot": event.get("rot"), "pose": event.get("pose"),
+                            "path": event.get("path"), "scale": event.get("scale"),
                             "grounded": event.get("grounded", False)})
         if sounds or voices or effects:
             roles[role] = {"length": end, "loop": role in LOOPING, "sounds": sounds, "voices": voices, "effects": effects}

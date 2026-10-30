@@ -187,6 +187,8 @@ var _weapon_anchors: Dictionary[int, Node3D] = {}
 var _weapon_place := WeaponPlace.HIDDEN
 var _weapon_reveal := 0.0
 var _weapon_materials: Array[ShaderMaterial] = []
+## 원작 이펙트를 붙일 노드 (이름 → 노드)
+var _effect_anchors: Dictionary[StringName, Node3D] = {}
 ## 동작에 맞춰 원작 소리·보이스를 낸다. 꾸러미가 없으면 소리 없이 돈다.
 var fx: CharacterFx
 ## 휘두를 때 칼날이 지나간 자리에 남는 빛의 띠
@@ -331,6 +333,32 @@ func weapon_anchor() -> Node3D:
 ## 가볍게 맞아 윗몸이 움찔하는 중인지
 func flinching() -> bool:
 	return _is_playing(&"flinch")
+
+## 캐릭터 모델의 뿌리 (원작 이펙트를 놓는 기준: 원점이 발밑, +Z가 캐릭터 앞). 모델이 없으면 몸 자신.
+func model_root() -> Node3D:
+	return _model if _model != null else self
+
+## 원작 이펙트를 붙일 노드: 이름이 없으면 모델 뿌리, 있으면 모델 안의 그 노드(무기 자리 wep_R 등)나 뼈.
+func effect_anchor(mount: StringName) -> Node3D:
+	if mount.is_empty() or _model == null:
+		return model_root()
+	if _effect_anchors.has(mount) and is_instance_valid(_effect_anchors[mount]):
+		return _effect_anchors[mount]
+	var anchor := _model.find_child(String(mount), true, false) as Node3D
+	if anchor == null and _skeleton != null and _skeleton.find_bone(mount) >= 0:
+		var attachment := BoneAttachment3D.new()
+		attachment.name = "Fx_" + String(mount)
+		_skeleton.add_child(attachment)
+		attachment.bone_name = mount
+		anchor = attachment
+	if anchor == null:
+		anchor = model_root()
+	_effect_anchors[mount] = anchor
+	return anchor
+
+## 동작이 흐르는 빠르기 (맞힌 순간 멈추면 0). 원작 이펙트도 같이 멈춘다.
+func action_time_scale() -> float:
+	return 0.0 if player != null and player.is_hit_stopped() else 1.0
 
 ## 무기가 지금 있는 자리 (WeaponPlace). 사라지는 중이면 사라지기 전 자리다.
 func weapon_place() -> int:
@@ -1050,7 +1078,9 @@ func _update_actions(delta: float) -> void:
 	_action_showing = showing
 	_tree.set(&"parameters/action/blend_amount", _action_amount)
 	if trail != null:
-		trail.active = showing and _action_amount > 0.5 and not idle_clip and not NON_ATTACK_CLIPS.has(_action_clip)
+		# 원작 이펙트(칼빛)가 있는 동작은 임시 검기를 그리지 않는다.
+		var original_effect := fx != null and fx.has_effects(_action_clip)
+		trail.active = showing and _action_amount > 0.5 and not idle_clip and not NON_ATTACK_CLIPS.has(_action_clip) and not original_effect
 		trail.crystal = _action_clip == &"skill" or _action_clip == &"ultimate"
 
 
