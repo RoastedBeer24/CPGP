@@ -201,6 +201,8 @@ func _host_fire(index: int, origin: Vector3, direction: Vector3, spread: float, 
 		results.append(_apply(entry["health"], entry["amount"], entry["position"], weapon.id, entry["headshot"]))
 	var tracer_start := muzzle_for_others(origin, direction)
 	_show_tracers.rpc(tracer_start, ends)
+	# 총성은 적이 듣는다.
+	StealthNoise.emit(self, origin, StealthNoise.GUNSHOT_RADIUS, StealthNoise.Kind.GUNSHOT)
 	if not is_multiplayer_authority():
 		_spawn_tracers(tracer_start, ends)
 	_send_confirmations(results)
@@ -215,6 +217,7 @@ func _host_melee(index: int, origin: Vector3, direction: Vector3) -> void:
 		return
 	var space := get_world_3d().direct_space_state
 	var results: Array[Dictionary] = []
+	StealthNoise.emit(self, origin, StealthNoise.MELEE_RADIUS, StealthNoise.Kind.MELEE)
 	for hitbox in CombatQuery.melee(space, origin, direction, weapon.melee_reach, weapon.melee_arc_degrees, TEAM):
 		var amount := weapon.damage * hitbox.multiplier(weapon.headshot_multiplier)
 		results.append(_apply(hitbox.health, amount, hitbox.global_position, weapon.id, hitbox.part == Hitbox.Part.HEAD))

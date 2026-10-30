@@ -20,6 +20,7 @@ const WEAPON_3 := &"weapon_3"
 const WEAPON_NEXT := &"weapon_next"
 const WEAPON_PREV := &"weapon_prev"
 const CAMERA_TOGGLE := &"camera_toggle"
+const INTERACT := &"interact"
 
 const DEFAULT_KEYS := {
 	MOVE_FORWARD: [KEY_W],
@@ -37,6 +38,7 @@ const DEFAULT_KEYS := {
 	WEAPON_3: [KEY_3],
 	# 사이버펑크 2077은 걸어 다닐 때 3인칭이 없어서, 차량 시점 전환 키(V)를 따른다.
 	CAMERA_TOGGLE: [KEY_V],
+	INTERACT: [KEY_F],
 }
 
 const DEFAULT_MOUSE_BUTTONS := {

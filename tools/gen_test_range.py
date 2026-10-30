@@ -40,6 +40,18 @@ glow_bloom = 0.15
 fog_enabled = true
 fog_light_color = Color(0.12, 0.08, 0.22, 1)
 fog_density = 0.015""")
+# 적의 길찾기 지도. "navigation_geometry" 그룹의 충돌 지형으로 실행할 때 굽는다(src/zones/zone.gd).
+sub.append("""[sub_resource type="NavigationMesh" id="navmesh"]
+geometry_parsed_geometry_type = 1
+geometry_source_geometry_mode = 1
+geometry_source_group_name = &"navigation_geometry"
+agent_height = 2.0
+agent_radius = 0.5
+agent_max_climb = 0.25
+agent_max_slope = 30.0""")
+sub.append("""[sub_resource type="StandardMaterial3D" id="mat_container"]
+albedo_color = Color(0.15, 0.35, 0.3, 1)
+roughness = 0.85""")
 sub.append("""[sub_resource type="BoxShape3D" id="stair_ramp_shape"]
 size = Vector3(3, 0.2, %.4f)""" % (math.hypot(6.0, 3.0) + 1.2))
 
@@ -67,10 +79,17 @@ def label(name, parent, pos, text, size=110):
     nodes.append(f'[node name="{name}" type="Label3D" parent="{parent}"]\n'
                  f"transform = {tf(pos)}\nbillboard = 1\nfont_size = {size}\noutline_size = 8\ntext = \"{text}\"")
 
-def group(name, parent="."):
-    nodes.append(f'[node name="{name}" type="Node3D" parent="{parent}"]')
+def groups_attr(groups):
+    return (" groups=[" + ", ".join('"%s"' % g for g in groups) + "]") if groups else ""
 
-nodes.append('[node name="TestRange" type="Node3D"]')
+def group(name, parent=".", groups=None):
+    nodes.append(f'[node name="{name}" type="Node3D" parent="{parent}"{groups_attr(groups)}]')
+
+def marker(name, parent, pos, groups=None):
+    nodes.append(f'[node name="{name}" type="Marker3D" parent="{parent}"{groups_attr(groups)}]\ntransform = {tf(pos)}')
+
+nodes.append('[node name="TestRange" type="Node3D"]\nscript = ExtResource("zone")')
+nodes.append('[node name="Navigation" type="NavigationRegion3D" parent="."]\nnavigation_mesh = SubResource("navmesh")')
 nodes.append('[node name="Environment" type="WorldEnvironment" parent="."]\nenvironment = SubResource("env")')
 nodes.append(f'[node name="Moon" type="DirectionalLight3D" parent="."]\ntransform = {tf((0, 20, 0), -55, 30)}\nlight_color = Color(0.6, 0.65, 1, 1)\nlight_energy = 0.5\nshadow_enabled = true')
 
@@ -78,7 +97,7 @@ group("SpawnPoints")
 for i, x in enumerate([0, 2, -2]):
     nodes.append(f'[node name="Spawn{i + 1}" type="Marker3D" parent="SpawnPoints"]\ntransform = {tf((x, 0.05, 10))}')
 
-group("Geometry")
+group("Geometry", groups=["navigation_geometry"])
 box("Floor", "Geometry", (0, -0.5, 0), (60, 1, 60), "floor")
 
 # 1) 턱 오르기 연습: 높이별 턱 (앞쪽 -Z)
@@ -137,8 +156,10 @@ for i, (x, z, w, h) in enumerate([(-6, 2, 2, 1.1), (-3, 3, 1, 1.8), (4, 2, 2.5, 
 
 # 6) 바깥 벽과 네온
 group("Walls", "Geometry")
+# 서쪽 벽은 가운데(z -2..2)를 비워 잠입 구역으로 이어지게 한다.
 for name, pos, size in [("North", (0, 3, -30), (60, 6, 1)), ("South", (0, 3, 30), (60, 6, 1)),
-                        ("East", (30, 3, 0), (1, 6, 60)), ("West", (-30, 3, 0), (1, 6, 60))]:
+                        ("East", (30, 3, 0), (1, 6, 60)),
+                        ("WestNorth", (-30, 3, -16.25), (1, 6, 28.5)), ("WestSouth", (-30, 3, 16.25), (1, 6, 28.5))]:
     box(name, "Geometry/Walls", pos, size, "wall")
 group("Neon")
 for i, (pos, size, mat) in enumerate([((0, 4.5, -29.4), (20, 0.15, 0.1), "neon_pink"),
@@ -152,7 +173,12 @@ for i, (pos, color) in enumerate([((0, 4, -27), "Color(1, 0.2, 0.7, 1)"), ((27, 
                  f"light_color = {color}\nlight_energy = 3.0\nomni_range = 14.0")
 
 ext = ['[ext_resource type="PackedScene" path="res://src/enemies/training_dummy.tscn" id="dummy"]',
-       '[ext_resource type="PackedScene" path="res://src/enemies/grunt.tscn" id="grunt"]']
+       '[ext_resource type="PackedScene" path="res://src/enemies/enemy.tscn" id="enemy"]',
+       '[ext_resource type="Script" path="res://src/zones/zone.gd" id="zone"]',
+       '[ext_resource type="Script" path="res://src/zones/hide_spot.gd" id="hide_spot"]',
+       '[ext_resource type="Resource" path="res://data/enemies/guard.tres" id="guard"]',
+       '[ext_resource type="Resource" path="res://data/enemies/heavy.tres" id="heavy"]',
+       '[ext_resource type="Resource" path="res://data/enemies/guard_arena.tres" id="guard_arena"]']
 # 7) 사격장 (시작 위치 뒤쪽, +Z): 거리별 허수아비. 시작 위치에서 뒤로 돌면 보인다.
 group("ShootingRange")
 box("FiringLine", "ShootingRange", (-4, 0.01, 13), (14, 0.02, 0.15), "neon_cyan", collide=False)
@@ -167,14 +193,79 @@ for i, (x, z, armor) in enumerate([(-9, 18, 0), (-5, 23, 0), (-1, 28, 0), (2, 19
     label(f"DistLabel{i + 1}", "ShootingRange", (x, 2.9, z), f"{dist}m" + (" 장갑" if armor else ""), 80)
 
 # 8) 경비병 구역 (남동쪽): 엄폐물 뒤의 적 두 명. 죽으면 10초 뒤 되살아난다.
-group("Arena")
+group("Arena", groups=["navigation_geometry"])
 label("ArenaLabel", "Arena", (17, 3.2, 12), "경비병 구역", 110)
 for i, (x, z) in enumerate([(22, 22), (26, 18)]):
-    nodes.append(f'[node name="Grunt{i + 1}" parent="Arena" instance=ExtResource("grunt")]\n'
-                 f"transform = {tf((x, 0, z), 0, 135)}\nrespawn_delay = 10.0\nsight_range = 15.0")
+    nodes.append(f'[node name="Guard{i + 1}" parent="Arena" instance=ExtResource("enemy")]\n'
+                 f'transform = {tf((x, 0, z), 0, 135)}\ndata = ExtResource("guard_arena")\nrespawn_delay = 10.0')
 for i, (x, z, w, h) in enumerate([(19, 16, 3, 1.1), (23, 14, 1, 2.0), (16, 20, 1, 1.6)]):
     box(f"ArenaCover{i + 1}", "Arena", (x, h / 2, z), (w, h, 1), "cover")
+group("ArenaCoverPoints", "Arena")
+for i, (x, z) in enumerate([(19, 14.8), (23, 12.8), (14.8, 20), (19, 17.2)]):
+    marker(f"Cover{i + 1}", "Arena/ArenaCoverPoints", (x, 0.05, z), ["cover_points"])
+
+# 9) 잠입 구역 (서쪽 벽 너머, x -90..-30): 순찰하는 경비 넷, 중장갑병 하나, 보초 하나.
+#    엄폐용 상자, 창고 건물, 시체를 숨길 컨테이너가 있다. 쓰러진 적은 60초 뒤 되살아난다.
+group("Stealth", groups=["navigation_geometry"])
+label("StealthLabel", "Stealth", (-27, 3.4, 0), "잠입 구역", 110)
+label("StealthHelp", "Stealth", (-27, 2.6, 0), "웅크리면 발소리가 나지 않음 · 뒤에서 F: 제압 · F: 몸 들기 · 컨테이너 옆에서 F: 숨기기", 40)
+box("StealthFloor", "Stealth", (-60, -0.5, 0), (60, 1, 60), "floor")
+for name, pos, size in [("StealthNorth", (-60, 3, -30), (60, 6, 1)), ("StealthSouth", (-60, 3, 30), (60, 6, 1)),
+                        ("StealthWest", (-90, 3, 0), (1, 6, 60))]:
+    box(name, "Stealth", pos, size, "wall")
+# 창고 건물
+for i, (x, z, w, d) in enumerate([(-45, -15, 10, 8), (-45, 15, 10, 8), (-71, 0, 12, 14), (-80, -21, 8, 8)]):
+    box(f"Warehouse{i + 1}", "Stealth", (x, 2, z), (w, 4, d), "wall")
+# 엄폐용 상자(1.2m)와 낮은 벽
+crates = [(-37, -5), (-37, 5), (-55, -4), (-55, 5), (-60, -16), (-62, 19), (-78, 12), (-62, -6)]
+for i, (x, z) in enumerate(crates):
+    box(f"Crate{i + 1}", "Stealth", (x, 0.6, z), (2, 1.2, 2), "cover")
+box("LowWall", "Stealth", (-50, 0.5, 0), (1, 1, 6), "cover")
+# 시체를 숨길 컨테이너
+for i, (x, z) in enumerate([(-53, -25), (-85, 22), (-36, 24)]):
+    box(f"Container{i + 1}", "Stealth", (x, 1.3, z), (2.6, 2.6, 1.8), "container")
+    nodes.append(f'[node name="HideSpot{i + 1}" type="Node3D" parent="Stealth"]\ntransform = {tf((x, 0, z))}\n'
+                 f'script = ExtResource("hide_spot")\nradius = 2.8')
+    label(f"ContainerLabel{i + 1}", "Stealth", (x, 3.0, z), "컨테이너", 50)
+# 조명: 어두운 구역에 띄엄띄엄
+for i, (pos, color) in enumerate([((-40, 5, 0), "Color(0.1, 0.9, 1, 1)"), ((-60, 5, -18), "Color(1, 0.2, 0.7, 1)"),
+                                  ((-60, 5, 18), "Color(0.1, 0.9, 1, 1)"), ((-82, 5, 0), "Color(1, 0.2, 0.7, 1)")]):
+    nodes.append(f'[node name="StealthLight{i + 1}" type="OmniLight3D" parent="Stealth"]\ntransform = {tf(pos)}\n'
+                 f"light_color = {color}\nlight_energy = 2.0\nomni_range = 16.0")
+# 엄폐 지점: 상자 양옆
+group("StealthCoverPoints", "Stealth")
+for i, (x, z) in enumerate(crates):
+    marker(f"Cover{i * 2 + 1}", "Stealth/StealthCoverPoints", (x - 1.6, 0.05, z), ["cover_points"])
+    marker(f"Cover{i * 2 + 2}", "Stealth/StealthCoverPoints", (x + 1.6, 0.05, z), ["cover_points"])
+# 순찰 경로
+group("Routes", "Stealth")
+routes = {
+    "Route1": [(-37, -9), (-37, -21), (-53, -21), (-53, -9)],
+    "Route2": [(-37, 9), (-53, 9), (-53, 21), (-37, 21)],
+    "Route3": [(-58, -11), (-58, 11)],
+    "Route4": [(-64, -11), (-82, -11), (-82, 12), (-64, 12)],
+}
+for name, points in routes.items():
+    group(name, "Stealth/Routes")
+    for j, (x, z) in enumerate(points):
+        marker(f"Point{j + 1}", f"Stealth/Routes/{name}", (x, 0.05, z))
+group("Enemies", "Stealth")
+stealth_enemies = [
+    ("Patrol1", (-37, -9), 0, "guard", "Route1"),
+    ("Patrol2", (-53, 21), 180, "guard", "Route2"),
+    ("Patrol3", (-58, 11), 0, "guard", "Route3"),
+    ("Patrol4", (-82, 12), 90, "guard", "Route4"),
+    ("Heavy1", (-64, 0), -90, "heavy", None),
+    ("Sentry1", (-75, -15), -135, "guard", None),
+]
+for name, (x, z), yaw, kind, route in stealth_enemies:
+    lines = [f'[node name="{name}" parent="Stealth/Enemies" instance=ExtResource("enemy")]',
+             f"transform = {tf((x, 0, z), 0, yaw)}", f'data = ExtResource("{kind}")', "respawn_delay = 60.0"]
+    if route:
+        lines.append(f'patrol_route = NodePath("../../Routes/{route}")')
+    nodes.append("\n".join(lines))
 
 text = f"[gd_scene load_steps={len(sub) + len(ext) + 1} format=3]\n\n" + "\n".join(ext) + "\n\n" + "\n\n".join(sub) + "\n\n" + "\n\n".join(nodes) + "\n"
-open(out, "w").write(text)
+# Windows에서도 UTF-8과 LF로 쓴다 (기본값이면 시스템 코드 페이지로 써져 한글이 깨진다).
+open(out, "w", encoding="utf-8", newline="\n").write(text)
 print("written", len(nodes), "nodes")

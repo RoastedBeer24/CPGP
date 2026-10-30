@@ -1,6 +1,6 @@
 [gd_scene load_steps=12 format=3]
 
-[ext_resource type="Script" path="res://src/enemies/grunt.gd" id="1_grunt"]
+[ext_resource type="Script" path="res://src/enemies/enemy.gd" id="1_enemy"]
 [ext_resource type="Script" path="res://src/combat/health.gd" id="2_health"]
 [ext_resource type="Script" path="res://src/combat/hitbox.gd" id="3_hitbox"]
 
@@ -40,11 +40,26 @@ properties/0/replication_mode = 1
 properties/1/path = NodePath("Health:current")
 properties/1/spawn = true
 properties/1/replication_mode = 2
+properties/2/path = NodePath(".:alert")
+properties/2/spawn = true
+properties/2/replication_mode = 2
+properties/3/path = NodePath(".:detection")
+properties/3/spawn = true
+properties/3/replication_mode = 2
+properties/4/path = NodePath(".:condition")
+properties/4/spawn = true
+properties/4/replication_mode = 2
+properties/5/path = NodePath(".:stashed")
+properties/5/spawn = true
+properties/5/replication_mode = 2
+properties/6/path = NodePath(".:carrier_peer")
+properties/6/spawn = true
+properties/6/replication_mode = 2
 
-[node name="Grunt" type="CharacterBody3D"]
+[node name="Enemy" type="CharacterBody3D"]
 collision_layer = 2
 collision_mask = 1
-script = ExtResource("1_grunt")
+script = ExtResource("1_enemy")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
@@ -88,3 +103,19 @@ font_size = 64
 outline_size = 8
 modulate = Color(1, 0.4, 0.4, 1)
 text = "80"
+
+[node name="AlertLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
+visible = false
+pixel_size = 0.0006
+billboard = 1
+no_depth_test = true
+fixed_size = true
+font_size = 72
+outline_size = 10
+text = "?"
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 1.0
+target_desired_distance = 1.0
+radius = 0.4

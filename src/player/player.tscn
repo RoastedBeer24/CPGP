@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://src/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://src/combat/health.gd" id="2_health"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://src/combat/weapon_holder.gd" id="4_weapons"]
 [ext_resource type="Script" path="res://src/combat/viewmodel.gd" id="5_viewmodel"]
 [ext_resource type="Script" path="res://src/player/player_body.gd" id="6_body"]
+[ext_resource type="Script" path="res://src/player/interactor.gd" id="7_interactor"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
 resource_local_to_scene = true
@@ -128,3 +129,6 @@ script = ExtResource("4_weapons")
 
 [node name="Viewmodel" type="Node3D" parent="Head/WeaponHolder"]
 script = ExtResource("5_viewmodel")
+
+[node name="Interactor" type="Node" parent="."]
+script = ExtResource("7_interactor")

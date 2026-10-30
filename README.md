@@ -2,9 +2,9 @@
 
 1인칭 사이버펑크 액션 RPG(구역형 반오픈월드, 싱글 + LAN 코옵) 프로젝트입니다. 엔진은 Godot 4.5이고, 아트풍은 서브컬처풍입니다. 가족끼리 즐기기 위한 비상업 프로젝트입니다.
 
-현재 단계: **M2 (전투 기초) 완료**, 다음은 M3 (적 AI와 잠입)
+현재 단계: **M3 (적 AI와 잠입) 완료**, 다음은 M4 (해킹)
 
-- 검수 체크리스트: [M1](docs/dev/review/m1.md), [M2](docs/dev/review/m2.md), [3인칭과 캐릭터 모델](docs/dev/review/third-person.md), [설정](docs/dev/review/settings.md)
+- 검수 체크리스트: [M1](docs/dev/review/m1.md), [M2](docs/dev/review/m2.md), [M3](docs/dev/review/m3.md), [3인칭과 캐릭터 모델](docs/dev/review/third-person.md), [설정](docs/dev/review/settings.md)
 
 ## 기획 문서
 - 기초 구상서: [docs/design/00-foundation.md](docs/design/00-foundation.md)

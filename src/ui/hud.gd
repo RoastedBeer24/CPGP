@@ -1,6 +1,7 @@
 class_name Hud
 extends CanvasLayer
-## 게임 화면 위의 정보: 조준점과 명중 표시, 체력, 무기와 탄약, 피격 효과, 사망 화면, F3 디버그 표시.
+## 게임 화면 위의 정보: 조준점과 명중 표시, 체력, 무기와 탄약, 피격 효과, 사망 화면, F3 디버그 표시,
+## 상호작용 안내("F: 제압" 등).
 
 const HIT_MARKER_TIME := 0.15
 const HIT_COLOR := Color(1, 1, 1)
@@ -15,6 +16,7 @@ var _last_health := -1.0
 var _hit_marker_left := 0.0
 var _damage_flash := 0.0
 var _dead_time := 0.0
+var _prompt_label: Label
 
 @onready var crosshair: ColorRect = $Crosshair
 @onready var hit_marker: Control = %HitMarker
@@ -29,6 +31,20 @@ var _dead_time := 0.0
 
 
 func _ready() -> void:
+	# 조준점 바로 아래에 상호작용 안내를 띄운다.
+	_prompt_label = Label.new()
+	_prompt_label.name = "PromptLabel"
+	_prompt_label.set_anchors_preset(Control.PRESET_CENTER)
+	_prompt_label.offset_left = -200.0
+	_prompt_label.offset_right = 200.0
+	_prompt_label.offset_top = 36.0
+	_prompt_label.offset_bottom = 70.0
+	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_prompt_label.add_theme_font_size_override("font_size", 22)
+	_prompt_label.add_theme_color_override("font_color", Color(1, 0.9, 0.4))
+	_prompt_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_prompt_label.add_theme_constant_override("outline_size", 6)
+	add_child(_prompt_label)
 	debug_label.hide()
 	hit_marker.hide()
 	death_overlay.hide()
@@ -49,6 +65,7 @@ func _process(delta: float) -> void:
 	_update_health(delta)
 	_update_weapon()
 	_update_hit_marker(delta)
+	_prompt_label.text = _player.interactor.prompt
 	if debug_label.visible:
 		_update_debug()
 

@@ -54,12 +54,16 @@ var _dodge_cooldown := 0.0
 var _last_tap_msec: Dictionary = {}
 var _pending_dodge := Vector2.ZERO
 var _pending_cycle := 0
+# 발소리 (호스트에서 모든 플레이어의 움직임을 보고 적에게 들려준다)
+var _noise_last_position := Vector3.ZERO
+var _step_left := 0.0
 
 @onready var head: Node3D = $Head
 @onready var camera_arm: SpringArm3D = $Head/CameraArm
 @onready var camera: Camera3D = $Head/CameraArm/Camera3D
 @onready var collision: CollisionShape3D = $CollisionShape3D
 @onready var body: PlayerBody = $Body
+@onready var interactor: Interactor = $Interactor
 @onready var _capsule: CapsuleShape3D = collision.shape
 @onready var health: Health = $Health
 @onready var weapons: WeaponHolder = $Head/WeaponHolder
@@ -122,6 +126,26 @@ func look(delta_radians: Vector2) -> void:
 	head.rotation.x = clampf(head.rotation.x - delta_radians.y, deg_to_rad(-89.0), deg_to_rad(89.0))
 
 
+## 움직임을 보고 발소리를 낸다. 호스트에서 모든 플레이어에 대해 돈다(다른 피어의 플레이어는 속도가
+## 동기화되지 않으므로 위치 변화로 잰다). 웅크려 걸으면 소리가 나지 않는다.
+func _emit_footsteps(delta: float) -> void:
+	var moved := global_position - _noise_last_position
+	_noise_last_position = global_position
+	# 한 프레임에 2m 넘게 움직였으면 걸은 게 아니라 옮겨진 것이다(스폰, 부활).
+	if delta <= 0.0 or not health.is_alive() or moved.length() > 2.0:
+		return
+	var speed := minf(Vector2(moved.x, moved.z).length() / delta, 15.0)
+	_step_left -= delta
+	if _step_left > 0.0 or crouch_blend > 0.5 or speed < 1.0:
+		return
+	if speed > config.walk_speed + 0.8:
+		_step_left = 0.3
+		StealthNoise.emit(self, global_position, StealthNoise.SPRINT_STEP_RADIUS, StealthNoise.Kind.FOOTSTEP)
+	else:
+		_step_left = 0.45
+		StealthNoise.emit(self, global_position, StealthNoise.WALK_STEP_RADIUS, StealthNoise.Kind.FOOTSTEP)
+
+
 ## 1인칭과 3인칭을 바꾼다. 내 화면에서만 바뀌고 다른 사람에게는 영향이 없다.
 func set_third_person(enabled: bool) -> void:
 	if third_person == enabled:
@@ -155,6 +179,8 @@ func aim_direction() -> Vector3:
 
 
 func _process(delta: float) -> void:
+	if multiplayer.is_server():
+		_emit_footsteps(delta)
 	if not is_multiplayer_authority():
 		# 원격 플레이어는 동기화된 crouch_blend로 몸 높이만 맞춘다.
 		_apply_crouch_shape()
@@ -219,7 +245,8 @@ func _physics_process(delta: float) -> void:
 		_try_mantle()
 
 	var sprinting := intent.sprint and intent.move.y > 0.3 and not crouched
-	weapons.tick(delta, intent, health.is_alive() and not sprinting)
+	# 몸을 들고 있으면 쏠 수 없다.
+	weapons.tick(delta, intent, health.is_alive() and not sprinting and interactor.carrying == null)
 	_update_fov(delta, intent)
 
 
@@ -389,6 +416,8 @@ func _target_speed(intent: PlayerIntent) -> float:
 		speed = config.sprint_speed
 	if weapons.aiming:
 		speed *= config.aim_speed_multiplier
+	if interactor.carrying != null:
+		speed = minf(speed, config.walk_speed) * Interactor.CARRY_SPEED_MULTIPLIER
 	return speed
 
 

@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/ai/enemy_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")

@@ -1,7 +1,12 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="PackedScene" path="res://src/enemies/training_dummy.tscn" id="dummy"]
-[ext_resource type="PackedScene" path="res://src/enemies/grunt.tscn" id="grunt"]
+[ext_resource type="PackedScene" path="res://src/enemies/enemy.tscn" id="enemy"]
+[ext_resource type="Script" path="res://src/zones/zone.gd" id="zone"]
+[ext_resource type="Script" path="res://src/zones/hide_spot.gd" id="hide_spot"]
+[ext_resource type="Resource" path="res://data/enemies/guard.tres" id="guard"]
+[ext_resource type="Resource" path="res://data/enemies/heavy.tres" id="heavy"]
+[ext_resource type="Resource" path="res://data/enemies/guard_arena.tres" id="guard_arena"]
 
 [sub_resource type="StandardMaterial3D" id="mat_floor"]
 albedo_color = Color(0.26, 0.27, 0.32, 1)
@@ -48,10 +53,27 @@ fog_enabled = true
 fog_light_color = Color(0.12, 0.08, 0.22, 1)
 fog_density = 0.015
 
+[sub_resource type="NavigationMesh" id="navmesh"]
+geometry_parsed_geometry_type = 1
+geometry_source_geometry_mode = 1
+geometry_source_group_name = &"navigation_geometry"
+agent_height = 2.0
+agent_radius = 0.5
+agent_max_climb = 0.25
+agent_max_slope = 30.0
+
+[sub_resource type="StandardMaterial3D" id="mat_container"]
+albedo_color = Color(0.15, 0.35, 0.3, 1)
+roughness = 0.85
+
 [sub_resource type="BoxShape3D" id="stair_ramp_shape"]
 size = Vector3(3, 0.2, 7.9082)
 
 [node name="TestRange" type="Node3D"]
+script = ExtResource("zone")
+
+[node name="Navigation" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("navmesh")
 
 [node name="Environment" type="WorldEnvironment" parent="."]
 environment = SubResource("env")
@@ -73,7 +95,7 @@ transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 2, 0.05, 10)
 [node name="Spawn3" type="Marker3D" parent="SpawnPoints"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -2, 0.05, 10)
 
-[node name="Geometry" type="Node3D" parent="."]
+[node name="Geometry" type="Node3D" parent="." groups=["navigation_geometry"]]
 
 [node name="Floor" type="CSGBox3D" parent="Geometry"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 0, -0.5, 0)
@@ -322,10 +344,16 @@ use_collision = true
 size = Vector3(1, 6, 60)
 material = SubResource("mat_wall")
 
-[node name="West" type="CSGBox3D" parent="Geometry/Walls"]
-transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -30, 3, 0)
+[node name="WestNorth" type="CSGBox3D" parent="Geometry/Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -30, 3, -16.25)
 use_collision = true
-size = Vector3(1, 6, 60)
+size = Vector3(1, 6, 28.5)
+material = SubResource("mat_wall")
+
+[node name="WestSouth" type="CSGBox3D" parent="Geometry/Walls"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -30, 3, 16.25)
+use_collision = true
+size = Vector3(1, 6, 28.5)
 material = SubResource("mat_wall")
 
 [node name="Neon" type="Node3D" parent="."]
@@ -429,7 +457,7 @@ font_size = 80
 outline_size = 8
 text = "6m 장갑"
 
-[node name="Arena" type="Node3D" parent="."]
+[node name="Arena" type="Node3D" parent="." groups=["navigation_geometry"]]
 
 [node name="ArenaLabel" type="Label3D" parent="Arena"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 17, 3.2, 12)
@@ -438,15 +466,15 @@ font_size = 110
 outline_size = 8
 text = "경비병 구역"
 
-[node name="Grunt1" parent="Arena" instance=ExtResource("grunt")]
+[node name="Guard1" parent="Arena" instance=ExtResource("enemy")]
 transform = Transform3D(-0.707107, 0, 0.707107, 0, 1, -0, -0.707107, -0, -0.707107, 22, 0, 22)
+data = ExtResource("guard_arena")
 respawn_delay = 10.0
-sight_range = 15.0
 
-[node name="Grunt2" parent="Arena" instance=ExtResource("grunt")]
+[node name="Guard2" parent="Arena" instance=ExtResource("enemy")]
 transform = Transform3D(-0.707107, 0, 0.707107, 0, 1, -0, -0.707107, -0, -0.707107, 26, 0, 18)
+data = ExtResource("guard_arena")
 respawn_delay = 10.0
-sight_range = 15.0
 
 [node name="ArenaCover1" type="CSGBox3D" parent="Arena"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 19, 0.55, 16)
@@ -465,3 +493,351 @@ transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 16, 0.8, 20)
 use_collision = true
 size = Vector3(1, 1.6, 1)
 material = SubResource("mat_cover")
+
+[node name="ArenaCoverPoints" type="Node3D" parent="Arena"]
+
+[node name="Cover1" type="Marker3D" parent="Arena/ArenaCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 19, 0.05, 14.8)
+
+[node name="Cover2" type="Marker3D" parent="Arena/ArenaCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 23, 0.05, 12.8)
+
+[node name="Cover3" type="Marker3D" parent="Arena/ArenaCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 14.8, 0.05, 20)
+
+[node name="Cover4" type="Marker3D" parent="Arena/ArenaCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, 19, 0.05, 17.2)
+
+[node name="Stealth" type="Node3D" parent="." groups=["navigation_geometry"]]
+
+[node name="StealthLabel" type="Label3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -27, 3.4, 0)
+billboard = 1
+font_size = 110
+outline_size = 8
+text = "잠입 구역"
+
+[node name="StealthHelp" type="Label3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -27, 2.6, 0)
+billboard = 1
+font_size = 40
+outline_size = 8
+text = "웅크리면 발소리가 나지 않음 · 뒤에서 F: 제압 · F: 몸 들기 · 컨테이너 옆에서 F: 숨기기"
+
+[node name="StealthFloor" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -60, -0.5, 0)
+use_collision = true
+size = Vector3(60, 1, 60)
+material = SubResource("mat_floor")
+
+[node name="StealthNorth" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -60, 3, -30)
+use_collision = true
+size = Vector3(60, 6, 1)
+material = SubResource("mat_wall")
+
+[node name="StealthSouth" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -60, 3, 30)
+use_collision = true
+size = Vector3(60, 6, 1)
+material = SubResource("mat_wall")
+
+[node name="StealthWest" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -90, 3, 0)
+use_collision = true
+size = Vector3(1, 6, 60)
+material = SubResource("mat_wall")
+
+[node name="Warehouse1" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -45, 2, -15)
+use_collision = true
+size = Vector3(10, 4, 8)
+material = SubResource("mat_wall")
+
+[node name="Warehouse2" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -45, 2, 15)
+use_collision = true
+size = Vector3(10, 4, 8)
+material = SubResource("mat_wall")
+
+[node name="Warehouse3" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -71, 2, 0)
+use_collision = true
+size = Vector3(12, 4, 14)
+material = SubResource("mat_wall")
+
+[node name="Warehouse4" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -80, 2, -21)
+use_collision = true
+size = Vector3(8, 4, 8)
+material = SubResource("mat_wall")
+
+[node name="Crate1" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -37, 0.6, -5)
+use_collision = true
+size = Vector3(2, 1.2, 2)
+material = SubResource("mat_cover")
+
+[node name="Crate2" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -37, 0.6, 5)
+use_collision = true
+size = Vector3(2, 1.2, 2)
+material = SubResource("mat_cover")
+
+[node name="Crate3" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -55, 0.6, -4)
+use_collision = true
+size = Vector3(2, 1.2, 2)
+material = SubResource("mat_cover")
+
+[node name="Crate4" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -55, 0.6, 5)
+use_collision = true
+size = Vector3(2, 1.2, 2)
+material = SubResource("mat_cover")
+
+[node name="Crate5" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -60, 0.6, -16)
+use_collision = true
+size = Vector3(2, 1.2, 2)
+material = SubResource("mat_cover")
+
+[node name="Crate6" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -62, 0.6, 19)
+use_collision = true
+size = Vector3(2, 1.2, 2)
+material = SubResource("mat_cover")
+
+[node name="Crate7" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -78, 0.6, 12)
+use_collision = true
+size = Vector3(2, 1.2, 2)
+material = SubResource("mat_cover")
+
+[node name="Crate8" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -62, 0.6, -6)
+use_collision = true
+size = Vector3(2, 1.2, 2)
+material = SubResource("mat_cover")
+
+[node name="LowWall" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -50, 0.5, 0)
+use_collision = true
+size = Vector3(1, 1, 6)
+material = SubResource("mat_cover")
+
+[node name="Container1" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -53, 1.3, -25)
+use_collision = true
+size = Vector3(2.6, 2.6, 1.8)
+material = SubResource("mat_container")
+
+[node name="HideSpot1" type="Node3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -53, 0, -25)
+script = ExtResource("hide_spot")
+radius = 2.8
+
+[node name="ContainerLabel1" type="Label3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -53, 3, -25)
+billboard = 1
+font_size = 50
+outline_size = 8
+text = "컨테이너"
+
+[node name="Container2" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -85, 1.3, 22)
+use_collision = true
+size = Vector3(2.6, 2.6, 1.8)
+material = SubResource("mat_container")
+
+[node name="HideSpot2" type="Node3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -85, 0, 22)
+script = ExtResource("hide_spot")
+radius = 2.8
+
+[node name="ContainerLabel2" type="Label3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -85, 3, 22)
+billboard = 1
+font_size = 50
+outline_size = 8
+text = "컨테이너"
+
+[node name="Container3" type="CSGBox3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -36, 1.3, 24)
+use_collision = true
+size = Vector3(2.6, 2.6, 1.8)
+material = SubResource("mat_container")
+
+[node name="HideSpot3" type="Node3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -36, 0, 24)
+script = ExtResource("hide_spot")
+radius = 2.8
+
+[node name="ContainerLabel3" type="Label3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -36, 3, 24)
+billboard = 1
+font_size = 50
+outline_size = 8
+text = "컨테이너"
+
+[node name="StealthLight1" type="OmniLight3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -40, 5, 0)
+light_color = Color(0.1, 0.9, 1, 1)
+light_energy = 2.0
+omni_range = 16.0
+
+[node name="StealthLight2" type="OmniLight3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -60, 5, -18)
+light_color = Color(1, 0.2, 0.7, 1)
+light_energy = 2.0
+omni_range = 16.0
+
+[node name="StealthLight3" type="OmniLight3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -60, 5, 18)
+light_color = Color(0.1, 0.9, 1, 1)
+light_energy = 2.0
+omni_range = 16.0
+
+[node name="StealthLight4" type="OmniLight3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -82, 5, 0)
+light_color = Color(1, 0.2, 0.7, 1)
+light_energy = 2.0
+omni_range = 16.0
+
+[node name="StealthCoverPoints" type="Node3D" parent="Stealth"]
+
+[node name="Cover1" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -38.6, 0.05, -5)
+
+[node name="Cover2" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -35.4, 0.05, -5)
+
+[node name="Cover3" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -38.6, 0.05, 5)
+
+[node name="Cover4" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -35.4, 0.05, 5)
+
+[node name="Cover5" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -56.6, 0.05, -4)
+
+[node name="Cover6" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -53.4, 0.05, -4)
+
+[node name="Cover7" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -56.6, 0.05, 5)
+
+[node name="Cover8" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -53.4, 0.05, 5)
+
+[node name="Cover9" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -61.6, 0.05, -16)
+
+[node name="Cover10" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -58.4, 0.05, -16)
+
+[node name="Cover11" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -63.6, 0.05, 19)
+
+[node name="Cover12" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -60.4, 0.05, 19)
+
+[node name="Cover13" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -79.6, 0.05, 12)
+
+[node name="Cover14" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -76.4, 0.05, 12)
+
+[node name="Cover15" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -63.6, 0.05, -6)
+
+[node name="Cover16" type="Marker3D" parent="Stealth/StealthCoverPoints" groups=["cover_points"]]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -60.4, 0.05, -6)
+
+[node name="Routes" type="Node3D" parent="Stealth"]
+
+[node name="Route1" type="Node3D" parent="Stealth/Routes"]
+
+[node name="Point1" type="Marker3D" parent="Stealth/Routes/Route1"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -37, 0.05, -9)
+
+[node name="Point2" type="Marker3D" parent="Stealth/Routes/Route1"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -37, 0.05, -21)
+
+[node name="Point3" type="Marker3D" parent="Stealth/Routes/Route1"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -53, 0.05, -21)
+
+[node name="Point4" type="Marker3D" parent="Stealth/Routes/Route1"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -53, 0.05, -9)
+
+[node name="Route2" type="Node3D" parent="Stealth/Routes"]
+
+[node name="Point1" type="Marker3D" parent="Stealth/Routes/Route2"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -37, 0.05, 9)
+
+[node name="Point2" type="Marker3D" parent="Stealth/Routes/Route2"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -53, 0.05, 9)
+
+[node name="Point3" type="Marker3D" parent="Stealth/Routes/Route2"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -53, 0.05, 21)
+
+[node name="Point4" type="Marker3D" parent="Stealth/Routes/Route2"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -37, 0.05, 21)
+
+[node name="Route3" type="Node3D" parent="Stealth/Routes"]
+
+[node name="Point1" type="Marker3D" parent="Stealth/Routes/Route3"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -58, 0.05, -11)
+
+[node name="Point2" type="Marker3D" parent="Stealth/Routes/Route3"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -58, 0.05, 11)
+
+[node name="Route4" type="Node3D" parent="Stealth/Routes"]
+
+[node name="Point1" type="Marker3D" parent="Stealth/Routes/Route4"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -64, 0.05, -11)
+
+[node name="Point2" type="Marker3D" parent="Stealth/Routes/Route4"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -82, 0.05, -11)
+
+[node name="Point3" type="Marker3D" parent="Stealth/Routes/Route4"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -82, 0.05, 12)
+
+[node name="Point4" type="Marker3D" parent="Stealth/Routes/Route4"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -64, 0.05, 12)
+
+[node name="Enemies" type="Node3D" parent="Stealth"]
+
+[node name="Patrol1" parent="Stealth/Enemies" instance=ExtResource("enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -37, 0, -9)
+data = ExtResource("guard")
+respawn_delay = 60.0
+patrol_route = NodePath("../../Routes/Route1")
+
+[node name="Patrol2" parent="Stealth/Enemies" instance=ExtResource("enemy")]
+transform = Transform3D(-1, 0, 1.22465e-16, 0, 1, -0, -1.22465e-16, -0, -1, -53, 0, 21)
+data = ExtResource("guard")
+respawn_delay = 60.0
+patrol_route = NodePath("../../Routes/Route2")
+
+[node name="Patrol3" parent="Stealth/Enemies" instance=ExtResource("enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -58, 0, 11)
+data = ExtResource("guard")
+respawn_delay = 60.0
+patrol_route = NodePath("../../Routes/Route3")
+
+[node name="Patrol4" parent="Stealth/Enemies" instance=ExtResource("enemy")]
+transform = Transform3D(6.12323e-17, 0, 1, 0, 1, -0, -1, 0, 6.12323e-17, -82, 0, 12)
+data = ExtResource("guard")
+respawn_delay = 60.0
+patrol_route = NodePath("../../Routes/Route4")
+
+[node name="Heavy1" parent="Stealth/Enemies" instance=ExtResource("enemy")]
+transform = Transform3D(6.12323e-17, -0, -1, 0, 1, -0, 1, 0, 6.12323e-17, -64, 0, 0)
+data = ExtResource("heavy")
+respawn_delay = 60.0
+
+[node name="Sentry1" parent="Stealth/Enemies" instance=ExtResource("enemy")]
+transform = Transform3D(-0.707107, -0, -0.707107, 0, 1, -0, 0.707107, -0, -0.707107, -75, 0, -15)
+data = ExtResource("guard")
+respawn_delay = 60.0

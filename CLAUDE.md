@@ -31,17 +31,22 @@
 | 3인칭과 캐릭터 모델 | 완료 | V로 1인칭/3인칭 전환, 캐릭터 모델에 코드로 만든 자세, 든 무기 동기화 (`docs/dev/review/third-person.md`) |
 | 설정 | 완료 | 소리 5종, 창 모드·크기, 그래픽, 감도·시야각, 키 바꾸기 (`docs/dev/review/settings.md`) |
 | 릴리스와 자동 업데이트 | 완료 | 기본 브랜치 푸시 → GitHub 릴리스 `build-<커밋 수>`, 게임이 켤 때 스스로 업데이트 (`docs/dev/testing.md`) |
-| **M3 적 AI와 잠입** | **다음 작업** | 아래 계획 참고 |
-| M4 해킹 ~ M8 폴리싱 | 예정 | 구상서 §9 |
+| M3 적 AI와 잠입 | 완료 | 감지·소리·경계 단계, 순찰과 길찾기, 제압·몸 숨기기, 중장갑병, 잠입 구역 (`docs/dev/review/m3.md`) |
+| **M4 해킹** | **다음 작업** | 아래 계획 참고 |
+| M5 성장 ~ M8 폴리싱 | 예정 | 구상서 §9 |
 
-### M3 계획 (구상서 §7.1 기준)
-- 적 AI 상태 머신: 순찰(경로 지점) → 의심 → 수색 → 전투, 경계 단계가 서로 퍼짐
-- 감지: 시야 원뿔과 거리, 웅크리면 덜 보임, 소리(총성, 달리기)
-- 은신 제압(뒤에서 접근해 상호작용), 시체 옮기기·숨기기
-- 이동하는 적: NavigationRegion3D와 NavigationAgent3D, 엄폐 지점 사용
-- 적 3종의 기초: 일반 경비, 중장갑병(장갑 높음), 적 넷러너는 M4에서 해킹과 함께
-- 지금의 `src/enemies/grunt.gd`(제자리에서 돌아서 쏘기만 함)를 이 AI로 바꾼다
-- 코옵: AI 판단은 호스트만, 상태와 위치는 동기화. 테스트는 `NetTestCase`로
+### M4 계획 (구상서 §7.1 기준)
+- 스캔 모드: 적과 장치를 표시하고 정보를 보여 준다
+- RAM 기반 퀵핵 4종: 카메라 차단, 주의 분산(적을 소리 쪽으로 유인, `StealthNoise`/`Enemy.hear` 활용), 과열, 무기 오작동
+- 장치 해킹: 문, 포탑
+- 적 넷러너: 플레이어를 역해킹. 세 번째 적 종류(`EnemyData` + `data/enemies/netrunner.tres`)
+- 코옵: 해킹 판정은 호스트가 한다. 테스트는 `NetTestCase`로
+
+### M3에서 만든 구조 (적 AI)
+- `src/enemies/enemy.gd`: 경계 단계(무경계·의심·수색·전투)와 쓰러짐(사망·기절), 순찰·수색·엄폐 이동, 사격. 판단은 호스트, 상태는 `StateSync`
+- `src/ai/senses.gd`(시야), `src/ai/stealth_noise.gd`(소리), `src/ai/enemy_data.gd`(수치, `data/enemies/*.tres`)
+- `src/player/interactor.gd`: F 상호작용(제압, 몸 들기·내려놓기·숨기기). 적 경로는 Players 노드 기준 상대 경로로 주고받는다
+- `src/zones/zone.gd`: 길찾기 지도 굽기. `src/zones/hide_spot.gd`: 시체 숨길 곳. 엄폐 지점은 `cover_points` 그룹의 Marker3D
 
 ## 개발 환경
 - **Godot 4.5.1 표준판**(GDScript), Forward+ 렌더러, Jolt Physics
@@ -85,4 +90,8 @@ godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --joi
 - **정적 함수와 자동 로드:** 정적 함수 안에서는 자동 로드 이름(`InputActions`)을 못 쓴다. 스크립트를 `preload`해서 쓴다.
 - **화면 없는 실행:** `DisplayServer.keyboard_get_keycode_from_physical`, 창 크기·모드 같은 창 기능은 headless에서 오류가 난다. `DisplayServer.get_name() == "headless"`면 건너뛴다.
 - **컴파일 오류면 테스트가 멈춘다:** 스크립트에 문법 오류가 있으면 러너가 끝나지 않는다. `timeout 500 tools/test.sh > build/test_all.log`처럼 시간 제한을 걸고 파일로 받아 확인한다.
+- **`Noise`라는 이름:** Godot에 같은 이름의 내장 클래스(노이즈 텍스처)가 있다. 소리 이벤트는 `StealthNoise`다. 새 class_name을 지을 때 내장 클래스와 겹치지 않는지 본다.
+- **길찾기 지도 굽기:** CSG 지형은 트리에 들어간 다음 프레임에 모양이 생긴다. 이미 트리에 있는 NavigationRegion3D에 지도를 바꿔 넣으면 `--fixed-fps`에서 길찾기 서버가 받지 못한다. 그래서 `Zone`은 지역을 트리에서 뺐다가 구운 새 지도를 넣고 다시 붙인다. 구운 지도는 씬마다 한 번만 만든다.
+- **길찾기 높이:** 구운 지도 표면이 바닥보다 0.5m 위에 있다. NavigationAgent3D의 `path_desired_distance`가 0.5 이하면 첫 지점에 영영 닿지 못한다(지금 1.0). 거리 비교는 수평(`_flat_distance`)으로 한다.
+- **Windows에서 씬 생성 스크립트:** `open()`에 `encoding="utf-8"`을 주지 않으면 시스템 코드 페이지로 써져 한글이 깨진다.
 - **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped, 뼈대 공간은 Z가 위)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.

@@ -34,7 +34,7 @@ const BASE_MOUSE_SENSITIVITY := 0.0025
 const REBINDABLE_ACTIONS: Array[StringName] = [
 	Actions.MOVE_FORWARD, Actions.MOVE_BACK, Actions.MOVE_LEFT, Actions.MOVE_RIGHT,
 	Actions.JUMP, Actions.SPRINT, Actions.CROUCH, Actions.RELOAD,
-	Actions.WEAPON_1, Actions.WEAPON_2, Actions.WEAPON_3, Actions.CAMERA_TOGGLE,
+	Actions.WEAPON_1, Actions.WEAPON_2, Actions.WEAPON_3, Actions.CAMERA_TOGGLE, Actions.INTERACT,
 ]
 const ACTION_LABELS := {
 	Actions.MOVE_FORWARD: "앞으로",
@@ -49,6 +49,7 @@ const ACTION_LABELS := {
 	Actions.WEAPON_2: "무기 2",
 	Actions.WEAPON_3: "무기 3",
 	Actions.CAMERA_TOGGLE: "1인칭 / 3인칭 전환",
+	Actions.INTERACT: "상호작용 (제압, 몸 들기)",
 }
 
 ## 저장 위치. 테스트는 사용자의 실제 설정을 건드리지 않도록 다른 파일로 바꾼다.
