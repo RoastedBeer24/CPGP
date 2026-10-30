@@ -274,6 +274,65 @@ func test_foot_ik_finds_step_under_one_foot() -> void:
 	assert_almost_eq(player.body.foot_offsets.y, 0.0, 0.04, "오른발은 바닥")
 	assert_almost_eq(player.global_position.y, 0.0, 0.05, "몸(캡슐)은 디딤판에 걸리지 않는다")
 
+func test_visor_key_takes_headgear_off_and_on() -> void:
+	await _spawn(null)
+	assert_true(player.visor_on, "처음에는 바이저를 쓰고 있다")
+	intent.visor_pressed = true
+	await _frames(2)
+	assert_false(player.visor_on, "H를 누르면 벗는다")
+	if player.body.has_headgear():
+		assert_false(player.body.headgear_shown(), "바이저 메시가 숨는다")
+	intent.visor_pressed = true
+	await _frames(2)
+	assert_true(player.visor_on, "다시 누르면 쓴다")
+	if player.body.has_headgear():
+		assert_true(player.body.headgear_shown())
+
+
+func test_crouching_holds_gun_low_in_front() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	intent.crouch_pressed = true
+	await _frames(40)
+	var chest := player.body.bone_position(player.body.appearance.chest_bone)
+	assert_true(player.body.has_muzzle())
+	var muzzle := player.to_local(player.body.muzzle_position())
+	assert_true(muzzle.z < chest.z - 0.2, "총을 몸 앞에 든다: 총구 %s, 가슴 %s" % [muzzle.z, chest.z])
+	assert_true(muzzle.y < chest.y, "가슴보다 낮춰 든다: 총구 %s, 가슴 %s" % [muzzle.y, chest.y])
+
+
+func test_cloth_hangs_and_stays_above_ground() -> void:
+	if not await _spawn_with_model() or not player.body.has_cloth():
+		return
+	# 옷자락 물리는 그리는 프레임에만 남으므로, 계산이 끝난 순간의 망토 끝 높이를 잰다.
+	var skeleton: Skeleton3D = player.body._skeleton
+	var tips: Array[int] = []
+	for chain in player.body.appearance.cloth_chains:
+		tips.append(skeleton.find_bone(chain.split(":")[1]))
+	var heights := {"low": INF, "high": -INF}
+	player.body._cloth.modification_processed.connect(func() -> void:
+		for bone in tips:
+			var y := (skeleton.global_transform * skeleton.get_bone_global_pose(bone)).origin.y - player.global_position.y
+			heights["low"] = minf(heights["low"], y)
+			heights["high"] = maxf(heights["high"], y))
+	intent.crouch_pressed = true
+	intent.move = Vector2(0, 1)
+	await _frames(60)
+	var chest := player.body.bone_position(player.body.appearance.chest_bone)
+	assert_true(float(heights["high"]) < chest.y, "웅크려 걸어도 망토 끝은 가슴 아래로 늘어진다: %s" % heights["high"])
+	# 일어서서 달리다가 슬라이딩
+	intent.crouch_pressed = true
+	await _frames(20)
+	intent.sprint = true
+	await _frames(45)
+	intent.sprint = false
+	intent.crouch_pressed = true
+	heights["low"] = INF
+	await _frames(30)
+	assert_eq(player.state, Player.State.SLIDE)
+	assert_true(float(heights["low"]) > -0.02, "슬라이딩해도 망토가 땅을 뚫지 않는다: %s" % heights["low"])
+
+
 func test_blade_has_no_muzzle() -> void:
 	if not await _spawn_with_model():
 		return

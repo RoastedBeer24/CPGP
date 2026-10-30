@@ -37,7 +37,7 @@ const REBINDABLE_ACTIONS: Array[StringName] = [
 	Actions.JUMP, Actions.SPRINT, Actions.CROUCH,
 	Actions.FIRE, Actions.AIM, Actions.RELOAD,
 	Actions.WEAPON_1, Actions.WEAPON_2, Actions.WEAPON_3, Actions.WEAPON_NEXT, Actions.WEAPON_PREV,
-	Actions.INTERACT, Actions.SCAN, Actions.CAMERA_TOGGLE, Actions.FREE_LOOK,
+	Actions.INTERACT, Actions.SCAN, Actions.CAMERA_TOGGLE, Actions.FREE_LOOK, Actions.TOGGLE_VISOR,
 ]
 const ACTION_LABELS := {
 	Actions.MOVE_FORWARD: "앞으로",
@@ -59,6 +59,7 @@ const ACTION_LABELS := {
 	Actions.WEAPON_PREV: "이전 무기",
 	Actions.FREE_LOOK: "자유 시야 (휠: 확대·축소)",
 	Actions.SCAN: "스캔 (누르는 동안, 1~3: 퀵핵)",
+	Actions.TOGGLE_VISOR: "바이저 쓰기 / 벗기",
 }
 
 ## 저장 위치. 테스트는 사용자의 실제 설정을 건드리지 않도록 다른 파일로 바꾼다.
@@ -99,6 +100,10 @@ static var key_overrides: Dictionary[StringName, int] = {}
 # ---- 게임 ----
 static var start_third_person := false
 static var auto_update := true
+## 캐릭터가 머리 장비(바이저)를 쓰고 있는지. 코옵에서도 남에게 그대로 보인다.
+static var visor_on := true
+## 에셋 키: 비공개 에셋 저장소(캐릭터 모델)를 읽는 GitHub 토큰. 비어 있으면 에셋을 받지 않는다(AssetUpdater).
+static var asset_key := ""
 
 
 static func reset_to_defaults() -> void:
@@ -122,6 +127,8 @@ static func reset_to_defaults() -> void:
 	key_overrides = {}
 	start_third_person = false
 	auto_update = true
+	visor_on = true
+	asset_key = ""
 
 
 static func volume(bus: StringName) -> float:
@@ -172,6 +179,8 @@ static func load_settings() -> void:
 				key_overrides[action] = code
 	start_third_person = bool(config.get_value("game", "start_third_person", start_third_person))
 	auto_update = bool(config.get_value("game", "auto_update", auto_update))
+	visor_on = bool(config.get_value("game", "visor_on", visor_on))
+	asset_key = str(config.get_value("game", "asset_key", asset_key)).strip_edges()
 
 
 ## 다른 섹션(마지막 접속 주소 등)은 남겨 두고 설정 섹션만 다시 쓴다.
@@ -203,6 +212,8 @@ static func save() -> Error:
 		config.set_value("keys", String(action), key_overrides[action])
 	config.set_value("game", "start_third_person", start_third_person)
 	config.set_value("game", "auto_update", auto_update)
+	config.set_value("game", "visor_on", visor_on)
+	config.set_value("game", "asset_key", asset_key)
 	return config.save(path)
 
 

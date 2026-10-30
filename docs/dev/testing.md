@@ -10,6 +10,7 @@
 ## Windows 실행 파일
 - **받기:** 기본 브랜치에 푸시하면 GitHub Actions가 테스트를 돌리고, 통과하면 `CyberUniverse-windows.zip`을 **릴리스**(`build-<커밋 수>`)로 올립니다. 릴리스는 최근 5개만 남깁니다. 다른 브랜치의 푸시는 Actions 탭의 Artifacts에만 올라갑니다(30일 보관).
 - **자동 업데이트:** 내보낸 게임은 켤 때 최신 릴리스의 빌드 번호를 보고, 자기보다 크면 받아서 바꿉니다(`src/core/updater.gd`). 메뉴에서는 바로 설치하고 다시 시작하고, 게임 중이면 메뉴로 돌아오거나 끝낼 때 설치합니다. 실행 중인 exe는 스스로 덮어쓸 수 없으므로 PowerShell 스크립트가 게임 종료를 기다렸다가 파일을 바꿉니다. 설치 기록: `%APPDATA%\Godot\app_userdata\CyberUniverse\update\apply_update.log`
+- **에셋(캐릭터 모델) 자동 업데이트:** 게임과 따로, 비공개 에셋 저장소의 릴리스에서 바뀐 에셋만 받습니다(`src/core/asset_updater.gd`, 설정의 "에셋 키" 필요). 올리는 방법과 키 만드는 법은 [에셋 목록](../assets.md)의 "모델 자동 업데이트"에 있습니다. 받은 파일은 SHA-256이 목록과 맞을 때만 바꿔 넣고, 다음에 생기는 플레이어부터 새 모델을 씁니다.
 - **빌드 번호:** 커밋 수(`git rev-list --count HEAD`)입니다. `tools/export_windows.sh`가 내보내는 동안만 `src/core/build_info.gd`에 써 넣고 되돌립니다. 저장소의 값은 항상 0이고, 0인 실행 파일(에디터, 개발 실행)은 업데이트하지 않습니다.
 - **직접 만들기:** `tools/export_windows.sh`를 실행하면 `build/CyberUniverse-windows.zip`이 생깁니다. 내보내기 템플릿이 없으면 공식 배포본(약 1.3GB)을 받아 체크섬을 검증한 뒤 Windows용만 꺼내 둡니다.
 - 게임 데이터는 exe 안에 들어 있어 파일 하나로 실행됩니다(캐릭터 모델만 `characters/` 폴더에 따로). `CyberUniverse.console.exe`로 실행하면 로그 창이 함께 뜹니다.

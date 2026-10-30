@@ -23,6 +23,7 @@ const CAMERA_TOGGLE := &"camera_toggle"
 const INTERACT := &"interact"
 const FREE_LOOK := &"free_look"
 const SCAN := &"scan"
+const TOGGLE_VISOR := &"toggle_visor"
 
 const DEFAULT_KEYS := {
 	MOVE_FORWARD: [KEY_W],
@@ -45,6 +46,8 @@ const DEFAULT_KEYS := {
 	FREE_LOOK: [KEY_QUOTELEFT],
 	# 사이버펑크 2077처럼 Tab을 누르고 있는 동안 스캔한다. 스캔 중에는 1~3으로 퀵핵을 올린다.
 	SCAN: [KEY_TAB],
+	# 머리 장비(바이저)를 벗거나 쓴다. 사이버펑크 2077에는 없는 키라 비어 있는 H(Head)를 쓴다.
+	TOGGLE_VISOR: [KEY_H],
 }
 
 const DEFAULT_MOUSE_BUTTONS := {

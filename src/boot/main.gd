@@ -11,6 +11,7 @@ extends Node
 ##
 ## 내보낸 Windows 게임은 켤 때 GitHub 릴리스에서 새 버전을 찾아 받는다(Updater).
 ## 메뉴에 있으면 바로 설치하고 다시 시작하고, 게임 중이면 게임을 끝낼 때 설치한다.
+## 캐릭터 모델 같은 에셋은 비공개 에셋 저장소에서 따로 받는다(AssetUpdater, 설정의 에셋 키가 있을 때).
 
 const SESSION_SCENE := preload("res://src/net/session.tscn")
 
@@ -19,6 +20,8 @@ var session: Session
 var start_in_third_person := false
 ## 자동 업데이트. 업데이트할 수 없는 실행 환경이면 null.
 var updater: Updater
+## 에셋(캐릭터 모델) 자동 업데이트. 업데이트할 수 없는 실행 환경이면 null.
+var asset_updater: AssetUpdater
 var settings_menu: SettingsMenu
 
 @onready var menu: MainMenu = $MainMenu
@@ -116,6 +119,10 @@ func open_settings() -> void:
 
 
 func _on_settings_closed() -> void:
+	# 설정에서 바이저를 바꿨으면 지금 내 캐릭터에도 바로 입힌다.
+	var mine := session.get_local_player() if session != null else null
+	if mine != null and mine.visor_on != GameSettings.visor_on:
+		mine.set_visor(GameSettings.visor_on)
 	if pause_menu.visible:
 		pause_menu.resume_button.grab_focus()
 	elif menu.visible:
@@ -180,6 +187,12 @@ func _start_updater() -> void:
 	updater.status_changed.connect(menu.set_update_status)
 	updater.update_ready.connect(_on_update_ready)
 	updater.check()
+	asset_updater = AssetUpdater.new()
+	asset_updater.name = "AssetUpdater"
+	asset_updater.key = GameSettings.asset_key
+	add_child(asset_updater)
+	asset_updater.status_changed.connect(menu.set_asset_status)
+	asset_updater.check()
 
 
 func _on_update_ready() -> void:

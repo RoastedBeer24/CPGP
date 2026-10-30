@@ -260,9 +260,14 @@ func _build_controls(rows: VBoxContainer) -> void:
 func _build_game(rows: VBoxContainer) -> void:
 	_add_options(rows, "시작 시점", ["1인칭", "3인칭"], 1 if GameSettings.start_third_person else 0,
 		func(index: int) -> void: GameSettings.start_third_person = index == 1)
+	_add_check(rows, "바이저 쓰기", GameSettings.visor_on,
+		func(on: bool) -> void: GameSettings.visor_on = on)
 	_add_check(rows, "자동 업데이트", GameSettings.auto_update,
 		func(on: bool) -> void: GameSettings.auto_update = on)
-	_add_note(rows, "자동 업데이트를 바꾸면 다음에 켤 때부터 적용됩니다.")
+	_add_text(rows, "에셋 키", GameSettings.asset_key, "비공개 에셋 저장소의 GitHub 토큰",
+		func(text: String) -> void: GameSettings.asset_key = text.strip_edges())
+	_add_note(rows, "자동 업데이트는 게임 실행 파일과 캐릭터 모델을 받습니다. 캐릭터 모델은 공개할 수 없어서 비공개 저장소에 두고, "
+		+ "에셋 키가 있어야 받습니다. 바이저는 게임 중에 H 키로도 쓰고 벗습니다. 자동 업데이트와 에셋 키는 다음에 켤 때부터 적용됩니다.")
 
 
 # ---- 줄 만들기 ----
@@ -319,6 +324,17 @@ func _add_check(rows: VBoxContainer, title: String, on: bool, changed: Callable)
 	check.button_pressed = on
 	check.toggled.connect(func(pressed: bool) -> void: changed.call(pressed))
 	return _add_row(rows, title, check)
+
+
+## 글을 넣는 칸. 비밀 값(에셋 키)이라 입력한 글자를 가린다.
+func _add_text(rows: VBoxContainer, title: String, value: String, placeholder: String, changed: Callable) -> HBoxContainer:
+	var field := LineEdit.new()
+	field.custom_minimum_size.x = CONTROL_WIDTH
+	field.text = value
+	field.placeholder_text = placeholder
+	field.secret = true
+	field.text_changed.connect(func(text: String) -> void: changed.call(text))
+	return _add_row(rows, title, field)
 
 
 func _add_note(rows: VBoxContainer, text: String) -> void:

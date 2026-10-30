@@ -23,6 +23,8 @@ func test_save_and_load_round_trip() -> void:
 	GameSettings.crouch_toggle = false
 	GameSettings.key_overrides[InputActions.JUMP] = KEY_J
 	GameSettings.auto_update = false
+	GameSettings.visor_on = false
+	GameSettings.asset_key = "github_pat_test"
 	assert_eq(GameSettings.save(), OK)
 
 	GameSettings.reset_to_defaults()
@@ -36,6 +38,8 @@ func test_save_and_load_round_trip() -> void:
 	assert_false(GameSettings.crouch_toggle)
 	assert_eq(GameSettings.key_overrides.get(InputActions.JUMP), KEY_J)
 	assert_false(GameSettings.auto_update)
+	assert_false(GameSettings.visor_on, "바이저를 벗은 채로 저장")
+	assert_eq(GameSettings.asset_key, "github_pat_test")
 
 
 func test_save_keeps_other_sections() -> void:

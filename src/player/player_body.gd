@@ -71,6 +71,21 @@ const MELEE_FADE_IN := 0.08
 const MELEE_FADE_OUT := 0.2
 const MELEE_CROSSFADE := 0.12
 const COMBO_WINDOW := 1.0
+## 웅크리거나 슬라이딩할 때 총을 앞으로 낮춰 드는 각도(약 40도 아래)
+const LOW_READY_PITCH := 0.7
+## 옷자락(망토) 물리: 동작 자세로 돌아가려는 힘, 흔들림이 줄어드는 정도(0~1), 아래로 처지는 힘,
+## 옷자락 두께(m), 끝 뼈 뒤에 덧붙이는 길이(m). 원본 동작에 펄럭임이 이미 있어서 동작을 강하게 따라가게 한다.
+const CLOTH_STIFFNESS := 8.0
+const CLOTH_DRAG := 0.6
+const CLOTH_GRAVITY := 2.0
+const CLOTH_RADIUS := 0.03
+const CLOTH_TAIL := 0.12
+## 옷자락이 뚫지 않게 막는 몸 모양의 반지름(m): 허벅지, 정강이(원기둥), 골반(공)
+const THIGH_RADIUS := 0.08
+const CALF_RADIUS := 0.06
+const HIPS_RADIUS := 0.13
+## 한 프레임에 이보다 멀리 움직이면 순간 이동(부활 등)으로 보고 옷자락 물리를 처음부터 다시 한다(m).
+const TELEPORT_DISTANCE := 2.0
 ## 발 IK가 땅을 찾을 때 보는 물리 레이어: 1 world, 5 foot_ground(계단 디딤판처럼 발만 딛는 모양)
 const FOOT_GROUND_LAYER := 16
 const FOOT_RAY_MASK := 1 | FOOT_GROUND_LAYER
@@ -131,6 +146,15 @@ var _slide_weight := 0.0
 var _held: Node3D
 var _held_index := -1
 var _muzzle: Node3D
+## 웅크리거나 슬라이딩할 때 총을 낮춰 든 정도 (0~1)
+var _low_blend := 0.0
+# 벗을 수 있는 머리 장비(바이저) 메시와, 지금 보이는지
+var _headgear: Array[GeometryInstance3D] = []
+var _headgear_on := true
+# 옷자락 물리와, 옷자락이 뚫지 않을 땅
+var _cloth: SpringBoneSimulator3D
+var _cloth_ground: SpringBoneCollisionPlane3D
+var _last_position := Vector3.ZERO
 
 # 움직임 재기 (원격 플레이어는 위치가 네트워크로 띄엄띄엄 오므로 바뀐 시간 간격으로 잰다)
 var _sample_position := Vector3.ZERO
@@ -231,6 +255,21 @@ func chest_facing() -> Vector3:
 	return FORWARD.rotated(Vector3.UP, _model_yaw + _twist)
 
 
+## 머리 장비(바이저) 메시가 있는 모델인지
+func has_headgear() -> bool:
+	return not _headgear.is_empty()
+
+
+## 머리 장비(바이저)가 보이는지
+func headgear_shown() -> bool:
+	return has_headgear() and _headgear[0].visible
+
+
+## 옷자락 물리를 쓰는지 (모델에 옷자락 뼈가 있으면)
+func has_cloth() -> bool:
+	return _cloth != null
+
+
 ## 모델을 내린 높이(m, 양수). 웅크려 걷기·슬라이딩·계단에서 골반을 내린 만큼이다.
 ## 꿇어앉기는 동작 자체가 낮아서 내리지 않는다.
 func pelvis_drop() -> float:
@@ -244,6 +283,13 @@ func _process(delta: float) -> void:
 	if not has_model:
 		_pose_placeholder()
 		return
+	if player.visor_on != _headgear_on:
+		_headgear_on = player.visor_on
+		for mesh in _headgear:
+			mesh.visible = _headgear_on
+	if _cloth != null and global_position.distance_to(_last_position) > TELEPORT_DISTANCE:
+		_cloth.reset()
+	_last_position = global_position
 	if _skeleton == null or not visible:
 		return
 	_read_motion(delta, velocity)
@@ -304,13 +350,17 @@ func _read_motion(delta: float, velocity: Vector3) -> void:
 	var wants_ready: bool
 	if animated:
 		# 애니메이션 모드는 조준하거나 쏘거나 휘두를 때만 전투 자세다. 평소에는 이동 동작을 그대로 보여 준다.
-		wants_stance = player.health.is_alive() and player.combat_ready and _sprint < 0.5 and not _sliding
+		# 슬라이딩은 빠르지만 질주가 아니라서 겨눌 수 있다.
+		wants_stance = player.health.is_alive() and player.combat_ready and (_sprint < 0.5 or _sliding)
 		wants_ready = wants_stance and not weapon.is_melee()
 	else:
 		wants_ready = player.health.is_alive() and not weapon.is_melee() and _sprint < 0.5
 		wants_stance = wants_ready
 	ready_blend = move_toward(ready_blend, 1.0 if wants_ready else 0.0, delta * 6.0)
 	_stance = move_toward(_stance, 1.0 if wants_stance else 0.0, delta * 6.0)
+	# 웅크리거나 슬라이딩하면 총을 두 손으로 앞으로 낮춰 든다(애니메이션 모드에서 겨누지 않을 때).
+	var wants_low := animated and player.health.is_alive() and not weapon.is_melee() and (_crouch > 0.5 or _sliding)
+	_low_blend = move_toward(_low_blend, 1.0 if wants_low else 0.0, delta * 5.0)
 
 
 # ---- 모델 불러오기 ----
@@ -327,6 +377,10 @@ func _load_model(scene: PackedScene) -> void:
 	has_model = true
 	placeholder.queue_free()
 	placeholder = null
+	for mesh_name: StringName in appearance.headgear_meshes:
+		var mesh := _model.find_child(String(mesh_name), true, false) as GeometryInstance3D
+		if mesh != null:
+			_headgear.append(mesh)
 
 	var skeletons := _model.find_children("*", "Skeleton3D", true, false)
 	if skeletons.is_empty():
@@ -366,6 +420,60 @@ func _load_model(scene: PackedScene) -> void:
 	_thigh_length = _skeleton.get_bone_rest(_bone[&"calf_l"]).origin.length()
 	_calf_length = _skeleton.get_bone_rest(_bone[&"foot_l"]).origin.length()
 	_setup_animation()
+	_setup_cloth()
+
+
+## 옷자락(망토)을 물리로 흔든다(SpringBoneSimulator3D). 동작 자세를 따라가되 몸보다 조금 늦게 따라오고,
+## 아래로 처지며, 다리·골반·땅을 뚫지 않는다. 덧입힌 자세(BodyPoseModifier) 다음에 계산해야 IK로 옮긴 다리와
+## 부딪히므로 그 뒤에 붙인다.
+## 계산은 세상 기준(CENTER_FROM_WORLD_ORIGIN)으로 한다. Godot 4.5는 몸이나 뼈 기준(NODE, BONE)으로 계산하면
+## 충돌 모양의 위치를 잘못 옮겨서(get_transform_from_skeleton의 곱 순서) 망토가 엉뚱한 곳에 걸려 뒤집힌다.
+func _setup_cloth() -> void:
+	var chains: Array[PackedStringArray] = []
+	for chain in appearance.cloth_chains:
+		var ends := chain.split(":")
+		if ends.size() == 2 and _skeleton.find_bone(ends[0]) >= 0 and _skeleton.find_bone(ends[1]) >= 0:
+			chains.append(ends)
+	if chains.is_empty():
+		return
+	_cloth = SpringBoneSimulator3D.new()
+	_cloth.name = "Cloth"
+	_skeleton.add_child(_cloth)
+	_add_limb_collision(&"thigh_l", &"calf_l", THIGH_RADIUS)
+	_add_limb_collision(&"calf_l", &"foot_l", CALF_RADIUS)
+	_add_limb_collision(&"thigh_r", &"calf_r", THIGH_RADIUS)
+	_add_limb_collision(&"calf_r", &"foot_r", CALF_RADIUS)
+	var hips := SpringBoneCollisionSphere3D.new()
+	_cloth.add_child(hips)
+	hips.bone_name = _skeleton.get_bone_name(_bone[&"pelvis"])
+	hips.radius = HIPS_RADIUS
+	_cloth_ground = SpringBoneCollisionPlane3D.new()
+	_cloth.add_child(_cloth_ground)
+	_cloth.setting_count = chains.size()
+	for i in chains.size():
+		_cloth.set_root_bone_name(i, chains[i][0])
+		_cloth.set_end_bone_name(i, chains[i][1])
+		_cloth.set_extend_end_bone(i, true)
+		_cloth.set_end_bone_length(i, CLOTH_TAIL)
+		_cloth.set_center_from(i, SpringBoneSimulator3D.CENTER_FROM_WORLD_ORIGIN)
+		_cloth.set_radius(i, CLOTH_RADIUS)
+		_cloth.set_stiffness(i, CLOTH_STIFFNESS)
+		_cloth.set_drag(i, CLOTH_DRAG)
+		_cloth.set_gravity(i, CLOTH_GRAVITY)
+		_cloth.set_enable_all_child_collisions(i, true)
+
+
+## 팔다리 한 마디(role에서 child_role까지)를 감싸는 원기둥. 옷자락이 이것을 뚫지 않는다.
+func _add_limb_collision(role: StringName, child_role: StringName, radius: float) -> void:
+	var capsule := SpringBoneCollisionCapsule3D.new()
+	_cloth.add_child(capsule)
+	capsule.bone_name = _skeleton.get_bone_name(_bone[role])
+	# 자식 뼈의 처음 위치가 이 뼈 공간에서 본 마디의 방향과 길이다. 원기둥(세로가 Y)을 그 방향으로 눕혀 가운데에 둔다.
+	var along := _skeleton.get_bone_rest(_bone[child_role]).origin
+	capsule.position_offset = along * 0.5
+	capsule.rotation_offset = Quaternion(Vector3.UP, along.normalized())
+	capsule.radius = radius
+	capsule.height = along.length() + radius * 2.0
 
 
 ## 뼈대 공간과 몸 공간의 관계를 다시 구한다(모델을 내리기 전 기준). 모델이 돌 때만이 아니라, 뼈대의 부모
@@ -526,7 +634,7 @@ func _add_melee(root: AnimationNodeBlendTree, animation_player: AnimationPlayer,
 	return &"melee"
 
 
-## 상체 뼈인지: 허리(spine) 아래에 매달린 뼈. 이 모델(3ds Max Biped)은 허벅지도 허리 뼈에 붙어 있어서 다리는 뺀다.
+## 상체 뼈인지: 허리(spine) 아래에 매달린 뼈. 3ds Max Biped에서 바로 내보낸 모델은 허벅지가 허리 뼈에 붙어 있어서 다리는 뺀다.
 func _is_upper_body(bone: int) -> bool:
 	while bone >= 0:
 		if bone == _bone[&"thigh_l"] or bone == _bone[&"thigh_r"]:
@@ -713,14 +821,27 @@ func apply_overlays() -> void:
 	_rotate_bone(&"chest", chest_right, pitch * lerpf(0.15, 0.35, ready_blend))
 	_rotate_bone(&"head", chest_right, pitch * 0.4 + lean * 0.6)
 	_swing_arms(chest_right)
-	if ready_blend > 0.0:
+	# 팔: 겨누면 조준 방향으로, 웅크리거나 슬라이딩하면 앞으로 낮춰 든다. 두 자세 사이는 섞는다.
+	var hold := maxf(ready_blend, _low_blend)
+	if hold > 0.0:
+		var hold_aim := _low_aim().slerp(aim, ready_blend)
 		for side: float in [-1.0, 1.0]:
 			var roles := _arm_roles(side)
-			var solved := _ready_arm(side, aim, weapon)
-			_point_bone(roles[0], roles[1], _current_direction(roles[0], roles[1]).slerp(solved[0], ready_blend))
-			_point_bone(roles[1], roles[2], _current_direction(roles[1], roles[2]).slerp(solved[1], ready_blend))
+			var solved := _ready_arm(side, hold_aim, weapon)
+			_point_bone(roles[0], roles[1], _current_direction(roles[0], roles[1]).slerp(solved[0], hold))
+			_point_bone(roles[1], roles[2], _current_direction(roles[1], roles[2]).slerp(solved[1], hold))
 	_legs_ik()
 	_update_held_weapon()
+	if _cloth_ground != null:
+		# 옷자락이 뚫지 않을 땅: 낮은 쪽 발밑 높이
+		var floor_y := player.global_position.y + minf(foot_offsets.x, foot_offsets.y) + 0.01
+		_cloth_ground.global_transform = Transform3D(Basis.IDENTITY, Vector3(global_position.x, floor_y, global_position.z))
+
+
+## 총을 앞으로 낮춰 든 방향: 가슴이 보는 쪽에서 LOW_READY_PITCH만큼 아래 (몸 기준)
+func _low_aim() -> Vector3:
+	var forward := chest_facing()
+	return forward.rotated(forward.cross(Vector3.UP).normalized(), -LOW_READY_PITCH)
 
 
 ## 다리 IK. 골반을 내리고(웅크려 걷기·슬라이딩·한 발이 낮은 계단) 발이 실제 땅에 닿도록 다리를 접는다.
@@ -907,12 +1028,16 @@ static func _leg_roles(side: float) -> Array[StringName]:
 
 ## 총을 겨눈 팔(위팔, 아래팔 방향): 두 손을 가슴 앞, 조준 방향 위에 모은다. 산탄총은 왼손이 총열을 받친다.
 func _ready_arm(side: float, aim: Vector3, weapon: WeaponData) -> PackedVector3Array:
+	# 손을 벌리는 쪽은 총이 향하는 쪽의 오른쪽이다(낮춰 들면 몸이 돌아가 있을 수 있다).
+	var right := Vector3(aim.x, 0.0, aim.z).normalized().cross(Vector3.UP)
+	if not right.is_normalized():
+		right = RIGHT
 	var shoulder := _posed_point(_arm_roles(side)[0])
 	var grip := _shoulder_center() + Vector3.DOWN * 0.08 + aim * 0.38
-	var target := grip + RIGHT * 0.02
+	var target := grip + right * 0.02
 	if side < 0.0:
-		target = grip + aim * (0.2 if weapon.pellets > 1 else 0.0) + RIGHT * -0.04
-	var pole := (Vector3.DOWN + RIGHT * side * 0.8).normalized()
+		target = grip + aim * (0.2 if weapon.pellets > 1 else 0.0) + right * -0.04
+	var pole := (Vector3.DOWN + right * side * 0.8).normalized()
 	return _two_bone(shoulder, target, _upper_arm_length, _forearm_length, pole)
 
 
@@ -1005,7 +1130,8 @@ func _update_held_weapon() -> void:
 	var hand := _posed_point(&"hand_r") + Vector3.UP * _ground_offset
 	var fore := (_posed_point(&"hand_r") - _posed_point(&"forearm_r")).normalized()
 	var aim := FORWARD.rotated(RIGHT, player.head.rotation.x)
-	var direction := fore.slerp(aim, ready_blend) if not weapons.current_weapon().is_melee() else fore
+	var hold_aim := _low_aim().slerp(aim, ready_blend)
+	var direction := fore.slerp(hold_aim, maxf(ready_blend, _low_blend)) if not weapons.current_weapon().is_melee() else fore
 	# 총이 거의 수직이면 위쪽 기준을 몸 앞쪽으로 바꾼다. 방향과 위쪽 기준이 나란하면 회전을 정할 수 없다.
 	var up := Vector3.UP if absf(direction.y) < 0.9 else FORWARD
 	_held.transform = Transform3D(Basis.looking_at(direction, up), hand)

@@ -28,9 +28,9 @@
 | M0 기반 | 완료 | Godot 프로젝트, 테스트 러너, 도구 스크립트 |
 | M1 이동 + 네트워크 | 완료 | 1인칭 이동, 시험장, 싱글·LAN 코옵(최대 3명), 메뉴 |
 | M2 전투 기초 | 완료 | 무기 3종, 체력·장갑, 허수아비, 단순한 경비병, 전투 HUD, 사망·부활 |
-| 3인칭과 캐릭터 모델 | 완료 | V로 1인칭/3인칭 전환, ` 자유 시야, 원본 애니메이션(서기·걷기·달리기·질주·무릎 꿇기·점프·회피·근접 공격 3연속) + 코드로 덧입힌 겨누기·웅크려 걷기·슬라이딩, 든 무기 동기화 (`docs/dev/review/third-person.md`) |
+| 3인칭과 캐릭터 모델 | 완료 | V로 1인칭/3인칭 전환, ` 자유 시야, 원본 애니메이션(서기·걷기·달리기·질주·무릎 꿇기·점프·회피·근접 공격 3연속) + 코드로 덧입힌 겨누기·낮춰 들기·웅크려 걷기·슬라이딩, 망토 물리, 바이저 벗기(H), 든 무기 동기화 (`docs/dev/review/third-person.md`) |
 | 설정 | 완료 | 소리 5종, 창 모드·크기, 그래픽, 감도·시야각, 키 바꾸기 (`docs/dev/review/settings.md`) |
-| 릴리스와 자동 업데이트 | 완료 | 기본 브랜치 푸시 → GitHub 릴리스 `build-<커밋 수>`, 게임이 켤 때 스스로 업데이트 (`docs/dev/testing.md`) |
+| 릴리스와 자동 업데이트 | 완료 | 기본 브랜치 푸시 → GitHub 릴리스 `build-<커밋 수>`, 게임이 켤 때 스스로 업데이트. 캐릭터 모델은 비공개 에셋 저장소에서 따로 받음(에셋 키 필요) (`docs/dev/testing.md`, `docs/assets.md`) |
 | M3 적 AI와 잠입 | 완료 | 감지·소리·경계 단계, 순찰과 길찾기, 제압·몸 숨기기, 중장갑병, 잠입 구역 (`docs/dev/review/m3.md`) |
 | **M4 해킹** | **진행 중** | 사이버덱(RAM·스캔·업로드), 퀵핵 4종, 카메라·문·포탑, 넷러너, HUD, 시험장 배치까지 됨. 남은 것: 코옵 해킹 테스트, 검수 체크리스트, 문서 |
 | M5 성장 ~ M8 폴리싱 | 예정 | 구상서 §9 |
@@ -61,6 +61,7 @@ tools/export_windows.sh       # build/CyberUniverse-windows.zip 생성
 python3 tools/gen_test_range.py   # 그레이박스 시험장 씬 다시 생성
 godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --join=주소, --third-person)
 python3 tools/extract_character.py <원본.glb> <결과.glb>   # 캐릭터 모델에 쓸 애니메이션만 뽑기
+python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장소에 올리기 (게임이 자동으로 받음)
 ```
 - 푸시하면 GitHub Actions(`.github/workflows/build.yml`)가 테스트를 돌리고 Windows 실행 파일을 Artifacts로 올린다.
 
@@ -80,7 +81,7 @@ python3 tools/extract_character.py <원본.glb> <결과.glb>   # 캐릭터 모�
 - **tscn의 Transform3D:** 기저 행렬은 행 우선으로 적는다. 생성 스크립트에서 한 번 전치 실수를 했다.
 - **피격 판정:** 물리 레이어 1 world, 2 character, 3 hitbox. 총알은 world와 hitbox만 맞고, 같은 팀의 Hitbox는 통과한다.
 - **죽었을 때:** 몸 충돌을 끄면 바닥 아래로 떨어진다. Hitbox의 collision_layer만 0으로 만든다.
-- **저장소에 없는 캐릭터 모델:** `assets/characters/endministrator_f/`는 재배포 불가라 gitignore 대상이다(`docs/assets.md`). CI와 다른 PC에는 없으므로, 모델이 필요한 테스트는 `has_model`이 false면 건너뛰고, 모델 없이도 전체 테스트가 통과해야 한다. `data/player/default_appearance.tres`의 경로를 잠시 바꿔서 확인한다.
+- **저장소에 없는 캐릭터 모델:** `assets/characters/endministrator_f/`는 재배포 불가라 gitignore 대상이다(`docs/assets.md`). CI와 다른 PC에는 없으므로, 모델이 필요한 테스트는 `has_model`이 false면 건너뛰고, 모델 없이도 전체 테스트가 통과해야 한다. `data/player/default_appearance.tres`의 `model_path`만 잠시 바꿔서 확인한다(`external_model_file`은 실행 파일 옆 경로라 테스트에서는 어차피 없고, 에셋 업데이트 테스트가 올리는 도구와 경로를 맞춰 본다).
 - **조준 판정:** 무기는 `player.camera`가 아니라 `aim_origin()`/`aim_direction()`을 쓴다. 3인칭 카메라 위치에서 쏘면 캐릭터 뒤의 물체를 맞힌다.
 - **자동 업데이트:** 빌드 번호는 커밋 수다. `src/core/build_info.gd`의 `NUMBER`는 저장소에서 항상 0이어야 한다(내보낼 때만 바뀜, 테스트가 확인함). 실행 중인 exe는 덮어쓸 수 없어 PowerShell 스크립트가 종료를 기다렸다 바꾼다. `CyberUniverse.console.exe`는 게임이 도는 동안 잠겨 있으므로 내용이 같은 파일은 건너뛴다. 설치 스크립트는 영어로만 쓴다(PowerShell 5.1이 BOM 없는 파일을 시스템 코드 페이지로 읽음).
 - **저장소는 공개여야 한다:** 게임은 로그인 없이 GitHub API로 릴리스를 받는다. 비공개 저장소면 404가 와서 업데이트가 조용히 멈춘다(2026-10-30에 공개로 바꿈). 그래서 재배포할 수 없는 에셋은 절대 커밋하지 않는다.
@@ -97,10 +98,13 @@ python3 tools/extract_character.py <원본.glb> <결과.glb>   # 캐릭터 모�
 - **Windows에서 씬 생성 스크립트:** `open()`에 `encoding="utf-8"`을 주지 않으면 시스템 코드 페이지로 써져 한글이 깨진다.
 - **캐릭터 애니메이션:** 원본(약 450MB, 651개)에서 `tools/extract_character.py`로 쓰는 동작만 뽑아 모델 파일에 넣는다(이름은 idle, walk 등 역할 이름). 동작 추가는 그 도구의 `ROLES`에. 실행 중에 glTF를 읽으면 "-loop" 꼬리가 이름에 남고 반복이 꺼져 있으므로 `PlayerBody._normalize_animation_names`가 고친다. 원본 공격 동작은 뒤에 긴 마무리가 붙고 몸(뿌리 뼈 Bip001)이 앞으로 1~4m 나가므로 `TRIMS`로 앞부분만 자르고 `ROOT_LOCKED`로 제자리에 묶는다. 모델 파일을 다시 뽑으면 exe 옆 `characters/`의 파일도 바꿔야 한다.
 - **뼈대의 부모가 움직인다:** 이 모델의 Skeleton3D는 Bip001 노드 아래에 있고, 동작이 Bip001 노드 자체를 움직인다(무릎 꿇기는 0.57m 내려간다). 뼈대 공간 ↔ 몸 공간 변환을 한 번만 구해 두면 손·발·총 위치가 통째로 어긋난다. `PlayerBody._update_space()`로 매번 구한다.
-- **한 번 트는 동작과 연속 공격:** AnimationNodeOneShot은 재생 중에 다시 틀면 섞지 않고 처음으로 튄다. 근접 공격은 Transition(동작 고르기, 섞어서 바꿈) + Blend2(섞는 양은 코드가)로 만든다. 상체만 휘두를 때는 Blend2의 거르개(filter)를 켜는데, Biped는 허벅지가 허리(Spine) 뼈에 붙어 있어서 다리를 따로 빼야 한다(`_is_upper_body`).
+- **한 번 트는 동작과 연속 공격:** AnimationNodeOneShot은 재생 중에 다시 틀면 섞지 않고 처음으로 튄다. 근접 공격은 Transition(동작 고르기, 섞어서 바꿈) + Blend2(섞는 양은 코드가)로 만든다. 상체만 휘두를 때는 Blend2의 거르개(filter)를 켜고 허리(Spine) 아래 뼈만 넣는다. 이 모델은 허벅지가 골반에 붙어 있지만, 3ds Max Biped에서 바로 내보낸 모델은 허벅지가 Spine에 붙어 있어서 다리는 따로 뺀다(`_is_upper_body`).
 - **이동 동작 고르기:** 걸음 주기가 다른 동작을 섞으면 다리가 엉킨다. 속도 구간마다 하나를 골라(AnimationNodeTransition) 실제 속도/원래 속도로 재생 속도를 맞춘다. Transition은 한 번도 요청을 받지 않으면 아무것도 내보내지 않아 뼈대 뿌리가 초기값으로 돌아가 몸이 눕는다. 만들 때 처음 상태를 꼭 요청한다.
 - **몸의 속도 재기:** 그리는 프레임마다 위치 차이로 재면, 화면이 물리(60fps)보다 자주 그려질 때 속도가 0과 큰 값 사이를 오간다. 내 플레이어는 `get_real_velocity()`, 원격 플레이어는 위치가 바뀐 시간 간격으로 잰다. 점프·회피·근접 공격 횟수와 이동 상태(state)는 동기화해서 원격 몸도 같은 동작을 튼다.
 - **계단 발 맞춤:** 몸은 보이지 않는 경사로를 타고, 보이는 디딤판은 물리 레이어 5(`foot_ground`, 값 16)에만 충돌한다. 발 IK만 이 레이어를 본다. 길찾기 지도는 레이어 1만 읽는다(`geometry_collision_mask = 1`).
 - **애니메이션 위에 덧입히기:** 총 겨누기·시선·웅크려 걷는 다리·슬라이딩 다리는 `BodyPoseModifier`(SkeletonModifier3D)에서 한다. 수정자 결과는 그리는 프레임에만 남아서, 나중에 뼈를 읽으면 원래 애니메이션 자세가 나온다. 테스트는 덧입힌 자세에 맞춘 것(손에 든 총 위치)으로 확인한다.
 - **코옵 테스트의 대기:** `--fixed-fps`라 프레임이 실제 시간보다 빨리 지나간다. 네트워크로 퍼지는 값은 정해진 프레임 수가 아니라 `wait_until`로 값이 맞을 때까지 기다린다.
+- **옷자락 물리(SpringBoneSimulator3D):** Godot 4.5는 중심(center)을 NODE나 BONE으로 하면 충돌 모양 위치를 잘못 계산한다(`get_transform_from_skeleton`의 곱 순서). 망토가 엉뚱한 땅·다리에 걸려 위로 뒤집힌다. 세상 기준(WORLD_ORIGIN)만 쓴다. 충돌 모양은 시뮬레이터의 바로 아래 자식이어야 하고, 뼈에 붙인 것은 계산할 때마다 위치를 덮어쓴다(`position_offset`은 뼈 회전 기준). 덧입힌 자세(IK) 다음에 계산하도록 `BodyPoseModifier` 뒤에 붙인다.
+- **프로젝트 안에 스크립트 사본을 두지 않는다:** `build/`도 프로젝트 안이다. `class_name`이 있는 스크립트를 거기 복사해 두면 전역 클래스가 사본으로 바뀌어 엉뚱하게 돈다(모델 대신 캡슐이 나옴). 백업은 프로젝트 밖(임시 폴더)에 둔다.
+- **에셋 자동 업데이트:** 캐릭터 모델은 비공개 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스에만 올린다. `tools/publish_assets.py`는 저장소가 공개면 거부한다. 게임은 설정의 에셋 키(GitHub 토큰)로 받는데, 키는 GitHub API에만 보낸다. 실제 파일은 다른 호스트로 넘겨받으므로 `max_redirects = 0`으로 직접 따라가며 키를 뺀다(`AssetUpdater._download`).
 - **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped, 뼈대 공간은 Z가 위)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.

@@ -19,6 +19,9 @@ signal quit_requested
 @onready var version_label: Label = %VersionLabel
 @onready var update_label: Label = %UpdateLabel
 
+## 에셋 업데이트 상태 줄. 처음 쓸 때 게임 업데이트 줄을 본떠 만든다.
+var _asset_label: Label
+
 
 func _ready() -> void:
 	single_button.pressed.connect(single_requested.emit)
@@ -49,6 +52,16 @@ func set_status(message: String) -> void:
 ## 자동 업데이트 진행 상황 (왼쪽 아래 한 줄)
 func set_update_status(message: String) -> void:
 	update_label.text = message
+
+
+## 에셋(캐릭터 모델) 업데이트 상태. 게임 업데이트 상태 아래 줄에 보인다.
+func set_asset_status(message: String) -> void:
+	if _asset_label == null:
+		_asset_label = update_label.duplicate() as Label
+		_asset_label.unique_name_in_owner = false
+		_asset_label.name = "AssetLabel"
+		update_label.add_sibling(_asset_label)
+	_asset_label.text = message
 
 
 ## 연결 중에는 버튼을 잠가 중복 요청을 막는다.

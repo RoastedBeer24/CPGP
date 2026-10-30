@@ -23,3 +23,9 @@
 - 애니메이션이 없는 `Endministrator_F.glb`를 그대로 위 이름으로 복사해도 됩니다. 그때는 걷기·달리기 자세를 코드로 만듭니다. 텍스처는 glb 안에 들어 있어 따로 넣지 않아도 됩니다.
 - 개발용 위치에 넣으면 에디터를 열거나 `tools/test.sh`를 돌릴 때 Godot가 자동으로 가져옵니다.
 - 실행 파일은 켤 때 `characters/` 폴더의 모델을 직접 읽습니다. 모델이 있는 PC에서 `tools/export_windows.sh`를 돌리면 모델까지 넣은 `build/CyberUniverse-windows-with-model.zip`이 생기므로, 가족 PC에 처음 설치할 때는 이것을 풀면 됩니다. 이 zip은 어디에도 올리지 않습니다.
+
+### 모델 자동 업데이트 (비공개 에셋 저장소)
+게임 실행 파일은 공개 릴리스로 받지만, 모델은 공개할 수 없어서 **비공개** 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스 `assets`에 따로 올립니다. 게임은 켤 때 그 릴리스의 목록(`assets.json`, 파일마다 SHA-256)과 자기 `characters/` 파일을 비교해 바뀐 것만 받습니다(`src/core/asset_updater.gd`).
+- **올리기 (모델을 다시 뽑았을 때):** `python3 tools/publish_assets.py` (처음 한 번은 `--create`로 비공개 저장소를 만듭니다). 저장소가 공개면 올리지 않습니다.
+- **받기:** PC마다 게임 설정 → 게임 → "에셋 키"에 그 저장소를 읽을 수 있는 GitHub 토큰(fine-grained, 저장소 하나, Contents 읽기 전용)을 한 번 넣습니다. 키가 없으면 모델을 받지 않고 있던 모델을 그대로 씁니다.
+- 공개 저장소(이 저장소)의 릴리스나 커밋에는 절대 넣지 않습니다.

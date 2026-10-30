@@ -30,6 +30,19 @@ func test_weapon_switch_is_visible_to_others() -> void:
 	assert_true(await wait_until(func() -> bool: return on_host.weapons.current_index == 1), "호스트에서도 산탄총을 든 것으로 보임")
 
 
+func test_visor_is_visible_to_others() -> void:
+	var sessions := await connect_peers(1)
+	var host := sessions[0]
+	var client := sessions[1]
+	var client_id := client.multiplayer.get_unique_id()
+	var intent := PlayerIntent.new()
+	client.get_local_player().intent_override = intent
+	var on_host := host.get_player(client_id)
+	assert_true(on_host.visor_on)
+	intent.visor_pressed = true
+	assert_true(await wait_until(func() -> bool: return not on_host.visor_on), "바이저를 벗은 것이 호스트에도 보인다")
+
+
 func test_melee_swing_is_visible_to_others() -> void:
 	var sessions := await connect_peers(1)
 	var host := sessions[0]

@@ -9,7 +9,8 @@ extends Resource
 ## 내보낸 게임에는 모델을 넣지 않는다(export_presets.cfg에서 제외). 공개 릴리스에 섞여 나가지 않게 하고,
 ## 자동 업데이트가 실행 파일만 바꿔도 각자 넣어 둔 모델이 그대로 남게 하기 위함이다.
 
-## 실행 중에 읽은 glTF 장면. 플레이어마다 다시 읽지 않도록 파일 경로별로 한 번만 읽는다.
+## 실행 중에 읽은 glTF 장면. 플레이어마다 다시 읽지 않도록 파일(경로와 고친 시각)마다 한 번만 읽는다.
+## 에셋 자동 업데이트로 파일이 바뀌면 고친 시각이 달라져서 새로 읽는다.
 static var _runtime_scenes: Dictionary[String, PackedScene] = {}
 
 ## 프로젝트 안의 모델 파일(.glb) 경로
@@ -38,6 +39,19 @@ static var _runtime_scenes: Dictionary[String, PackedScene] = {}
 @export var right_calf_bone := &"Bip001_R_Calf"
 @export var right_foot_bone := &"Bip001_R_Foot"
 
+@export_group("장비와 옷자락")
+## 벗을 수 있는 머리 장비(바이저) 메시. 이 모델은 바이저 본체와 얼굴에 지는 바이저 그림자가 따로 있다.
+@export var headgear_meshes: Array[StringName] = [&"S_actor_endminf_cloth_03_lod0", &"S_actor_endminf_cloth_05_lod0"]
+## 몸을 따라 흔들리는 옷자락 뼈 사슬("시작 뼈:끝 뼈"). 등에서 늘어진 망토 다섯 갈래다.
+## 동작 자세를 따라가되 몸보다 조금 늦게 따라오고, 다리와 땅을 뚫지 않게 물리로 움직인다.
+@export var cloth_chains: PackedStringArray = [
+	"clothes_pifeng_L_a_1_jnt:clothes_pifeng_L_a_4_jnt",
+	"clothes_pifeng_L_b_1_jnt:clothes_pifeng_L_b_4_jnt",
+	"clothes_pifeng_M_a_1_jnt:clothes_pifeng_M_a_4_jnt",
+	"clothes_pifeng_R_a_1_jnt:clothes_pifeng_R_a_4_jnt",
+	"clothes_pifeng_R_b_1_jnt:clothes_pifeng_R_b_4_jnt",
+]
+
 
 ## 모델 장면. 찾지 못하면 null이다.
 func load_model_scene() -> PackedScene:
@@ -60,8 +74,9 @@ func external_model_path() -> String:
 
 ## glTF 파일을 실행 중에 읽어 장면으로 만든다. 실패하면 null이다.
 static func load_gltf_file(path: String) -> PackedScene:
-	if _runtime_scenes.has(path):
-		return _runtime_scenes[path]
+	var key := "%s@%d" % [path, FileAccess.get_modified_time(path)]
+	if _runtime_scenes.has(key):
+		return _runtime_scenes[key]
 	var document := GLTFDocument.new()
 	var state := GLTFState.new()
 	var error := document.append_from_file(path, state)
@@ -79,5 +94,5 @@ static func load_gltf_file(path: String) -> PackedScene:
 	root.free()
 	if error != OK:
 		return null
-	_runtime_scenes[path] = scene
+	_runtime_scenes[key] = scene
 	return scene

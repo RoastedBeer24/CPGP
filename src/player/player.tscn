@@ -63,6 +63,9 @@ properties/8/replication_mode = 2
 properties/9/path = NodePath(".:melee_count")
 properties/9/spawn = true
 properties/9/replication_mode = 2
+properties/10/path = NodePath(".:visor_on")
+properties/10/spawn = true
+properties/10/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_health"]
 properties/0/path = NodePath("Health:current")

@@ -52,6 +52,8 @@ var melee_count := 0
 var crouched := false
 ## 0이면 선 자세, 1이면 웅크린 자세. 원격 피어에도 동기화된다.
 var crouch_blend := 0.0
+## 머리 장비(바이저)를 쓰고 있는지. 원격 피어에도 동기화된다. 내 플레이어는 설정에 저장된 값으로 시작한다.
+var visor_on := true
 ## 조준 중이거나 방금 쐈으면 true. 3인칭 몸이 조준 방향을 보고 총을 겨눈다. 원격 피어에도 동기화된다.
 var combat_ready := false
 ## true면 어깨 너머 3인칭. 조종하는 피어의 화면에만 영향을 주므로 동기화하지 않는다.
@@ -112,6 +114,8 @@ func _ready() -> void:
 	camera.current = local and use_device_input
 	camera.fov = GameSettings.fov
 	camera_distance = config.third_person_distance
+	if local and use_device_input:
+		visor_on = GameSettings.visor_on
 	_shown_distance = camera_distance
 	# 3인칭 카메라가 내 몸에 걸려 당겨지지 않게 한다.
 	camera_arm.add_excluded_object(get_rid())
@@ -304,6 +308,8 @@ func _physics_process(delta: float) -> void:
 	if not is_multiplayer_authority():
 		return
 	var intent := _read_intent()
+	if intent.visor_pressed:
+		set_visor(not visor_on)
 	if not health.is_alive():
 		intent = PlayerIntent.new()
 	# 쏘거나 조준하면 달리기가 풀린다.
@@ -341,11 +347,18 @@ func _physics_process(delta: float) -> void:
 	if cyberdeck.scanning and intent.weapon_slot > 0:
 		cyberdeck.request_hack(intent.weapon_slot)
 		intent.weapon_slot = 0
-	# 몸을 들고 있으면 쏠 수 없다.
 	# 몸을 들고 있거나 스캔 중에는 쏠 수 없다.
 	weapons.tick(delta, intent, health.is_alive() and not sprinting and interactor.carrying == null and not cyberdeck.scanning)
 	combat_ready = weapons.aiming or Engine.get_physics_frames() - _last_fire_frame < COMBAT_READY_FRAMES
 	_update_fov(delta, intent)
+
+
+## 머리 장비(바이저)를 쓰거나 벗는다. 남에게도 보이고(동기화), 내 플레이어면 설정에 저장해 다음에도 그대로다.
+func set_visor(on: bool) -> void:
+	visor_on = on
+	if use_device_input:
+		GameSettings.visor_on = on
+		GameSettings.save()
 
 
 func horizontal_speed() -> float:

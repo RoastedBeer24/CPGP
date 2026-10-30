@@ -23,6 +23,8 @@ var weapon_slot := 0
 var weapon_cycle := 0
 ## 스캔 모드(누르고 있는 동안). 이때 1~3 키는 무기 대신 퀵핵을 고른다.
 var scan_held := false
+## 바이저를 벗거나 쓴다 (눌림)
+var visor_pressed := false
 
 
 static func from_device() -> PlayerIntent:
@@ -41,6 +43,7 @@ static func from_device() -> PlayerIntent:
 	intent.aim_held = Input.is_action_pressed(InputActions.AIM)
 	intent.reload_pressed = Input.is_action_just_pressed(InputActions.RELOAD)
 	intent.scan_held = Input.is_action_pressed(InputActions.SCAN)
+	intent.visor_pressed = Input.is_action_just_pressed(InputActions.TOGGLE_VISOR)
 	for slot in 3:
 		if Input.is_action_just_pressed(StringName("weapon_%d" % (slot + 1))):
 			intent.weapon_slot = slot + 1
@@ -63,6 +66,7 @@ func copy() -> PlayerIntent:
 	other.weapon_slot = weapon_slot
 	other.weapon_cycle = weapon_cycle
 	other.scan_held = scan_held
+	other.visor_pressed = visor_pressed
 	return other
 
 
@@ -75,3 +79,4 @@ func consume_edges() -> void:
 	reload_pressed = false
 	weapon_slot = 0
 	weapon_cycle = 0
+	visor_pressed = false
