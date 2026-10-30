@@ -23,6 +23,7 @@ const DEFAULT_LOADOUT: Array[String] = [
 	"res://data/weapons/pistol.tres",
 	"res://data/weapons/shotgun.tres",
 	"res://data/weapons/arm_blade.tres",
+	"res://data/weapons/fists.tres",
 ]
 
 ## 비워 두면 DEFAULT_LOADOUT을 쓴다.

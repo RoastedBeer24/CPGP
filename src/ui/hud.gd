@@ -179,7 +179,9 @@ func _update_weapon() -> void:
 	var weapons := _player.weapons
 	var weapon := weapons.current_weapon()
 	weapon_label.text = "%d  %s" % [weapons.current_index + 1, weapon.display_name]
-	if weapon.is_melee():
+	if weapon.is_unarmed():
+		ammo_label.text = "주먹"
+	elif weapon.is_melee():
 		ammo_label.text = "근접"
 	elif weapons.reloading:
 		ammo_label.text = "재장전 중..."

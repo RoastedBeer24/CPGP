@@ -6,6 +6,8 @@ extends Node3D
 const HIP_POSITION := Vector3(0.2, -0.2, -0.5)
 const AIM_POSITION := Vector3(0.0, -0.11, -0.4)
 const BLADE_POSITION := Vector3(0.28, -0.28, -0.42)
+## 맨손: 두 주먹(오른 주먹 기준 위치. 왼 주먹은 왼쪽에 둔다)
+const FISTS_POSITION := Vector3(0.2, -0.27, -0.42)
 
 var aim_blend := 0.0
 
@@ -18,13 +20,18 @@ var _swing_time := -1.0
 var _reload_time := 0.0
 var _reload_duration := 0.0
 var _is_blade := false
+var _is_fists := false
 
 
 func show_weapon(weapon: WeaponData) -> void:
 	if _model != null:
 		_model.queue_free()
-	_is_blade = weapon.is_melee()
-	_model = _build_blade() if _is_blade else _build_gun(weapon)
+	_is_fists = weapon.is_unarmed()
+	_is_blade = weapon.is_melee() and not _is_fists
+	if _is_fists:
+		_model = _build_fists()
+	else:
+		_model = _build_blade() if _is_blade else _build_gun(weapon)
 	_model.scale = Vector3.ONE * 0.7
 	add_child(_model)
 	_swing_time = -1.0
@@ -63,7 +70,11 @@ func _process(delta: float) -> void:
 	if _flash != null and _flash_time <= 0.0:
 		_flash.visible = false
 
-	var base := BLADE_POSITION if _is_blade else HIP_POSITION.lerp(AIM_POSITION, aim_blend)
+	var base := HIP_POSITION.lerp(AIM_POSITION, aim_blend)
+	if _is_blade:
+		base = BLADE_POSITION
+	elif _is_fists:
+		base = FISTS_POSITION
 	var offset := Vector3(0.0, 0.0, _kick * 0.08)
 	var rotation_x := _kick * 0.25
 	var rotation_y := 0.0
@@ -78,8 +89,13 @@ func _process(delta: float) -> void:
 	if _swing_time >= 0.0:
 		_swing_time += delta
 		var t := clampf(_swing_time / 0.22, 0.0, 1.0)
-		rotation_y = lerpf(1.1, -1.2, ease(t, 0.4))
-		offset.x -= sin(t * PI) * 0.2
+		if _is_fists:
+			# 주먹은 앞으로 곧게 내질렀다 돌아온다.
+			offset.z -= sin(t * PI) * 0.3
+			offset.x -= sin(t * PI) * 0.06
+		else:
+			rotation_y = lerpf(1.1, -1.2, ease(t, 0.4))
+			offset.x -= sin(t * PI) * 0.2
 		if t >= 1.0:
 			_swing_time = -1.0
 
@@ -109,6 +125,18 @@ func _build_blade() -> Node3D:
 	var root := Node3D.new()
 	_add_box(root, Vector3(0.09, 0.09, 0.35), Vector3(0, 0, 0.05), Color(0.25, 0.25, 0.3))
 	_add_box(root, Vector3(0.015, 0.07, 0.75), Vector3(0.03, 0.02, -0.45), Color(1, 0.25, 0.7), true)
+	_muzzle = null
+	_flash = null
+	return root
+
+
+## 두 주먹 (장갑 낀 손). 오른 주먹이 기준이고 왼 주먹은 왼쪽 조금 뒤에 있다.
+func _build_fists() -> Node3D:
+	var root := Node3D.new()
+	_add_box(root, Vector3(0.09, 0.08, 0.1), Vector3.ZERO, Color(0.2, 0.2, 0.24))
+	_add_box(root, Vector3(0.07, 0.07, 0.3), Vector3(0.0, -0.01, 0.18), Color(0.25, 0.25, 0.3))
+	_add_box(root, Vector3(0.09, 0.08, 0.1), Vector3(-0.42, 0.0, 0.05), Color(0.2, 0.2, 0.24))
+	_add_box(root, Vector3(0.07, 0.07, 0.3), Vector3(-0.42, -0.01, 0.23), Color(0.25, 0.25, 0.3))
 	_muzzle = null
 	_flash = null
 	return root

@@ -36,7 +36,7 @@ const REBINDABLE_ACTIONS: Array[StringName] = [
 	Actions.MOVE_FORWARD, Actions.MOVE_BACK, Actions.MOVE_LEFT, Actions.MOVE_RIGHT,
 	Actions.JUMP, Actions.SPRINT, Actions.CROUCH,
 	Actions.FIRE, Actions.AIM, Actions.RELOAD,
-	Actions.WEAPON_1, Actions.WEAPON_2, Actions.WEAPON_3, Actions.WEAPON_NEXT, Actions.WEAPON_PREV,
+	Actions.WEAPON_1, Actions.WEAPON_2, Actions.WEAPON_3, Actions.WEAPON_4, Actions.WEAPON_NEXT, Actions.WEAPON_PREV,
 	Actions.INTERACT, Actions.SCAN, Actions.CAMERA_TOGGLE, Actions.FREE_LOOK, Actions.TOGGLE_VISOR,
 ]
 const ACTION_LABELS := {
@@ -51,6 +51,7 @@ const ACTION_LABELS := {
 	Actions.WEAPON_1: "무기 1",
 	Actions.WEAPON_2: "무기 2",
 	Actions.WEAPON_3: "무기 3",
+	Actions.WEAPON_4: "맨손",
 	Actions.CAMERA_TOGGLE: "1인칭 / 3인칭 전환",
 	Actions.INTERACT: "상호작용 (제압, 몸 들기)",
 	Actions.FIRE: "공격",

@@ -148,21 +148,20 @@ func test_animated_crouch_kneels_then_steps() -> void:
 	assert_almost_eq(player.body.pelvis_drop(), PlayerBody.CROUCH_WALK_DROP, 0.03, "걸을 때는 골반을 내린다")
 
 
-func test_crouch_gait_keeps_planted_foot_still() -> void:
-	# 웅크려 걷는 발은 딛는 동안 몸이 나아가는 만큼 뒤로 밀려서 땅에서 미끄러지지 않는다. 모델이 없어도 확인한다.
-	var speed := 2.4
-	var step := 0.6
-	var dt := 1.0 / 60.0
-	var du := speed * dt / (2.0 * step)
-	var u := 0.02
-	while u + du < PlayerBody.CROUCH_STANCE:
-		var now := PlayerBody._gait_offset(u, step)
-		var moved := PlayerBody._gait_offset(u + du, step).x - now.x
-		assert_almost_eq(moved / dt, -speed, 0.01, "딛은 발은 몸 속도만큼 뒤로")
-		assert_eq(now.y, 0.0, "딛는 동안은 땅에 붙어 있음")
-		u += du * 4.0
-	assert_true(PlayerBody._gait_offset(0.8, step).y > 0.05, "옮기는 동안은 발을 든다")
-	assert_almost_eq(PlayerBody._gait_offset(0.9999, step).x, PlayerBody._gait_offset(0.0, step).x, 0.01, "옮긴 발은 다시 디딜 자리에 내려온다")
+func test_crouch_foot_shortens_stride_and_keeps_planted_foot_down() -> void:
+	# 웅크려 걷기는 달리기 동작의 발을 따라가되 앞뒤 보폭과 발 든 높이를 줄인다. 모델이 없어도 확인한다.
+	var hip := Vector3(0.1, 0.9, 0.0)
+	var forward := Vector3.FORWARD
+	var rest := 0.08
+	var ground := 0.42
+	# 땅을 딛고 엉덩이보다 0.5m 앞, 0.05m 바깥에 있는 발
+	var planted := PlayerBody._crouch_foot(hip, Vector3(0.15, rest, -0.5), ground, rest, forward)
+	assert_almost_eq(planted.y, ground, 0.0001, "딛은 발은 내린 골반 밑 땅에 그대로 있다")
+	assert_almost_eq(planted.z, -0.5 * PlayerBody.CROUCH_STRIDE, 0.0001, "앞뒤 보폭은 줄인다")
+	assert_almost_eq(planted.x, 0.15, 0.0001, "옆으로 벌린 거리는 그대로")
+	# 0.3m 들어 올린 발
+	var lifted := PlayerBody._crouch_foot(hip, Vector3(0.1, rest + 0.3, 0.2), ground, rest, forward)
+	assert_almost_eq(lifted.y, ground + 0.3 * PlayerBody.CROUCH_LIFT_SCALE, 0.0001, "발 든 높이도 줄인다")
 
 
 func test_animated_slide_stretches_leg() -> void:
@@ -306,9 +305,11 @@ func test_cloth_hangs_and_stays_above_ground() -> void:
 		return
 	# 옷자락 물리는 그리는 프레임에만 남으므로, 계산이 끝난 순간의 망토 끝 높이를 잰다.
 	var skeleton: Skeleton3D = player.body._skeleton
+	# 등에서 늘어진 망토 갈래의 끝만 본다(목 뒤의 후드 끝은 원래 높다).
 	var tips: Array[int] = []
 	for chain in player.body.appearance.cloth_chains:
-		tips.append(skeleton.find_bone(chain.split(":")[1]))
+		if chain.contains("pifeng"):
+			tips.append(skeleton.find_bone(chain.split(":")[1]))
 	var heights := {"low": INF, "high": -INF}
 	player.body._cloth.modification_processed.connect(func() -> void:
 		for bone in tips:
@@ -317,7 +318,9 @@ func test_cloth_hangs_and_stays_above_ground() -> void:
 			heights["high"] = maxf(heights["high"], y))
 	intent.crouch_pressed = true
 	intent.move = Vector2(0, 1)
-	await _frames(60)
+	await _frames(30)
+	heights["high"] = -INF
+	await _frames(30)
 	var chest := player.body.bone_position(player.body.appearance.chest_bone)
 	assert_true(float(heights["high"]) < chest.y, "웅크려 걸어도 망토 끝은 가슴 아래로 늘어진다: %s" % heights["high"])
 	# 일어서서 달리다가 슬라이딩
@@ -331,6 +334,41 @@ func test_cloth_hangs_and_stays_above_ground() -> void:
 	await _frames(30)
 	assert_eq(player.state, Player.State.SLIDE)
 	assert_true(float(heights["low"]) > -0.02, "슬라이딩해도 망토가 땅을 뚫지 않는다: %s" % heights["low"])
+
+
+func test_eyes_stay_still_and_shadows_are_multiplied() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	# 원본 동작은 오른쪽 눈 뼈만 움직여서 한쪽 눈이 돌아갔다. 추출 도구가 눈 뼈 트랙을 뺀다.
+	var animation_player := player.body.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+	for clip in animation_player.get_animation_list():
+		var animation := animation_player.get_animation(clip)
+		for track in animation.get_track_count():
+			var bone := animation.track_get_path(track).get_concatenated_subnames()
+			assert_false(bone in ["eyeLfJoint", "eyeRtJoint"], "%s 동작이 눈 뼈(%s)를 움직이지 않는다" % [clip, bone])
+	# 눈 흰자 위 그림자는 아래 색에 곱해서 그린다(그냥 칠하면 하늘색 줄).
+	var shadow := player.body.find_child("S_actor_endminf_eyeshadow_01_lod0", true, false) as MeshInstance3D
+	assert_not_null(shadow)
+	assert_eq((shadow.get_surface_override_material(0) as ShaderMaterial).shader, PlayerBody.SHADE_SHADER)
+	assert_false(player.body._face_meshes.is_empty(), "얼굴은 고르게 비추는 재질을 쓴다")
+
+
+func test_fists_hold_nothing_and_raise_guard() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	intent.weapon_slot = 4
+	await _frames(20)
+	assert_false(player.body.has_muzzle())
+	assert_eq(player.body._held.get_child_count(), 0, "맨손은 아무것도 들지 않는다")
+	intent.fire_pressed = true
+	await _frames(6)
+	assert_eq(player.body.dominant_animation(), &"melee", "주먹을 내지른다")
+	assert_eq(player.body._melee_clip, &"melee_2", "맨손은 찌르기(주먹 지르기)부터")
+	await _frames(30)
+	assert_true(player.body._guard_amount > 0.9, "싸우는 중에는 두 주먹을 든다: %s" % player.body._guard_amount)
+	intent.weapon_slot = 1
+	await _frames(30)
+	assert_true(player.body._guard_amount < 0.1, "총을 들면 내린다")
 
 
 func test_blade_has_no_muzzle() -> void:

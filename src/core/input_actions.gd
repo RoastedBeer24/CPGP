@@ -17,6 +17,8 @@ const RELOAD := &"reload"
 const WEAPON_1 := &"weapon_1"
 const WEAPON_2 := &"weapon_2"
 const WEAPON_3 := &"weapon_3"
+## 맨손 (무기를 넣는다)
+const WEAPON_4 := &"weapon_4"
 const WEAPON_NEXT := &"weapon_next"
 const WEAPON_PREV := &"weapon_prev"
 const CAMERA_TOGGLE := &"camera_toggle"
@@ -39,6 +41,7 @@ const DEFAULT_KEYS := {
 	WEAPON_1: [KEY_1],
 	WEAPON_2: [KEY_2],
 	WEAPON_3: [KEY_3],
+	WEAPON_4: [KEY_4],
 	# 사이버펑크 2077은 걸어 다닐 때 3인칭이 없어서, 차량 시점 전환 키(V)를 따른다.
 	CAMERA_TOGGLE: [KEY_V],
 	INTERACT: [KEY_F],

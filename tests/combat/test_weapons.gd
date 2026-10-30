@@ -108,6 +108,23 @@ func test_shotgun_damage_falls_off_with_distance() -> void:
 	assert_true(far_damage < near_damage * 0.6, "멀면 피해가 크게 줄어야 함: %s vs %s" % [near_damage, far_damage])
 
 
+func test_fists_punch_only_up_close() -> void:
+	intent.weapon_slot = 4
+	await _frames(20)
+	var fists := player.weapons.current_weapon()
+	assert_true(fists.is_unarmed(), "4번은 맨손")
+	assert_true(fists.is_melee())
+	await _place_dummy(1.4)
+	await _fire_once()
+	assert_almost_eq(dummy.health.current, 100.0 - fists.damage, 0.01, "가까이 있으면 주먹으로 친다")
+	assert_eq(player.melee_count, 1, "휘두른 횟수가 는다(남도 휘두르는 동작을 본다)")
+	dummy.health.revive()
+	await _place_dummy(2.6)
+	await _frames(30)
+	await _fire_once()
+	assert_eq(dummy.health.current, 100.0, "블레이드보다 짧아서 닿지 않는다")
+
+
 func test_blade_hits_only_within_reach() -> void:
 	intent.weapon_slot = 3
 	await _frames(20)
@@ -159,6 +176,9 @@ func test_weapon_switching() -> void:
 	intent.weapon_cycle = 1
 	await _frames(1)
 	assert_eq(player.weapons.current_weapon().id, &"arm_blade")
+	intent.weapon_cycle = 1
+	await _frames(1)
+	assert_eq(player.weapons.current_weapon().id, &"fists", "마지막은 맨손")
 	intent.weapon_cycle = 1
 	await _frames(1)
 	assert_eq(player.weapons.current_weapon().id, &"pistol", "끝에서 처음으로 돌아감")

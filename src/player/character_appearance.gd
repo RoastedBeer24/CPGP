@@ -42,7 +42,7 @@ static var _runtime_scenes: Dictionary[String, PackedScene] = {}
 @export_group("장비와 옷자락")
 ## 벗을 수 있는 머리 장비(바이저) 메시. 이 모델은 바이저 본체와 얼굴에 지는 바이저 그림자가 따로 있다.
 @export var headgear_meshes: Array[StringName] = [&"S_actor_endminf_cloth_03_lod0", &"S_actor_endminf_cloth_05_lod0"]
-## 몸을 따라 흔들리는 옷자락 뼈 사슬("시작 뼈:끝 뼈"). 등에서 늘어진 망토 다섯 갈래다.
+## 몸을 따라 흔들리는 옷자락 뼈 사슬("시작 뼈:끝 뼈"). 등에서 늘어진 망토 다섯 갈래와 후드다.
 ## 동작 자세를 따라가되 몸보다 조금 늦게 따라오고, 다리와 땅을 뚫지 않게 물리로 움직인다.
 @export var cloth_chains: PackedStringArray = [
 	"clothes_pifeng_L_a_1_jnt:clothes_pifeng_L_a_4_jnt",
@@ -50,7 +50,39 @@ static var _runtime_scenes: Dictionary[String, PackedScene] = {}
 	"clothes_pifeng_M_a_1_jnt:clothes_pifeng_M_a_4_jnt",
 	"clothes_pifeng_R_a_1_jnt:clothes_pifeng_R_a_4_jnt",
 	"clothes_pifeng_R_b_1_jnt:clothes_pifeng_R_b_4_jnt",
+	"maozi_a1_M:maozi_a3_M",
 ]
+## 장식 끈. 망토와 후드에 매달려 있어서 그 뒤에 계산하고, 더 가볍게 날린다.
+@export var ribbon_chains: PackedStringArray = [
+	"piaodai_b_1_ctrl_jnt:piaodai_b_4_ctrl_jnt",
+	"piaodai_a_1_ctrl_jnt:piaodai_a_4_ctrl_jnt",
+	"piaodai_hou_L_0_skin_jnt:piaodai_hou_L_3_skin_jnt",
+	"piaodai_hou_R_0_skin_jnt:piaodai_hou_R_3_skin_jnt",
+	"piaodai_back_L_0_skin_jnt:piaodai_back_L_4_skin_jnt",
+	"piaodai_back_R_0_skin_jnt:piaodai_back_R_4_skin_jnt",
+	"piaodai_c_1_ctrl_jnt:piaodai_c_2_ctrl_jnt",
+]
+## 머리카락 뼈 사슬. 모양이 무너지지 않게 단단하게 흔든다.
+@export var hair_chains: PackedStringArray = [
+	"hair_L_d_01_jnt:hair_L_d_04_jnt",
+	"hair_L_e_01_jnt:hair_L_e_04_jnt",
+	"hair_L_f_01_jnt:hair_L_f_03_jnt",
+	"hair_L_g_01_jnt:hair_L_g_03_jnt",
+	"hair_L_h_01_jnt:hair_L_h_02_jnt",
+	"hair_L_i_01_jnt:hair_L_i_02_jnt",
+	"hair_L_j_01_jnt:hair_L_j_03_jnt",
+	"hair_L_k_01_jnt:hair_L_k_02_jnt",
+]
+
+@export_group("재질")
+## 얼굴 재질(얼굴, 눈썹, 눈동자). 얼굴 전체를 얼굴이 보는 방향으로 고르게 비춘다(face.gdshader).
+@export var face_materials: Array[StringName] = [&"M_actor_endminf_face_01", &"M_actor_endminf_brow_01", &"M_actor_endminf_iris_01"]
+## 아래 색에 곱해 그림자만 지우는 재질 → 세기(0~1). 원본은 마스크의 빨간 채널에 그림자를 넣어 두었다(shade_overlay.gdshader).
+@export var shade_materials: Dictionary[StringName, float] = {
+	&"M_eyewhiteshadow_common_01": 0.55,
+	&"M_eyeshadow_common_03": 0.55,
+	&"M_hairshadow_common_03": 1.0,
+}
 
 
 ## 모델 장면. 찾지 못하면 null이다.
@@ -72,6 +104,29 @@ func external_model_path() -> String:
 	return OS.get_executable_path().get_base_dir().path_join(external_model_file)
 
 
+## 실행 중에 읽은 glTF의 텍스처에는 밉맵이 없어서, 멀리서 보면 자글거리고 거칠어 보인다(에디터로 가져온 것은 있다).
+## 크기는 원본 그대로 두고 밉맵만 만든다.
+static func _add_mipmaps(root: Node) -> void:
+	var done := {}
+	for node: Node in root.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (node as MeshInstance3D).mesh
+		if mesh == null:
+			continue
+		for i in mesh.get_surface_count():
+			var material := mesh.surface_get_material(i) as BaseMaterial3D
+			if material == null:
+				continue
+			for slot in BaseMaterial3D.TEXTURE_MAX:
+				var texture := material.get_texture(slot) as ImageTexture
+				if texture == null or done.has(texture):
+					continue
+				done[texture] = true
+				var image := texture.get_image()
+				if image != null and not image.has_mipmaps() and not image.is_compressed():
+					image.generate_mipmaps()
+					texture.set_image(image)
+
+
 ## glTF 파일을 실행 중에 읽어 장면으로 만든다. 실패하면 null이다.
 static func load_gltf_file(path: String) -> PackedScene:
 	var key := "%s@%d" % [path, FileAccess.get_modified_time(path)]
@@ -86,6 +141,7 @@ static func load_gltf_file(path: String) -> PackedScene:
 	var root := document.generate_scene(state)
 	if root == null:
 		return null
+	_add_mipmaps(root)
 	# PackedScene은 owner가 장면 뿌리인 노드만 저장한다.
 	for node: Node in root.find_children("*", "", true, false):
 		node.owner = root

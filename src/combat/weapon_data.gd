@@ -39,6 +39,8 @@ enum Kind { HITSCAN, MELEE }
 @export var melee_reach := 2.6
 ## 정면 기준 좌우 판정 각도(도)
 @export var melee_arc_degrees := 70.0
+## 맨손이면 true. 손에 아무것도 들지 않고 주먹으로 친다(1인칭은 두 주먹, 3인칭은 빈손).
+@export var unarmed := false
 
 @export_group("조준")
 @export var aim_fov := 55.0
@@ -46,6 +48,10 @@ enum Kind { HITSCAN, MELEE }
 
 func is_melee() -> bool:
 	return kind == Kind.MELEE
+
+
+func is_unarmed() -> bool:
+	return unarmed
 
 
 ## 거리에 따른 피해 배율

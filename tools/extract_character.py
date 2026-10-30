@@ -33,12 +33,21 @@ ROLES = {
     "melee_1": "A_actor_endminf_battle_attack_01",
     "melee_2": "A_actor_endminf_battle_attack_02",
     "melee_3": "A_actor_endminf_battle_attack_03",
+    # 맨손 전투 자세: 두 주먹을 가슴 앞에 든다. 맨손일 때 상체에만 입힌다.
+    "guard": "A_actor_endminf_dialog_state_fists_loop",
     "hit": "A_actor_endminf_battle_hit_heavy",
     "dead": "A_actor_endminf_battle_dead",
 }
 
 # 루프로 재생할 동작 (glTF에는 반복 여부가 없어서 이름 끝에 -loop를 붙이면 Godot가 반복으로 가져온다)
-LOOPING = {"idle", "walk", "run", "sprint", "crouch", "fall"}
+LOOPING = {"idle", "walk", "run", "sprint", "crouch", "fall", "guard"}
+
+# 모든 동작에서 움직임을 빼는 뼈(눈동자). 원본의 대화·전투 동작은 오른쪽 눈 뼈만 2~6도씩 움직여서
+# (왼쪽은 그대로) 한쪽 눈만 돌아간다. 원래 게임은 시선을 따로 정하는 것으로 보여, 눈은 처음 자세(정면)로 둔다.
+FROZEN_BONES = {
+    "eyeLfJoint", "eyeRtJoint", "faceLfIrisJoint", "faceRtIrisJoint",
+    "faceLfPupilJoint", "faceRtPupilJoint", "faceLfHighlightJoint", "faceRtHighlightJoint",
+}
 
 # 앞부분만 잘라 쓸 동작: 게임 이름 -> (시작 초, 끝 초)
 TRIMS = {
@@ -128,6 +137,18 @@ def reshape(doc, data, anim, trim, lock_root):
         sampler["output"] = add_floats(doc, data, values, doc["accessors"][sampler["output"]]["type"])
 
 
+def freeze(doc, anim):
+    """FROZEN_BONES를 움직이는 채널을 뺀다. 남은 채널이 쓰는 샘플러만 남기고 번호를 다시 매긴다."""
+    nodes = doc["nodes"]
+    channels = [c for c in anim["channels"] if nodes[c["target"]["node"]].get("name") not in FROZEN_BONES]
+    used = sorted({c["sampler"] for c in channels})
+    remap = {old: new for new, old in enumerate(used)}
+    anim["samplers"] = [anim["samplers"][old] for old in used]
+    for channel in channels:
+        channel["sampler"] = remap[channel["sampler"]]
+    anim["channels"] = channels
+
+
 def main(source, target):
     doc, data = read_glb(source)
     data = bytearray(data)
@@ -142,6 +163,7 @@ def main(source, target):
         anim["name"] = role + ("-loop" if role in LOOPING else "")
         if role in TRIMS or role in ROOT_LOCKED:
             reshape(doc, data, anim, TRIMS.get(role), role in ROOT_LOCKED)
+        freeze(doc, anim)
         animations.append(anim)
     doc["animations"] = animations
 

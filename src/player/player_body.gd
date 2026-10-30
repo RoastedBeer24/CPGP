@@ -25,6 +25,8 @@ extends Node3D
 enum ViewMode { VISIBLE, SHADOW_ONLY, HIDDEN }
 
 const DEFAULT_APPEARANCE := "res://data/player/default_appearance.tres"
+const FACE_SHADER := preload("res://src/player/face.gdshader")
+const SHADE_SHADER := preload("res://src/player/shade_overlay.gdshader")
 
 # 몸 기준 방향. 앞은 -Z, 오른쪽은 +X다.
 const FORWARD := Vector3(0, 0, -1)
@@ -35,7 +37,7 @@ const MAX_TRACKED_SPEED := 15.0
 
 ## 애니메이션 모드에 꼭 있어야 하는 동작. 하나라도 없으면 코드로 만든 자세를 쓴다.
 const REQUIRED_ANIMATIONS: Array[StringName] = [&"idle", &"walk", &"run", &"sprint", &"fall"]
-## 이동 고르기의 상태. crouch는 꿇어앉기 동작, crouch_walk는 서기 동작을 바탕으로 다리를 코드로 움직인다.
+## 이동 고르기의 상태. crouch는 꿇어앉기 동작, crouch_walk는 달리기 동작을 낮춰서 쓴다(골반을 내리고 보폭을 줄인다).
 ## 꿇어앉기 동작이 없는 모델이면 웅크릴 때 늘 crouch_walk를 쓴다.
 const LOCOMOTION_STATES: Array[StringName] = [&"idle", &"walk", &"run", &"sprint", &"crouch", &"crouch_walk"]
 ## 이동 동작이 원래 속도로 재생될 때 나아가는 속도(m/s). 재생 속도를 실제 속도에 맞추는 기준이다.
@@ -54,13 +56,12 @@ const MAX_TWIST := 1.31
 ## 전투 자세에서 이보다 뒤쪽으로 가면 뒷걸음(동작 거꾸로)으로 바꾼다. 들어갈 때와 나올 때 경계가 다르다.
 const BACKPEDAL_ENTER := 1.92
 const BACKPEDAL_EXIT := 1.7
-## 웅크려 걷기: 골반을 내리는 높이(m), 앞으로 숙이는 각도(약 26도), 한 걸음 주기 중 발이 땅을 딛는 비율,
-## 발을 드는 높이(m), 팔을 흔드는 각도
+## 웅크려 걷기: 달리기 동작을 그대로 쓰되(팔 흔들기, 상체·옷의 움직임) 골반을 내리고(m), 앞으로 더 숙이고(약 17도),
+## 발이 엉덩이보다 앞뒤로 나가는 거리와 발을 드는 높이를 줄인다. 재생 속도는 줄인 보폭으로 실제 속도에 맞춘다.
 const CROUCH_WALK_DROP := 0.34
-const CROUCH_WALK_LEAN := 0.45
-const CROUCH_STANCE := 0.6
-const CROUCH_LIFT := 0.12
-const ARM_SWING := 0.35
+const CROUCH_WALK_LEAN := 0.3
+const CROUCH_STRIDE := 0.62
+const CROUCH_LIFT_SCALE := 0.5
 ## 슬라이딩: 꿇은 자세에서 골반을 조금 더 내리는 높이(m)와 상체를 뒤로 젖히는 각도(약 29도)
 const SLIDE_DROP := 0.06
 const SLIDE_RECLINE := 0.5
@@ -71,6 +72,8 @@ const MELEE_FADE_IN := 0.08
 const MELEE_FADE_OUT := 0.2
 const MELEE_CROSSFADE := 0.12
 const COMBO_WINDOW := 1.0
+## 맨손 연속 동작. 원본에 주먹 동작이 없어서 공격 동작 중 찌르기(주먹 지르기처럼 보임)와 가로 베기(훅)를 쓴다.
+const FIST_COMBO: Array[StringName] = [&"melee_2", &"melee_1"]
 ## 웅크리거나 슬라이딩할 때 총을 앞으로 낮춰 드는 각도(약 40도 아래)
 const LOW_READY_PITCH := 0.7
 ## 옷자락(망토) 물리: 동작 자세로 돌아가려는 힘, 흔들림이 줄어드는 정도(0~1), 아래로 처지는 힘,
@@ -86,6 +89,16 @@ const CALF_RADIUS := 0.06
 const HIPS_RADIUS := 0.13
 ## 한 프레임에 이보다 멀리 움직이면 순간 이동(부활 등)으로 보고 옷자락 물리를 처음부터 다시 한다(m).
 const TELEPORT_DISTANCE := 2.0
+## 장식 끈: 망토보다 가볍게 날린다
+const RIBBON_STIFFNESS := 4.0
+const RIBBON_DRAG := 0.4
+const RIBBON_GRAVITY := 1.5
+## 머리카락: 모양이 무너지지 않게 단단하게, 조금만 처지게 한다
+const HAIR_STIFFNESS := 10.0
+const HAIR_DRAG := 0.5
+const HAIR_GRAVITY := 0.3
+## 끈과 머리카락 두께(m)
+const STRAND_RADIUS := 0.02
 ## 발 IK가 땅을 찾을 때 보는 물리 레이어: 1 world, 5 foot_ground(계단 디딤판처럼 발만 딛는 모양)
 const FOOT_GROUND_LAYER := 16
 const FOOT_RAY_MASK := 1 | FOOT_GROUND_LAYER
@@ -138,8 +151,6 @@ var _stance := 0.0
 var _ground_offset := 0.0
 var _pelvis_drop := 0.0
 var _phase := 0.0
-## 웅크려 걷기의 걸음 주기 (0~1, 왼발 기준)
-var _step_phase := 0.0
 ## 코드로 만든 다리(웅크려 걷기, 슬라이딩)를 얼마나 입힐지. 동작이 바뀔 때 부드럽게 넘어가게 한다.
 var _walk_weight := 0.0
 var _slide_weight := 0.0
@@ -151,6 +162,9 @@ var _low_blend := 0.0
 # 벗을 수 있는 머리 장비(바이저) 메시와, 지금 보이는지
 var _headgear: Array[GeometryInstance3D] = []
 var _headgear_on := true
+# 얼굴 메시(얼굴, 눈썹, 눈동자)와, 머리 뼈 공간에서 얼굴 정면 방향
+var _face_meshes: Array[GeometryInstance3D] = []
+var _face_axis := Vector3.ZERO
 # 옷자락 물리와, 옷자락이 뚫지 않을 땅
 var _cloth: SpringBoneSimulator3D
 var _cloth_ground: SpringBoneCollisionPlane3D
@@ -170,7 +184,13 @@ var _last_melee_count := 0
 var _melee_blend: AnimationNodeBlend2
 var _melee_choice: AnimationNodeTransition
 var _melee_kinds: Array[StringName] = []
-var _melee_lengths: Array[float] = []
+var _melee_lengths: Dictionary[StringName, float] = {}
+## 지금 휘두르는 동작과, 그 동작을 고른 무기 (무기를 바꾸면 연속 동작을 처음부터 한다)
+var _melee_clip := &""
+var _combo_weapon := &""
+## 맨손 전투 자세(두 주먹을 든다)를 상체에 섞는 노드와 그 양
+var _guard_blend: AnimationNodeBlend2
+var _guard_amount := 0.0
 ## 공격 동작이 보이는 정도 (0~1)
 var _melee_amount := 0.0
 ## 지금 연속 동작 번호 (0부터)
@@ -298,6 +318,7 @@ func _process(delta: float) -> void:
 	else:
 		_pose_procedural()
 		_update_held_weapon()
+		_update_face_light()
 
 
 ## 지금 속도(세상 기준). 내가 조종하는 플레이어는 물리 엔진의 실제 속도를 쓴다.
@@ -419,8 +440,55 @@ func _load_model(scene: PackedScene) -> void:
 	_forearm_length = _skeleton.get_bone_rest(_bone[&"hand_r"]).origin.length()
 	_thigh_length = _skeleton.get_bone_rest(_bone[&"calf_l"]).origin.length()
 	_calf_length = _skeleton.get_bone_rest(_bone[&"foot_l"]).origin.length()
+	# 처음 자세에서 몸 앞쪽이 머리 뼈 공간의 어느 방향인지 (얼굴을 비출 방향을 매 프레임 구할 때 쓴다)
+	var head_rest := _skeleton.get_bone_global_rest(_bone[&"head"]).basis.orthonormalized()
+	_face_axis = (head_rest.inverse() * (_to_skeleton * FORWARD)).normalized()
+	_setup_materials()
 	_setup_animation()
 	_setup_cloth()
+
+
+## 원본 게임 전용 셰이더로 그리던 재질을 Godot에서 비슷하게 보이게 바꾼다.
+##   - 얼굴(얼굴, 눈썹, 눈동자): 얼굴이 보는 방향으로 고르게 비춘다(face.gdshader). 보통 조명은 얼굴이 반으로 갈라진다.
+##   - 그림자 메시(눈 흰자 위, 앞머리): 아래 색에 곱한다(shade_overlay.gdshader). 그냥 칠하면 하늘색 줄이 생긴다.
+##   - 나머지: 비스듬히 봐도 흐려지지 않게 비등방 필터를 켠다.
+## 재질은 모델을 쓰는 플레이어끼리 함께 쓰므로, 메시마다 덮어쓰는 재질(surface override)로 바꾼다.
+func _setup_materials() -> void:
+	for node: Node in _model.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := node as MeshInstance3D
+		for i in mesh_instance.mesh.get_surface_count():
+			var material := mesh_instance.mesh.surface_get_material(i) as BaseMaterial3D
+			if material == null:
+				continue
+			var material_name := StringName(material.resource_name)
+			if appearance.face_materials.has(material_name):
+				var face := ShaderMaterial.new()
+				face.shader = FACE_SHADER
+				face.set_shader_parameter(&"albedo_texture", material.albedo_texture)
+				face.set_shader_parameter(&"albedo_color", material.albedo_color)
+				mesh_instance.set_surface_override_material(i, face)
+				if not _face_meshes.has(mesh_instance):
+					_face_meshes.append(mesh_instance)
+			elif appearance.shade_materials.has(material_name):
+				var shade := ShaderMaterial.new()
+				shade.shader = SHADE_SHADER
+				shade.set_shader_parameter(&"mask", material.albedo_texture)
+				shade.set_shader_parameter(&"use_mask", material.albedo_texture != null)
+				shade.set_shader_parameter(&"shade", material.albedo_color.r)
+				shade.set_shader_parameter(&"strength", appearance.shade_materials[material_name])
+				mesh_instance.set_surface_override_material(i, shade)
+			else:
+				material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+
+
+## 얼굴을 비출 방향을 머리 뼈의 지금 방향으로 맞춘다 (face.gdshader의 face_forward).
+func _update_face_light() -> void:
+	if _face_meshes.is_empty():
+		return
+	var head := _skeleton.get_bone_global_pose(_bone[&"head"]).basis.orthonormalized()
+	var forward := (_skeleton.global_basis.orthonormalized() * (head * _face_axis)).normalized()
+	for mesh in _face_meshes:
+		mesh.set_instance_shader_parameter(&"face_forward", forward)
 
 
 ## 옷자락(망토)을 물리로 흔든다(SpringBoneSimulator3D). 동작 자세를 따라가되 몸보다 조금 늦게 따라오고,
@@ -429,12 +497,20 @@ func _load_model(scene: PackedScene) -> void:
 ## 계산은 세상 기준(CENTER_FROM_WORLD_ORIGIN)으로 한다. Godot 4.5는 몸이나 뼈 기준(NODE, BONE)으로 계산하면
 ## 충돌 모양의 위치를 잘못 옮겨서(get_transform_from_skeleton의 곱 순서) 망토가 엉뚱한 곳에 걸려 뒤집힌다.
 func _setup_cloth() -> void:
-	var chains: Array[PackedStringArray] = []
-	for chain in appearance.cloth_chains:
-		var ends := chain.split(":")
-		if ends.size() == 2 and _skeleton.find_bone(ends[0]) >= 0 and _skeleton.find_bone(ends[1]) >= 0:
-			chains.append(ends)
-	if chains.is_empty():
+	# 무리마다 (사슬들, 돌아가는 힘, 흔들림 줄임, 처짐, 두께, 다리·땅과 부딪히는지). 망토와 후드에 매달린 끈이 있어서
+	# 망토 → 끈 순서로 계산한다. 머리카락은 다리나 땅에 닿을 일이 없다.
+	var groups: Array[Array] = [
+		[appearance.cloth_chains, CLOTH_STIFFNESS, CLOTH_DRAG, CLOTH_GRAVITY, CLOTH_RADIUS, true],
+		[appearance.ribbon_chains, RIBBON_STIFFNESS, RIBBON_DRAG, RIBBON_GRAVITY, STRAND_RADIUS, true],
+		[appearance.hair_chains, HAIR_STIFFNESS, HAIR_DRAG, HAIR_GRAVITY, STRAND_RADIUS, false],
+	]
+	var settings: Array[Array] = []
+	for group in groups:
+		for chain: String in group[0]:
+			var ends := chain.split(":")
+			if ends.size() == 2 and _skeleton.find_bone(ends[0]) >= 0 and _skeleton.find_bone(ends[1]) >= 0:
+				settings.append([ends[0], ends[1]] + group.slice(1))
+	if settings.is_empty():
 		return
 	_cloth = SpringBoneSimulator3D.new()
 	_cloth.name = "Cloth"
@@ -449,18 +525,19 @@ func _setup_cloth() -> void:
 	hips.radius = HIPS_RADIUS
 	_cloth_ground = SpringBoneCollisionPlane3D.new()
 	_cloth.add_child(_cloth_ground)
-	_cloth.setting_count = chains.size()
-	for i in chains.size():
-		_cloth.set_root_bone_name(i, chains[i][0])
-		_cloth.set_end_bone_name(i, chains[i][1])
+	_cloth.setting_count = settings.size()
+	for i in settings.size():
+		var setting := settings[i]
+		_cloth.set_root_bone_name(i, setting[0])
+		_cloth.set_end_bone_name(i, setting[1])
 		_cloth.set_extend_end_bone(i, true)
 		_cloth.set_end_bone_length(i, CLOTH_TAIL)
 		_cloth.set_center_from(i, SpringBoneSimulator3D.CENTER_FROM_WORLD_ORIGIN)
-		_cloth.set_radius(i, CLOTH_RADIUS)
-		_cloth.set_stiffness(i, CLOTH_STIFFNESS)
-		_cloth.set_drag(i, CLOTH_DRAG)
-		_cloth.set_gravity(i, CLOTH_GRAVITY)
-		_cloth.set_enable_all_child_collisions(i, true)
+		_cloth.set_stiffness(i, setting[2])
+		_cloth.set_drag(i, setting[3])
+		_cloth.set_gravity(i, setting[4])
+		_cloth.set_radius(i, setting[5])
+		_cloth.set_enable_all_child_collisions(i, setting[6])
 
 
 ## 팔다리 한 마디(role에서 child_role까지)를 감싸는 원기둥. 옷자락이 이것을 뚫지 않는다.
@@ -513,7 +590,9 @@ func _setup_animation() -> void:
 	var index := 0
 	for name: StringName in LOCOMOTION_STATES:
 		var clip := name
-		if name == &"crouch_walk" or (name == &"crouch" and not _has_kneel):
+		if name == &"crouch_walk":
+			clip = &"run"
+		elif name == &"crouch" and not _has_kneel:
 			clip = &"idle"
 		moves.add_input(String(name))
 		root.add_node(StringName(name + "_clip"), _clip(clip))
@@ -532,6 +611,7 @@ func _setup_animation() -> void:
 	last = _add_one_shot(root, animation_player, last, &"jump", {&"idle": &"jump_idle", &"run": &"jump_run"}, 1.0, 0.05, 0.25)
 	last = _add_one_shot(root, animation_player, last, &"land", {&"idle": &"land", &"run": &"run_land"}, 1.4, 0.05, 0.25)
 	last = _add_one_shot(root, animation_player, last, &"dodge", {&"f": &"dodge_f", &"b": &"dodge_b"}, 1.8, 0.05, 0.2)
+	last = _add_guard(root, animation_player, last)
 	last = _add_melee(root, animation_player, last)
 	root.connect_node(&"output", 0, last)
 
@@ -556,6 +636,8 @@ func _setup_animation() -> void:
 		_tree.set(&"parameters/melee_kind/transition_request", String(_melee_kinds[0]))
 		_tree.set(&"parameters/melee_speed/scale", MELEE_SPEED)
 		_tree.set(&"parameters/melee/blend_amount", 0.0)
+	if _guard_blend != null:
+		_tree.set(&"parameters/guard/blend_amount", 0.0)
 
 	var modifier := BodyPoseModifier.new()
 	modifier.body = self
@@ -607,7 +689,7 @@ func _add_melee(root: AnimationNodeBlendTree, animation_player: AnimationPlayer,
 		var clip := StringName("melee_%d" % (i + 1))
 		if animation_player.has_animation(clip):
 			_melee_kinds.append(clip)
-			_melee_lengths.append(animation_player.get_animation(clip).length / MELEE_SPEED)
+			_melee_lengths[clip] = animation_player.get_animation(clip).length / MELEE_SPEED
 	if _melee_kinds.is_empty():
 		return input
 	_melee_choice = AnimationNodeTransition.new()
@@ -619,11 +701,7 @@ func _add_melee(root: AnimationNodeBlendTree, animation_player: AnimationPlayer,
 		_melee_choice.add_input(String(clip))
 		root.add_node(clip, _clip(clip))
 		root.connect_node(&"melee_kind", i, clip)
-		var animation := animation_player.get_animation(clip)
-		for track in animation.get_track_count():
-			var path := animation.track_get_path(track)
-			if _is_upper_body(_skeleton.find_bone(path.get_concatenated_subnames())):
-				_melee_blend.set_filter_path(path, true)
+		_filter_upper_body(_melee_blend, animation_player.get_animation(clip))
 	root.add_node(&"melee_speed", AnimationNodeTimeScale.new())
 	root.connect_node(&"melee_speed", 0, &"melee_kind")
 	root.add_node(&"melee_seek", AnimationNodeTimeSeek.new())
@@ -632,6 +710,29 @@ func _add_melee(root: AnimationNodeBlendTree, animation_player: AnimationPlayer,
 	root.connect_node(&"melee", 0, input)
 	root.connect_node(&"melee", 1, &"melee_seek")
 	return &"melee"
+
+
+## 맨손 전투 자세: 맨손으로 싸울 때(전투 자세) 두 주먹을 드는 동작(guard)을 상체에만 섞는다.
+## 걷거나 뛰는 다리는 그대로 두고, 섞는 양은 코드가 정한다.
+func _add_guard(root: AnimationNodeBlendTree, animation_player: AnimationPlayer, input: StringName) -> StringName:
+	if not animation_player.has_animation(&"guard"):
+		return input
+	_guard_blend = AnimationNodeBlend2.new()
+	_guard_blend.filter_enabled = true
+	_filter_upper_body(_guard_blend, animation_player.get_animation(&"guard"))
+	root.add_node(&"guard_clip", _clip(&"guard"))
+	root.add_node(&"guard", _guard_blend)
+	root.connect_node(&"guard", 0, input)
+	root.connect_node(&"guard", 1, &"guard_clip")
+	return &"guard"
+
+
+## 동작의 트랙 중 상체 뼈 트랙만 node의 거르개에 넣는다.
+func _filter_upper_body(node: AnimationNode, animation: Animation) -> void:
+	for track in animation.get_track_count():
+		var path := animation.track_get_path(track)
+		if _is_upper_body(_skeleton.find_bone(path.get_concatenated_subnames())):
+			node.set_filter_path(path, true)
 
 
 ## 상체 뼈인지: 허리(spine) 아래에 매달린 뼈. 3ds Max Biped에서 바로 내보낸 모델은 허벅지가 허리 뼈에 붙어 있어서 다리는 뺀다.
@@ -670,11 +771,10 @@ func _drive_animation(delta: float) -> void:
 	_update_facing(delta)
 	_update_locomotion()
 	_tree.set(&"parameters/air/blend_amount", move_toward(float(_tree.get(&"parameters/air/blend_amount")), 1.0 if _airborne else 0.0, delta * 8.0))
-	# 코드로 만드는 다리: 웅크려 걷기는 걸음 주기를 속도만큼 돌린다(한 주기에 두 걸음).
+	# 코드로 만드는 다리(웅크려 걷기, 슬라이딩)를 얼마나 입힐지
 	var crouch_walking := locomotion == &"crouch_walk" and not _sliding
 	_walk_weight = move_toward(_walk_weight, 1.0 if crouch_walking else 0.0, delta * 5.0)
 	_slide_weight = move_toward(_slide_weight, 1.0 if _sliding else 0.0, delta * (8.0 if _sliding else 4.0))
-	_step_phase = fmod(_step_phase + _speed * delta / (2.0 * _step_length()), 1.0)
 	_update_melee(delta)
 
 	# 점프·회피는 동기화된 횟수가 바뀌었을 때 튼다(원격 플레이어도 같은 동작을 본다).
@@ -735,7 +835,12 @@ func _update_locomotion() -> void:
 		var natural: float = NATURAL_SPEEDS[locomotion]
 		var lowest := 0.5 if locomotion == &"walk" else 0.6
 		_tree.set(StringName("parameters/%s_speed/scale" % locomotion), clampf(speed / natural, lowest, 2.2))
-	_tree.set(&"parameters/direction/scale", -1.0 if _backpedal and NATURAL_SPEEDS.has(locomotion) else 1.0)
+	elif locomotion == &"crouch_walk":
+		# 보폭을 CROUCH_STRIDE만큼 줄였으니 그만큼 빨리 틀어야 실제 속도와 발이 맞는다.
+		var natural: float = NATURAL_SPEEDS[&"run"] * CROUCH_STRIDE
+		_tree.set(&"parameters/crouch_walk_speed/scale", clampf(speed / natural, 0.4, 1.4))
+	var walking := NATURAL_SPEEDS.has(locomotion) or locomotion == &"crouch_walk"
+	_tree.set(&"parameters/direction/scale", -1.0 if _backpedal and walking else 1.0)
 
 
 func _pick_locomotion(speed: float) -> StringName:
@@ -778,15 +883,29 @@ func _update_melee(delta: float) -> void:
 	if player.melee_count != _last_melee_count:
 		_last_melee_count = player.melee_count
 		_attack()
-	var showing := _since_attack < _melee_lengths[_combo] - MELEE_FADE_OUT
+	var showing := _since_attack < float(_melee_lengths.get(_melee_clip, 0.0)) - MELEE_FADE_OUT
 	_melee_amount = move_toward(_melee_amount, 1.0 if showing else 0.0, delta / (MELEE_FADE_IN if showing else MELEE_FADE_OUT))
 	_tree.set(&"parameters/melee/blend_amount", _melee_amount)
+	if _guard_blend != null:
+		# 맨손으로 싸우는 중(전투 자세)이면 두 주먹을 든다. 평소에는 팔을 흔들며 걷는다.
+		var guarding := player.weapons.current_weapon().is_unarmed() and _stance > 0.5 and not _sliding
+		_guard_amount = move_toward(_guard_amount, 1.0 if guarding else 0.0, delta * 5.0)
+		_tree.set(&"parameters/guard/blend_amount", _guard_amount)
 
 
 ## 마지막 공격 뒤 COMBO_WINDOW 안에 다시 치면 다음 연속 동작으로, 아니면 첫 동작으로 휘두른다.
 func _attack() -> void:
-	var next := (_combo + 1) % _melee_kinds.size() if _since_attack < COMBO_WINDOW else 0
-	var clip := _melee_kinds[next]
+	var weapon := player.weapons.current_weapon()
+	var sequence: Array[StringName] = []
+	if weapon.is_unarmed():
+		for fist in FIST_COMBO:
+			if _melee_kinds.has(fist):
+				sequence.append(fist)
+	if sequence.is_empty():
+		sequence = _melee_kinds
+	var chained := _since_attack < COMBO_WINDOW and _combo_weapon == weapon.id
+	var next := (_combo + 1) % sequence.size() if chained else 0
+	var clip := sequence[next]
 	# 서 있으면 온몸으로 휘두르고, 움직이거나 웅크리거나 공중이면 상체만 휘두른다(다리는 하던 동작을 이어 간다).
 	_melee_blend.filter_enabled = _speed > 0.6 or _airborne or _crouch > 0.5 or _sliding
 	if String(_tree.get(&"parameters/melee_kind/current_state")) == String(clip):
@@ -797,6 +916,8 @@ func _attack() -> void:
 		_melee_choice.xfade_time = MELEE_CROSSFADE if _melee_amount > 0.05 else 0.0
 		_tree.set(&"parameters/melee_kind/transition_request", String(clip))
 	_combo = next
+	_melee_clip = clip
+	_combo_weapon = weapon.id
 	_since_attack = 0.0
 
 
@@ -820,7 +941,6 @@ func apply_overlays() -> void:
 	# 고개를 드는 만큼 가슴과 머리를 나눠 든다. 겨눌 때는 더 많이 따라간다.
 	_rotate_bone(&"chest", chest_right, pitch * lerpf(0.15, 0.35, ready_blend))
 	_rotate_bone(&"head", chest_right, pitch * 0.4 + lean * 0.6)
-	_swing_arms(chest_right)
 	# 팔: 겨누면 조준 방향으로, 웅크리거나 슬라이딩하면 앞으로 낮춰 든다. 두 자세 사이는 섞는다.
 	var hold := maxf(ready_blend, _low_blend)
 	if hold > 0.0:
@@ -832,6 +952,7 @@ func apply_overlays() -> void:
 			_point_bone(roles[1], roles[2], _current_direction(roles[1], roles[2]).slerp(solved[1], hold))
 	_legs_ik()
 	_update_held_weapon()
+	_update_face_light()
 	if _cloth_ground != null:
 		# 옷자락이 뚫지 않을 땅: 낮은 쪽 발밑 높이
 		var floor_y := player.global_position.y + minf(foot_offsets.x, foot_offsets.y) + 0.01
@@ -878,10 +999,9 @@ func _legs_ik() -> void:
 		var dirs := _two_bone(hip, target, _thigh_length, _calf_length, pole)
 		var under_hip := Vector3(hip.x, ground + offset, hip.z)
 		if _walk_weight > 0.0:
-			# 웅크려 걷기: 엉덩이 밑을 중심으로, 움직이는 방향을 따라 발을 옮긴다. 무릎은 앞으로 조금 벌려 굽힌다.
-			var gait := _gait_offset(_leg_phase(side), _step_length())
-			var step := under_hip + right * side * 0.05 + _move_dir * gait.x + Vector3.UP * gait.y
-			var stepped := _two_bone(hip, step, _thigh_length, _calf_length, forward + right * side * 0.3)
+			# 웅크려 걷기: 달리기 동작의 발을 따라가되 보폭과 발 든 높이를 줄여, 내린 골반 밑 땅을 딛는다.
+			var step := _crouch_foot(hip, _posed_point(roles[2]), ground + offset, _rest_foot_height, forward)
+			var stepped := _two_bone(hip, step, _thigh_length, _calf_length, pole + right * side * 0.2)
 			dirs = _mix_legs(dirs, stepped, _walk_weight)
 		var stretch := _slide_weight if side > 0.0 else 0.0
 		if stretch > 0.0:
@@ -900,39 +1020,14 @@ func _legs_ik() -> void:
 			_skeleton.set_bone_pose_rotation(foot_index, _skeleton.get_bone_pose_rotation(foot_index).slerp(rest, stretch))
 
 
-## 웅크려 걸을 때 팔을 다리와 반대로 흔든다. 바탕이 서기 동작이라 팔이 가만히 있기 때문이다.
-func _swing_arms(chest_right: Vector3) -> void:
-	var amount := _walk_weight * (1.0 - _melee_amount) * clampf(_speed / 1.5, 0.0, 1.0)
-	if amount <= 0.001:
-		return
-	var step := _step_length()
-	var reach := CROUCH_STANCE * step
-	for side: float in [-1.0, 1.0]:
-		var gait := _gait_offset(_leg_phase(side), step)
-		# 같은 쪽 발이 앞에 있으면 팔은 뒤로 간다.
-		var ahead := (_move_dir * gait.x).dot(facing()) / reach
-		_rotate_bone(_arm_roles(side)[0], chest_right, -ahead * ARM_SWING * amount)
-
-
-## 웅크려 걸을 때 한 걸음 길이(m). 빠를수록 넓게 딛는다.
-func _step_length() -> float:
-	return clampf(0.28 + 0.14 * _speed, 0.28, 0.62)
-
-
-## 다리의 걸음 주기 (0~1). 오른발은 왼발과 반 주기 어긋난다.
-func _leg_phase(side: float) -> float:
-	return fmod(_step_phase + (0.0 if side < 0.0 else 0.5), 1.0)
-
-
-## 웅크려 걷는 발의 위치. u는 걸음 주기(0~1), step은 한 걸음 길이(m)다.
-## 앞쪽 CROUCH_STANCE 동안은 땅을 딛고 몸이 나아가는 만큼 뒤로 밀리고(미끄러지지 않게),
-## 나머지 동안은 들어 올려 앞으로 옮긴다. x: 움직이는 방향으로 엉덩이보다 앞선 거리(m), y: 든 높이(m).
-static func _gait_offset(u: float, step: float) -> Vector2:
-	var reach := CROUCH_STANCE * step
-	if u < CROUCH_STANCE:
-		return Vector2(reach * (1.0 - 2.0 * u / CROUCH_STANCE), 0.0)
-	var swing := (u - CROUCH_STANCE) / (1.0 - CROUCH_STANCE)
-	return Vector2(reach * (2.0 * smoothstep(0.0, 1.0, swing) - 1.0), CROUCH_LIFT * sin(PI * swing))
+## 웅크려 걷는 발의 목표 위치 (몸 기준). 동작의 발(clip_foot)이 엉덩이보다 앞뒤(forward)로 나간 거리를
+## CROUCH_STRIDE만큼, 발을 든 높이를 CROUCH_LIFT_SCALE만큼 줄여서, 내린 골반 밑 땅(ground)을 딛게 한다.
+## 옆으로 벌린 거리는 그대로 둔다. 땅을 딛은 발은 그대로 땅에 있다.
+static func _crouch_foot(hip: Vector3, clip_foot: Vector3, ground: float, rest_foot: float, forward: Vector3) -> Vector3:
+	var offset := Vector3(clip_foot.x - hip.x, 0.0, clip_foot.z - hip.z)
+	var along := forward * offset.dot(forward)
+	var lift := maxf(clip_foot.y - rest_foot, 0.0) * CROUCH_LIFT_SCALE
+	return Vector3(hip.x, ground + lift, hip.z) + along * CROUCH_STRIDE + (offset - along)
 
 
 ## 다리 방향(허벅지, 정강이) 둘을 섞는다.
@@ -1144,7 +1239,9 @@ func _build_held(weapon: WeaponData) -> void:
 	_held = Node3D.new()
 	_held.name = "Held"
 	_muzzle = null
-	if weapon.is_melee():
+	if weapon.is_unarmed():
+		pass  # 맨손: 아무것도 들지 않는다.
+	elif weapon.is_melee():
 		_add_box(_held, Vector3(0.015, 0.06, 0.6), Vector3(0.0, 0.0, -0.3), Color(1, 0.25, 0.7), true)
 	else:
 		var length := 0.5 if weapon.pellets > 1 else 0.2

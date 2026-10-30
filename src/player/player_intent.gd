@@ -17,7 +17,7 @@ var fire_held := false
 var fire_pressed := false
 var aim_held := false
 var reload_pressed := false
-## 1~3이면 그 번호의 무기로 바꾼다. 0이면 그대로.
+## 1~4이면 그 번호의 무기로 바꾼다(4는 맨손). 0이면 그대로.
 var weapon_slot := 0
 ## +1이면 다음 무기, -1이면 이전 무기.
 var weapon_cycle := 0
@@ -44,7 +44,7 @@ static func from_device() -> PlayerIntent:
 	intent.reload_pressed = Input.is_action_just_pressed(InputActions.RELOAD)
 	intent.scan_held = Input.is_action_pressed(InputActions.SCAN)
 	intent.visor_pressed = Input.is_action_just_pressed(InputActions.TOGGLE_VISOR)
-	for slot in 3:
+	for slot in 4:
 		if Input.is_action_just_pressed(StringName("weapon_%d" % (slot + 1))):
 			intent.weapon_slot = slot + 1
 	return intent
