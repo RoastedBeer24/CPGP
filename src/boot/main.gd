@@ -7,6 +7,7 @@ extends Node
 ##   godot --path . -- --join=192.168.0.12
 ##   godot --path . -- --single --character=endministrator_m   # 캐릭터 고르기
 ##   godot --path . -- --single --autoplay        # 내 플레이어가 저절로 싸운다 (화면 확인용, AutoPilot)
+##   godot --path . -- --single --character-screen   # 로비에서 캐릭터 화면을 연 채로 시작 (화면 확인용)
 ##   --no-update                                 # 자동 업데이트를 하지 않음
 ##   --update-url=http://127.0.0.1:8000/latest   # 업데이트 확인 주소 바꾸기 (시험용)
 ##
@@ -155,6 +156,9 @@ func _on_session_started() -> void:
 
 
 func _on_player_spawned(player: Player) -> void:
+	if OS.get_cmdline_user_args().has("--character-screen") and player.is_multiplayer_authority():
+		hud.character_screen.session = session
+		hud.character_screen.open_screen.call_deferred()
 	if autoplay and player.is_multiplayer_authority():
 		var pilot := AutoPilot.new()
 		pilot.name = "AutoPilot"

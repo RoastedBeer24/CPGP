@@ -148,6 +148,8 @@ var _last_position := Vector3.ZERO
 var _sword: Node3D
 ## 동작에 맞춰 원작 소리·보이스를 낸다. 꾸러미가 없으면 소리 없이 돈다.
 var fx: CharacterFx
+## 휘두를 때 칼날이 지나간 자리에 남는 빛의 띠
+var trail: WeaponTrail
 
 # 움직임 재기 (원격 플레이어는 위치가 네트워크로 띄엄띄엄 오므로 바뀐 시간 간격으로 잰다)
 var _sample_position := Vector3.ZERO
@@ -801,6 +803,9 @@ func _update_actions(delta: float) -> void:
 		showing = false
 	_action_amount = move_toward(_action_amount, 1.0 if showing else 0.0, delta / (ACTION_FADE_IN if showing else ACTION_FADE_OUT))
 	_tree.set(&"parameters/action/blend_amount", _action_amount)
+	if trail != null:
+		trail.active = showing and _action_amount > 0.5 and not NON_ATTACK_CLIPS.has(_action_clip)
+		trail.crystal = _action_clip == &"skill" or _action_clip == &"ultimate"
 
 
 func _play_action(clip: StringName, length: float) -> void:
@@ -994,6 +999,10 @@ func _attach_weapon() -> void:
 		_sword = _build_sword()
 	anchor.add_child(_sword)
 	_sword.visible = false
+	trail = WeaponTrail.new()
+	trail.name = "WeaponTrail"
+	trail.weapon = _sword
+	add_child(trail)
 
 
 ## 원작 무기 모델을 쥐었는지 (없으면 코드로 만든 검)

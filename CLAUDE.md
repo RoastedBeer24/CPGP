@@ -14,7 +14,8 @@
 - **그래픽보다 게임성이 우선**이다. 시각 요소는 가독성이 목표다(적의 공격 예고, 경직, 원석 결정이 한눈에 보이게).
 - 참고작은 **아크나이츠: 엔드필드**다. 조작 기본값(PC판 키), 전투 감각, 캐릭터 기술이 기준이다.
 - 캐릭터·적 모델은 원작에서 추출한 것이라 **재배포할 수 없다.** 공개 저장소와 그 릴리스에는 절대 넣지 않고, 비공개 에셋 저장소에만 올린다(`docs/assets.md`). 그 밖의 에셋은 무료 공개 에셋만 쓰고 출처를 `docs/assets.md`에 적는다.
-- 모델 추출은 사용자가 해서 준다(GPT로 사이트에서 추출, 형식은 `!File/` 아래 원본과 같다). 사이트를 브라우저로 열지 않는다.
+- 모델·소리·이펙트 추출은 사용자가 해서 준다(GPT로 사이트에서 추출, 형식은 `!File/` 아래 원본과 같다). 사이트를 브라우저로 열지 않는다. 준비되면 사용자가 알려 준다.
+- 사용자는 작업 중에도 응답을 잘 하길 바란다. 긴 작업 중에도 짧게 진행 상황을 알리고, 사용자 메시지에 바로 답한다.
 
 ## 기획 문서 (먼저 읽을 것)
 - `docs/design/00-foundation.md`: 기초 구상서. 전제, 전투 규칙, 조작, 협동, 로드맵, 검수 기록
@@ -26,15 +27,20 @@
 | 마일스톤 | 상태 | 비고 |
 |---|---|---|
 | M0 정리 | 완료 | 이름 변경(설치된 게임의 자동 업데이트 유지), 옛 게임 코드 삭제. 메뉴·설정·자동 업데이트·협동 연결·캐릭터 모델 처리·만화풍 셰이더는 다시 씀 |
-| **M1 첫 전투 방** | **검수 대기** | 관리자(여·남) 검 5연속·대시 공격·처형·배틀 스킬(원석 결정)·궁극기(결정 파쇄)·회피(완벽한 회피)·경직, 적 3종(임시 도형 몸), 웨이브 3개, HUD, 협동, 캐릭터 고르기 (`docs/dev/review/m1.md`) |
-| M2 적 모델 ~ M6 다듬기 | 예정 | 구상서 §6 |
+| M1 첫 전투 방 | 검수 대기 | 관리자(여·남) 검 5연속·대시 공격·처형·배틀 스킬(원석 결정)·궁극기(결정 파쇄)·회피(완벽한 회피)·경직, 적 3종(임시 도형 몸), 웨이브, HUD, 협동, 캐릭터 고르기 (`docs/dev/review/m1.md`) |
+| M2 적 모델 | 모델 기다림 | 사용자가 적 모델을 추출해 주면 넣는다 |
+| **M3 한 판** | **검수 대기** | 로비(캐릭터 화면 C, 출발 Enter), 방 다섯 개(배치 둘 + 보스 방), 보상 12종, 중간·최종 보스(격노), 원작 무기 타르 11·소리·보이스, 검기, 카메라 확대·축소 (`docs/dev/review/m3.md`) |
+| M4 거점·영구 성장 ~ M6 다듬기 | 예정 | 구상서 §6. 원작 이펙트(전용 셰이더 옮기기)는 M6 |
 
 ### 지금 구조
 - `src/player/player.gd`: 3인칭 액션 조작. 카메라(CameraRig, 몸과 따로 돈다), 카메라 기준 이동, 공격 연속·스킬·회피·대상 고정·쓰러짐·동료 일으키기. 동작은 `action_id`/`action_count`, 회피는 `dodge_count`로 동기화
 - `src/player/player_body.gd`: 모델·만화풍 재질·옷자락·발 IK, 이동 동작 고르기, 동작 층(공격·스킬·회피·맞음·쓰러짐), 코드로 만든 검(`wep_R`에 붙임)
 - `src/combat/`: `KitData`(캐릭터 전투 구성) → `AttackData`(동작 하나: 길이, 이어지는 시각, 내디딤 거리) → `HitData`(타격 하나: 시각, 배율, 경직, 범위, 원석 결정 효과). `Health`, `Hitbox`, `CombatQuery.melee`, `DamageNumber`, `HitSpark`
 - `src/enemies/`: `Enemy`(호스트가 판단: 쫓기 → 예고 → 맞히기 → 쉬기, 움찔·경직·원석 결정), `EnemyBody`(예고 표시, 모델 또는 도형 몸), `EnemyProjectile`, `EnemyData`/`EnemyAttackData`(`data/enemies/*.tres`)
-- `src/zones/combat_room/`: 웨이브, 방 정리, 전멸 뒤 다시 시작. 적은 방 안의 `EnemySpawner`가 복제한다. 씬은 `tools/gen_combat_room.py`로 만든다
+- `src/zones/combat_room/`: 웨이브, 방 정리, 전멸. 적은 방 안의 `EnemySpawner`가 복제한다. 씬 세 개(방 A·B, 보스 방)는 `tools/gen_combat_room.py`로 만든다
+- `src/zones/lobby/`: 로비(격납고, `tools/gen_lobby.py`). `src/run/`: 작전(`Run`, 세션의 자식): 방 차례, 보상 고르기(`RewardPool`, `data/rewards/pool.tres`), 작전 완료·실패 뒤 로비. 작전 구성은 `data/runs/first_run.tres`
+- `src/player/character_fx.gd`: 동작에 맞춘 원작 소리·보이스(캐릭터마다 zip, `tools/extract_character_fx.py`). `weapon_trail.gd`: 검기
+- `src/ui/character_screen.gd`(로비 캐릭터 화면), `reward_panel.gd`(보상 고르기), `hud.gd`(보스 체력, 작전 진행)
 - `src/player/characters.gd` + `data/characters/<이름>/`(character, appearance, kit): 고를 수 있는 캐릭터
 - `src/core/roster.gd`: 같은 3D 세계의 플레이어·적 목록
 
@@ -48,7 +54,9 @@ tools/test.sh                 # 자동 테스트 전체 (커밋 전에 반드시
 tools/test.sh combat          # 이름에 combat이 들어간 테스트만
 tools/screenshot.sh "" 330 build/screenshots/fight.png --single --autoplay --no-update   # 싸우는 화면 캡처
 tools/export_windows.sh       # build/Crossfield-windows.zip (+ 옛 이름 CyberUniverse-windows.zip) 생성
-python3 tools/gen_combat_room.py   # 전투 방 씬 다시 생성
+python3 tools/gen_combat_room.py   # 전투 방 씬 셋(방 A·B, 보스 방) 다시 생성
+python3 tools/gen_lobby.py         # 로비 씬 다시 생성
+python3 tools/extract_character_fx.py "!File/Endministrator_Extras" F assets/characters/endministrator_f/endministrator_f_fx.zip   # 소리·보이스 꾸러미
 godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --join=주소, --character=endministrator_m, --autoplay)
 python3 tools/extract_character.py <원본_Animated.glb> <결과.glb>   # 캐릭터 모델에 쓸 동작만 뽑기 (여·남 자동 구분)
 python3 tools/measure_attack_clips.py <원본_Animated.glb> attack_01:1.4   # 공격 동작의 타격 시각과 내디딤 거리 재기
@@ -70,7 +78,10 @@ python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장�
 - **세션 종료 순서:** 복제 중인 노드를 먼저 지우고 나서 연결을 닫는다(`Session.leave()`). 반대로 하면 복제 시스템 오류가 난다. 느린 시간(Engine.time_scale)도 여기서 되돌린다.
 - **권한:** 플레이어 노드는 조종하는 피어 권한이지만 `Health`와 `HealthSync`는 호스트(1) 권한으로 되돌린다(`Session._spawn_player`). 적과 전투 방은 호스트 권한이다. 피해 판정은 호스트: 플레이어의 타격은 `_request_hit` → 호스트 `_resolve_hit` → `_hit_results`로 돌려준다. 적의 공격은 호스트가 `Enemy.strike`로 판정하고 `Player.notify_hit`/`notify_perfect_dodge`로 알린다.
 - **그룹과 여러 피어:** `get_nodes_in_group`은 장면 트리 전체에서 찾아서, 한 프로세스에 여러 피어를 띄우는 코옵 테스트에서는 다른 피어의 노드까지 섞인다. `Roster.players()`/`Roster.enemies()`로 같은 3D 세계의 것만 쓴다.
-- **캐릭터 고르기와 스폰:** 참여한 피어는 접속한 뒤 고른 캐릭터를 `Session._register`로 알리고, 호스트가 그때 스폰한다(접속 즉시 스폰하지 않는다). 캐릭터 이름은 스폰 정보로 모든 피어에 간다.
+- **캐릭터 고르기와 스폰:** 참여한 피어는 접속한 뒤 고른 캐릭터를 `Session._register`로 알리고, 호스트가 그때 스폰한다(접속 즉시 스폰하지 않는다). 캐릭터 이름은 스폰 정보로 모든 피어에 간다. 로비에서 캐릭터를 바꾸면 호스트가 그 플레이어를 지우고 같은 이름으로 다시 스폰한다(`change_character`).
+- **구역 바꾸기:** 호스트가 `Session.change_zone`으로 모든 피어의 구역을 바꾼다. 구역 노드 이름(Zone0, Zone1, ...)은 호스트가 정해 보낸다: 적 복제는 노드 경로로 찾으므로 나중에 들어온 피어도 이름이 같아야 한다. 방을 바꾸기 전에 호스트가 적을 먼저 치우고 0.3초 기다린다(`Run._switch_zone`). 로비에서 나가는 첫 전환은 기다리지 않아 바로 바뀐다.
+- **작전 중 참여 거절:** 접속하자마자 복제가 시작되므로, 연결 뒤에 거절하면 그 피어에 지금 방의 적이 복제되어 "Node not found" 오류가 난다. `SceneMultiplayer`의 접속 인증(auth_callback, `peer_authenticating`)에서 호스트가 받을지 먼저 답한다(`Session._on_peer_authenticating`). `refuse_new_connections`는 들어오려는 쪽이 시간 초과까지 기다려서 쓰지 않는다.
+- **테스트의 람다:** 지워질 노드를 람다가 붙잡으면 "Lambda capture was freed" 오류가 난다(구역을 바꾸면 옛 구역이 지워진다). 노드 대신 이름을 담는다.
 - **tscn의 Transform3D:** 기저 행렬은 행 우선으로 적는다(`m[r][c]`, r이 바깥). 생성 스크립트에서 전치 실수를 두 번 했다.
 - **피격 판정:** 물리 레이어 1 world, 2 character, 3 hitbox. 근접 판정(`CombatQuery.melee`)은 hitbox만 보고 벽 너머는 맞지 않는다. 같은 팀의 Hitbox는 맞지 않는다. 적의 공격은 Hitbox 없이 거리와 각도로 판정한다.
 - **쓰러졌을 때:** 몸 충돌을 끄면 바닥 아래로 떨어진다. 적이 쓰러지면 Hitbox와 몸 충돌을 끄되 바닥에 붙여 둔다.
@@ -102,5 +113,8 @@ python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장�
 - **눈:** 흰 마름모 하이라이트는 `hidden_bones`로 그 뼈를 한 점으로 줄여 숨긴다. 원본 동작이 오른쪽 눈 뼈만 움직이므로 추출 도구의 `FROZEN_BONES`로 눈 뼈 트랙을 뺀다.
 - **실행 중에 읽은 glTF 텍스처:** 밉맵이 없다. `CharacterAppearance._add_mipmaps`가 원본 크기 그대로 밉맵만 만든다.
 - **프로젝트 안에 스크립트 사본을 두지 않는다:** `build/`도 프로젝트 안이다. `class_name`이 있는 스크립트를 거기 복사해 두면 전역 클래스가 사본으로 바뀌어 엉뚱하게 돈다. 백업은 프로젝트 밖(임시 폴더)에 둔다.
+- **실행 중에 읽는 소리:** `AudioStreamWAV.load_from_buffer`로 zip 안의 WAV를 읽는다. 이 PC에는 소리 인코더(ffmpeg)가 없어서 WAV 그대로 묶는다. 같은 zip은 플레이어끼리 한 번만 읽는다(`CharacterFx._loaded`).
+- **원작 이펙트:** 받은 이펙트 glb에는 모양·텍스처만 있고 재질 연결이 비어 있다(원작 전용 셰이더 VFXBaseV2). 셰이더를 다시 만들기 전까지는 검기로 대신한다.
+- **도구 쓸 때(Claude 세션):** Bash의 heredoc 안 Python 문자열에 백슬래시(줄바꿈 표시 등)를 쓰면 실행 도구를 거치며 지워진다. 백슬래시가 든 스크립트는 Write로 파일을 만들어 실행하고, 이미 있는 파일은 Edit로 고친다.
 - **에셋 자동 업데이트:** 모델은 비공개 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스 `assets`에만 올린다. 파일 목록은 `tools/publish_assets.py`의 `FILES`. 그 도구는 저장소가 공개면 거부한다. 게임은 설정의 에셋 키(GitHub 토큰)로 받는데, 키는 GitHub API에만 보낸다. 실제 파일은 다른 호스트로 넘겨받으므로 `max_redirects = 0`으로 직접 따라가며 키를 뺀다(`AssetUpdater._download`). 모델의 동작 이름이 바뀌면 옛 게임이 새 모델을 받아 깨질 수 있으니 **게임 푸시와 에셋 올리기를 함께** 한다.
 - **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.

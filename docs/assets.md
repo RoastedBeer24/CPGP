@@ -7,6 +7,8 @@
 | Noto Sans KR (Regular, Bold) | `assets/fonts/noto_sans_kr/` | https://github.com/notofonts/noto-cjk | Google, Adobe | SIL Open Font License 1.1 (`LICENSE.txt` 동봉) | 게임 기본 한글 폰트 |
 | 관리자(여) 모델 (Endministrator_F) | `assets/characters/endministrator_f/endministrator_f.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (studio.warfarin.wiki에서 추출) | 원작: 명일방주: 엔드필드 (Hypergryph) | 상용 게임 자산. 재배포 불가 | 아래 "저장소에 없는 에셋" 참고 |
 | 관리자(남) 모델 (Endministrator_M) | `assets/characters/endministrator_m/endministrator_m.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, 같은 사이트에서 추출) | 원작: 명일방주: 엔드필드 (Hypergryph) | 상용 게임 자산. 재배포 불가 | 원본은 `!File/endministrator_m/` |
+| 관리자 소리·보이스 꾸러미 | `assets/characters/endministrator_{f,m}/*_fx.zip` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Endministrator_Extras/`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `tools/extract_character_fx.py`로 쓰는 동작의 것만 묶음 |
+| 무기 타르 11 (wpn_sword_0003) | `assets/weapons/tarr_11.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Tarr_11.glb`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 왼손(wep_L)에 쥔다 |
 
 ## 저장소에 없는 에셋
 공개 저장소에 올릴 수 없는 에셋입니다. 각자 PC에 직접 넣고, `.gitignore`로 커밋에서 뺍니다.
@@ -17,6 +19,8 @@
 |---|---|---|
 | 관리자(여) 모델 | `assets/characters/endministrator_f/endministrator_f.glb` | `Crossfield.exe`가 있는 폴더의 `characters/endministrator_f.glb` |
 | 관리자(남) 모델 | `assets/characters/endministrator_m/endministrator_m.glb` | `Crossfield.exe`가 있는 폴더의 `characters/endministrator_m.glb` |
+| 관리자 소리 꾸러미 | `assets/characters/endministrator_{f,m}/endministrator_{f,m}_fx.zip` | `characters/endministrator_{f,m}_fx.zip` |
+| 무기 모델 | `assets/weapons/tarr_11.glb` | `weapons/tarr_11.glb` |
 | 적 모델 (아직 없음) | `assets/enemies/<이름>.glb` | `Crossfield.exe`가 있는 폴더의 `enemies/<이름>.glb` |
 
 - **애니메이션이 든 원본(`*_Animated.glb`, 약 450MB)에서** 게임에 쓰는 동작(이동, 점프, 공격 5단계, 대시 공격, 처형, 스킬, 궁극기, 회피, 맞음, 쓰러짐)만 골라 가벼운 파일(약 30MB)을 만들어 넣습니다. 고르는 동작 목록은 도구 안의 `ROLES`에 있고, 여·남은 원본 이름을 보고 알아서 고릅니다.
@@ -26,6 +30,12 @@
   ```
 - 공격 동작의 타격 시각과 내디디는 거리는 원본에서 재서 `data/characters/*/kit.tres`에 넣었습니다. 동작을 바꾸면 다시 잽니다.
 - 텍스처는 glb 안에 들어 있어 따로 넣지 않아도 됩니다.
+- **소리·보이스:** 원작 꾸러미에는 동작마다 몇 초에 어떤 소리·보이스가 나는지가 있습니다. 게임이 쓰는 동작의 것만 골라 캐릭터마다 zip 하나(약 32MB)로 묶습니다. 게임은 실행 중에 zip을 읽어 동작에 맞춰 냅니다(`src/player/character_fx.gd`).
+  ```bash
+  python3 tools/extract_character_fx.py "!File/Endministrator_Extras" F assets/characters/endministrator_f/endministrator_f_fx.zip
+  python3 tools/extract_character_fx.py "!File/Endministrator_Extras" M assets/characters/endministrator_m/endministrator_m_fx.zip
+  ```
+- **이펙트:** 원작 이펙트 모양(glb)은 zip에 함께 넣어 두었지만 아직 쓰지 않습니다. 모양에 어떤 재질을 쓰는지가 비어 있고 원작 전용 셰이더(VFXBaseV2)가 없어서, 셰이더를 다시 만들어야 합니다. 지금은 칼날 자리에 남는 빛의 띠(`src/player/weapon_trail.gd`)로 대신합니다.
 - 개발용 위치에 넣으면 에디터를 열거나 `tools/test.sh`를 돌릴 때 Godot가 자동으로 가져옵니다.
 - 실행 파일은 켤 때 `characters/` 폴더의 모델을 직접 읽습니다. 모델이 있는 PC에서 `tools/export_windows.sh`를 돌리면 모델까지 넣은 `build/Crossfield-windows-with-model.zip`이 생기므로, 가족 PC에 처음 설치할 때는 이것을 풀면 됩니다. 이 zip은 어디에도 올리지 않습니다.
 

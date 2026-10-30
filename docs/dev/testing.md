@@ -71,7 +71,8 @@ func test_enemy_spawns_in_tree() -> void:
 `tests/net/` 아래 테스트는 한 프로세스 안에서 호스트와 클라이언트 2~3개를 띄워 실제 ENet으로 접속시킵니다. 새 코옵 테스트는 `NetTestCase`를 상속하면 `new_peer()`, `connect_peers()`, `wait_until()`을 쓸 수 있습니다.
 - 피어마다 독립된 `SubViewport`(별도 3D 월드·물리 공간)와 `MultiplayerAPI`를 줍니다. 서로의 사본끼리 부딪히지 않습니다.
 - 확인하는 것: 접속, 이동 동기화, 3인 플레이, 4번째 접속 거부, 퇴장 처리, 호스트 종료 시 클라이언트 정리, 각자 고른 캐릭터, 참여자의 공격을 호스트가 판정하는지, 적의 공격을 호스트가 판정하는지, 쓰러진 동료 일으키기
-- 적 웨이브는 `NetTestCase`에서 꺼 둡니다(`session.waves_enabled`). 웨이브를 보는 테스트(`tests/zones/`)만 켭니다.
+- 적 웨이브는 `NetTestCase`에서 꺼 둡니다(`session.waves_enabled`). 웨이브를 보는 테스트(`tests/zones/`, `tests/run/`)만 켭니다.
+- 판은 로비에서 시작합니다. 전투 방 하나만 시험할 때는 `session.zone_scene`을 전투 방으로 바꾸거나 호스트가 `change_zone`으로 옮깁니다.
 
 ## 메뉴를 건너뛰고 바로 시작하기
 게임 실행 파일 뒤에 `--`와 옵션을 붙이면 메인 메뉴를 건너뜁니다.
@@ -80,7 +81,8 @@ godot --path . -- --single                # 혼자 하기
 godot --path . -- --host                  # 방 만들기
 godot --path . -- --join=192.168.0.12     # 참여하기
 godot --path . -- --single --character=endministrator_m   # 캐릭터 고르기 (다른 옵션과 함께 씀)
-godot --path . -- --single --autoplay     # 내 플레이어가 저절로 싸운다 (화면 확인용)
+godot --path . -- --single --autoplay     # 내 플레이어가 저절로 싸운다 (로비에서 출발, 보상은 첫 번째, 화면 확인용)
+godot --path . -- --single --character-screen   # 로비에서 캐릭터 화면을 연 채로 시작 (화면 확인용)
 Crossfield.exe -- --no-update             # 자동 업데이트 끄기
 ```
 

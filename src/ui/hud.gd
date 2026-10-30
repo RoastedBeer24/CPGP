@@ -56,13 +56,13 @@ func _ready() -> void:
 	damage_flash.name = "DamageFlash"
 	damage_flash.color = Color(0.9, 0.1, 0.05, 0.0)
 	damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	damage_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	damage_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(damage_flash)
 
 	overlay = HudOverlay.new()
 	overlay.name = "Overlay"
 	overlay.hud = self
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(overlay)
 
@@ -224,6 +224,8 @@ func _process(delta: float) -> void:
 	damage_flash.color.a = _flash * 0.35
 	if _player == null:
 		return
+	# 캐릭터 화면이 열리면 오른쪽 아래 스킬 안내가 그 화면을 가리지 않게 숨긴다.
+	(get_node("SkillBox") as Control).visible = not character_screen.visible
 	_update_self()
 	_update_room()
 	_update_boss()

@@ -90,10 +90,27 @@ cp "$out_dir/README.txt" "$legacy_dir/README.txt"
 make_zip "$ROOT/build/CyberUniverse-windows.zip" "$legacy_dir" CyberUniverse.exe CyberUniverse.console.exe README.txt
 echo "$ROOT/build/CyberUniverse-windows.zip"
 
-model="$ROOT/assets/characters/endministrator_f/endministrator_f.glb"
-if [[ -f "$model" ]]; then
-  mkdir -p "$out_dir/characters"
-  cp "$model" "$out_dir/characters/endministrator_f.glb"
-  make_zip "$ROOT/build/Crossfield-windows-with-model.zip" "$out_dir" Crossfield.exe Crossfield.console.exe README.txt characters
+# 저장소에 없는 에셋(캐릭터 모델, 소리 꾸러미, 무기 모델)이 이 PC에 있으면 실행 파일 옆 자리에 넣은 zip도 만든다.
+# 자리는 tools/publish_assets.py의 FILES와 같다.
+private_assets=(
+  characters/endministrator_f.glb:assets/characters/endministrator_f/endministrator_f.glb
+  characters/endministrator_m.glb:assets/characters/endministrator_m/endministrator_m.glb
+  characters/endministrator_f_fx.zip:assets/characters/endministrator_f/endministrator_f_fx.zip
+  characters/endministrator_m_fx.zip:assets/characters/endministrator_m/endministrator_m_fx.zip
+  weapons/tarr_11.glb:assets/weapons/tarr_11.glb
+)
+folders=()
+for asset in "${private_assets[@]}"; do
+  target="${asset%%:*}"
+  source="$ROOT/${asset#*:}"
+  if [[ -f "$source" ]]; then
+    folder="$(dirname "$target")"
+    mkdir -p "$out_dir/$folder"
+    cp "$source" "$out_dir/$target"
+    [[ " ${folders[*]} " == *" $folder "* ]] || folders+=("$folder")
+  fi
+done
+if [[ ${#folders[@]} -gt 0 ]]; then
+  make_zip "$ROOT/build/Crossfield-windows-with-model.zip" "$out_dir" Crossfield.exe Crossfield.console.exe README.txt "${folders[@]}"
   echo "$ROOT/build/Crossfield-windows-with-model.zip"
 fi
