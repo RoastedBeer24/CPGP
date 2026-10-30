@@ -43,6 +43,7 @@ fog_density = 0.015""")
 # 적의 길찾기 지도. "navigation_geometry" 그룹의 충돌 지형으로 실행할 때 굽는다(src/zones/zone.gd).
 sub.append("""[sub_resource type="NavigationMesh" id="navmesh"]
 geometry_parsed_geometry_type = 1
+geometry_collision_mask = 1
 geometry_source_geometry_mode = 1
 geometry_source_group_name = &"navigation_geometry"
 agent_height = 2.0
@@ -65,11 +66,14 @@ def tf(pos, rot_x_deg=0.0, rot_y_deg=0.0):
     basis = ", ".join(f(m[r][c]) for r in range(3) for c in range(3))  # tscn은 행 우선
     return f"Transform3D({basis}, {f(pos[0])}, {f(pos[1])}, {f(pos[2])})"
 
-def box(name, parent, pos, size, mat, collide=True, rot_x=0.0, rot_y=0.0):
+def box(name, parent, pos, size, mat, collide=True, rot_x=0.0, rot_y=0.0, layer=None):
+    """layer를 주면 그 물리 레이어에만 충돌을 둔다(몸은 통과하고 발 IK만 딛는 계단 디딤판 등)."""
     lines = [f'[node name="{name}" type="CSGBox3D" parent="{parent}"]']
     if pos != (0, 0, 0) or rot_x or rot_y:
         lines.append(f"transform = {tf(pos, rot_x, rot_y)}")
-    if collide:
+    if layer is not None:
+        lines += ["use_collision = true", f"collision_layer = {layer}", "collision_mask = 0"]
+    elif collide:
         lines.append("use_collision = true")
     lines.append(f"size = Vector3({size[0]}, {size[1]}, {size[2]})")
     lines.append(f'material = SubResource("mat_{mat}")')
@@ -133,12 +137,12 @@ box("RoofA", "Geometry/Rooftops", (14, roof_h / 2, -4 - 0.0), (6, roof_h, 8), "r
 box("RoofB", "Geometry/Rooftops", (14, roof_h / 2, -15.5), (6, roof_h, 8), "roof")
 label("GapLabel", "Geometry/Rooftops", (14, roof_h + 1.0, -9.75), "3.5m 틈")
 
-# 3) 계단: 보이는 계단은 충돌 없음, 아래에 보이지 않는 경사 충돌면
+# 3) 계단: 몸은 보이지 않는 경사 충돌면을 타고 오르고, 보이는 디딤판은 발만 딛는다(레이어 5 foot_ground, 값 16).
 group("Stairs", "Geometry")
 steps, step_h, step_d = 12, 0.25, 0.5
 for i in range(steps):
     h = step_h * (i + 1)
-    box(f"Step{i + 1}", "Geometry/Stairs", (-14, h / 2, 6 - i * step_d - step_d / 2), (3, h, step_d), "wall", collide=False)
+    box(f"Step{i + 1}", "Geometry/Stairs", (-14, h / 2, 6 - i * step_d - step_d / 2), (3, h, step_d), "wall", layer=16)
 box("StairTop", "Geometry/Stairs", (-14, roof_h / 2, -3), (3, roof_h, 6), "roof")
 slope("StairRamp", "Geometry/Stairs", -14, 6.0, 6.0 - steps * step_d, steps * step_h, 3)
 
@@ -178,7 +182,11 @@ ext = ['[ext_resource type="PackedScene" path="res://src/enemies/training_dummy.
        '[ext_resource type="Script" path="res://src/zones/hide_spot.gd" id="hide_spot"]',
        '[ext_resource type="Resource" path="res://data/enemies/guard.tres" id="guard"]',
        '[ext_resource type="Resource" path="res://data/enemies/heavy.tres" id="heavy"]',
-       '[ext_resource type="Resource" path="res://data/enemies/guard_arena.tres" id="guard_arena"]']
+       '[ext_resource type="Resource" path="res://data/enemies/guard_arena.tres" id="guard_arena"]',
+       '[ext_resource type="Resource" path="res://data/enemies/netrunner.tres" id="netrunner"]',
+       '[ext_resource type="Script" path="res://src/hacking/security_camera.gd" id="security_camera"]',
+       '[ext_resource type="Script" path="res://src/hacking/hack_door.gd" id="hack_door"]',
+       '[ext_resource type="Script" path="res://src/hacking/turret.gd" id="turret"]']
 # 7) 사격장 (시작 위치 뒤쪽, +Z): 거리별 허수아비. 시작 위치에서 뒤로 돌면 보인다.
 group("ShootingRange")
 box("FiringLine", "ShootingRange", (-4, 0.01, 13), (14, 0.02, 0.15), "neon_cyan", collide=False)
@@ -204,7 +212,8 @@ group("ArenaCoverPoints", "Arena")
 for i, (x, z) in enumerate([(19, 14.8), (23, 12.8), (14.8, 20), (19, 17.2)]):
     marker(f"Cover{i + 1}", "Arena/ArenaCoverPoints", (x, 0.05, z), ["cover_points"])
 
-# 9) 잠입 구역 (서쪽 벽 너머, x -90..-30): 순찰하는 경비 넷, 중장갑병 하나, 보초 하나.
+# 9) 잠입 구역 (서쪽 벽 너머, x -90..-30): 순찰하는 경비 넷, 중장갑병 하나, 보초 하나, 넷러너 하나.
+#    감시 카메라 둘, 포탑 하나, 잠긴 문이 달린 보안 금고가 있다 (M4 해킹).
 #    엄폐용 상자, 창고 건물, 시체를 숨길 컨테이너가 있다. 쓰러진 적은 60초 뒤 되살아난다.
 group("Stealth", groups=["navigation_geometry"])
 label("StealthLabel", "Stealth", (-27, 3.4, 0), "잠입 구역", 110)
@@ -214,8 +223,26 @@ for name, pos, size in [("StealthNorth", (-60, 3, -30), (60, 6, 1)), ("StealthSo
                         ("StealthWest", (-90, 3, 0), (1, 6, 60))]:
     box(name, "Stealth", pos, size, "wall")
 # 창고 건물
-for i, (x, z, w, d) in enumerate([(-45, -15, 10, 8), (-45, 15, 10, 8), (-71, 0, 12, 14), (-80, -21, 8, 8)]):
+for i, (x, z, w, d) in enumerate([(-45, -15, 10, 8), (-71, 0, 12, 14), (-80, -21, 8, 8)]):
     box(f"Warehouse{i + 1}", "Stealth", (x, 2, z), (w, 4, d), "wall")
+# 보안 금고: 속이 빈 창고. 서쪽 벽의 문은 잠겨 있어 장치 해킹(문 열기)으로 연다.
+group("Vault", "Stealth")
+for name, pos, size in [("VaultNorth", (-45, 2, 11.2), (10, 4, 0.4)), ("VaultSouth", (-45, 2, 18.8), (10, 4, 0.4)),
+                        ("VaultEast", (-40.2, 2, 15), (0.4, 4, 8)),
+                        ("VaultWestA", (-49.8, 2, 12.3), (0.4, 4, 2.6)), ("VaultWestB", (-49.8, 2, 17.7), (0.4, 4, 2.6)),
+                        ("VaultRoof", (-45, 4.2, 15), (10, 0.4, 8))]:
+    box(name, "Stealth/Vault", pos, size, "wall")
+box("VaultTerminal", "Stealth/Vault", (-42, 0.6, 15), (1.2, 1.2, 1.6), "neon_cyan", collide=True)
+label("VaultLabel", "Stealth", (-51, 3.4, 15), "보안 금고", 60)
+nodes.append(f'[node name="VaultDoor" type="StaticBody3D" parent="Stealth"]\ntransform = {tf((-49.8, 0, 15), 0, 90)}\n'
+             f'script = ExtResource("hack_door")')
+# 감시 카메라와 포탑
+group("Devices", "Stealth")
+for name, pos, yaw in [("Camera1", (-31.2, 3.6, -3.5), 90), ("Camera2", (-39.6, 4.3, -10.6), 180)]:
+    nodes.append(f'[node name="{name}" type="Node3D" parent="Stealth/Devices"]\ntransform = {tf(pos, 0, yaw)}\n'
+                 f'script = ExtResource("security_camera")')
+nodes.append(f'[node name="Turret1" type="StaticBody3D" parent="Stealth/Devices"]\ntransform = {tf((-87, 0, -4), 0, -90)}\n'
+             f'script = ExtResource("turret")')
 # 엄폐용 상자(1.2m)와 낮은 벽
 crates = [(-37, -5), (-37, 5), (-55, -4), (-55, 5), (-60, -16), (-62, 19), (-78, 12), (-62, -6)]
 for i, (x, z) in enumerate(crates):
@@ -257,6 +284,7 @@ stealth_enemies = [
     ("Patrol4", (-82, 12), 90, "guard", "Route4"),
     ("Heavy1", (-64, 0), -90, "heavy", None),
     ("Sentry1", (-75, -15), -135, "guard", None),
+    ("Netrunner1", (-60, 21), -90, "netrunner", None),
 ]
 for name, (x, z), yaw, kind, route in stealth_enemies:
     lines = [f'[node name="{name}" parent="Stealth/Enemies" instance=ExtResource("enemy")]',

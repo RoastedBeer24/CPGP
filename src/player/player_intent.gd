@@ -21,6 +21,8 @@ var reload_pressed := false
 var weapon_slot := 0
 ## +1이면 다음 무기, -1이면 이전 무기.
 var weapon_cycle := 0
+## 스캔 모드(누르고 있는 동안). 이때 1~3 키는 무기 대신 퀵핵을 고른다.
+var scan_held := false
 
 
 static func from_device() -> PlayerIntent:
@@ -38,6 +40,7 @@ static func from_device() -> PlayerIntent:
 	intent.fire_pressed = Input.is_action_just_pressed(InputActions.FIRE)
 	intent.aim_held = Input.is_action_pressed(InputActions.AIM)
 	intent.reload_pressed = Input.is_action_just_pressed(InputActions.RELOAD)
+	intent.scan_held = Input.is_action_pressed(InputActions.SCAN)
 	for slot in 3:
 		if Input.is_action_just_pressed(StringName("weapon_%d" % (slot + 1))):
 			intent.weapon_slot = slot + 1
@@ -59,6 +62,7 @@ func copy() -> PlayerIntent:
 	other.reload_pressed = reload_pressed
 	other.weapon_slot = weapon_slot
 	other.weapon_cycle = weapon_cycle
+	other.scan_held = scan_held
 	return other
 
 

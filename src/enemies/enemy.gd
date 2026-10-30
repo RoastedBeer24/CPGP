@@ -8,6 +8,7 @@ extends CharacterBody3D
 ##   수색: 총성을 들었거나, 시체를 봤거나, 동료가 불렀거나, 대상을 놓쳤다. 그곳과 주변을 뒤진다.
 ##   전투: 감지 게이지가 다 찼거나 공격받았다. 엄폐 지점으로 움직이며 쏘고, 근처 동료를 부른다.
 ## 쓰러지면(사망, 기절) 몸이 남고, 플레이어가 들어 옮기거나 컨테이너에 숨길 수 있다.
+## 퀵핵(주의 분산, 과열, 무기 오작동)을 받을 수 있고, 넷러너는 총 대신 플레이어에게 역해킹을 올린다.
 ##
 ## 판단과 이동은 호스트만 하고, 위치·경계 단계·감지 게이지·쓰러짐 상태는 StateSync로 모두에게 퍼진다.
 ## 머리 위 표시("?", "!")와 쓰러진 모습은 동기화된 값으로 각 피어가 그린다.
@@ -70,6 +71,13 @@ var _has_face_point := false
 var _respawn_left := 0.0
 var _home: Transform3D
 var _applied_condition := Condition.ACTIVE
+# 퀵핵 효과 (호스트)
+var _glitch_left := 0.0
+var _burn_left := 0.0
+var _burn_dps := 0.0
+# 넷러너의 역해킹 (호스트)
+var _netrun_target: Player
+var _netrun_left := 0.0
 var _applied_stashed := false
 
 @onready var health: Health = $Health
@@ -79,6 +87,7 @@ var _applied_stashed := false
 @onready var agent: NavigationAgent3D = $NavigationAgent3D
 @onready var collision: CollisionShape3D = $CollisionShape3D
 @onready var hitboxes: Array[Hitbox] = [$HeadHitbox, $BodyHitbox]
+@onready var hackable: Hackable = $Hackable
 
 
 func _ready() -> void:
@@ -91,6 +100,7 @@ func _ready() -> void:
 	health.current = data.max_health
 	health.died.connect(_on_died)
 	health.damaged.connect(_on_damaged)
+	hackable.display_name = data.display_name
 	_apply_look()
 	_home = global_transform
 	var route := get_node_or_null(patrol_route)
@@ -173,6 +183,86 @@ func stash() -> void:
 	stashed = true
 
 
+# ---- 해킹 (판정은 호스트) ----
+
+func is_hackable() -> bool:
+	return is_active()
+
+
+## 스캔 화면에 보여 줄 정보
+func scan_lines() -> PackedStringArray:
+	var state: String = ["무경계", "의심", "수색", "전투"][alert]
+	var lines := PackedStringArray([
+		data.display_name,
+		"상태: %s" % state,
+		"체력 %d / %d   장갑 %d" % [ceili(health.current), int(data.max_health), int(data.armor)],
+	])
+	if data.netrunner:
+		lines.append("넷러너: 보이면 역해킹을 올린다")
+	if data.armor >= 50.0:
+		lines.append("약점: 과열(장갑 무시)")
+	return lines
+
+
+func apply_quickhack(hack: QuickhackData, hacker: Player) -> void:
+	if not multiplayer.is_server() or not is_active():
+		return
+	match hack.effect:
+		QuickhackData.Effect.DISTRACT:
+			# 해커 반대쪽 6m에서 소리가 난 것처럼 그쪽을 확인하러 간다(해커에게서 멀어지게 꾄다).
+			# 전투 중이면 넘어가지 않는다.
+			if alert != Alert.COMBAT:
+				var away := global_position - hacker.global_position
+				away.y = 0.0
+				away = away.normalized() if away.length() > 0.1 else global_basis.z
+				_investigate(_closest_walkable(global_position + away * 6.0))
+		QuickhackData.Effect.OVERHEAT:
+			_burn_left = hack.duration
+			_burn_dps = hack.damage_per_second
+			# 누가 했는지는 모르므로 자기 주변을 수색한다.
+			if alert != Alert.COMBAT:
+				_start_search(global_position)
+		QuickhackData.Effect.WEAPON_GLITCH:
+			_glitch_left = hack.duration
+			_cancel_netrun()
+
+
+func is_weapon_glitched() -> bool:
+	return _glitch_left > 0.0
+
+
+func _tick_hacks(delta: float) -> void:
+	_glitch_left = maxf(_glitch_left - delta, 0.0)
+	if _burn_left > 0.0:
+		_burn_left -= delta
+		health.apply_damage(DamageInfo.hack(_burn_dps * delta, 0, global_position, &"overheat"))
+
+
+## 넷러너: 보이는 대상에게 역해킹을 올린다. 시야를 끊거나 맞으면 처음부터 다시 해야 한다.
+func _netrun(delta: float, sees_target: bool) -> void:
+	var in_range := sees_target and _flat_distance(global_position, target.global_position) <= data.hack_range
+	if not in_range or _glitch_left > 0.0 or _cooldown > 0.0:
+		_cancel_netrun()
+		return
+	if _netrun_target != target:
+		_cancel_netrun()
+		_netrun_target = target
+		_netrun_left = data.hack_upload_time
+	_netrun_left -= delta
+	_netrun_target.cyberdeck.incoming_progress = clampf(1.0 - _netrun_left / data.hack_upload_time, 0.0, 1.0)
+	if _netrun_left <= 0.0:
+		_netrun_target.cyberdeck.apply_overheat(data.hack_damage_per_second, data.hack_duration)
+		_cancel_netrun()
+		_cooldown = data.hack_cooldown
+
+
+func _cancel_netrun() -> void:
+	if _netrun_target != null and is_instance_valid(_netrun_target):
+		_netrun_target.cyberdeck.incoming_progress = 0.0
+	_netrun_target = null
+	_netrun_left = 0.0
+
+
 # ---- 감각 입력 (호스트) ----
 
 ## 소리를 들었다. StealthNoise.emit이 부른다.
@@ -209,6 +299,9 @@ func _physics_process(delta: float) -> void:
 		return
 	_state_time += delta
 	_cooldown = maxf(_cooldown - delta, 0.0)
+	_tick_hacks(delta)
+	if not is_active():
+		return
 	_has_move_target = false
 	_has_face_point = false
 	_perceive(delta)
@@ -378,6 +471,8 @@ func _search() -> void:
 
 func _fight(delta: float) -> void:
 	var sees_target := target != null and _since_seen <= 0.05
+	if data.netrunner:
+		_netrun(delta, sees_target)
 	if not sees_target:
 		# 마지막으로 본 곳으로 뛰어간다.
 		_go(last_known_position, data.run_speed)
@@ -397,7 +492,8 @@ func _fight(delta: float) -> void:
 		_go(target.global_position, data.run_speed)
 
 	var facing := absf(angle_difference(rotation.y, _yaw_to(aim))) < deg_to_rad(12.0)
-	if facing and _cooldown <= 0.0:
+	# 넷러너는 총을 쏘지 않고, 무기 오작동 중에는 아무도 쏘지 못한다.
+	if facing and _cooldown <= 0.0 and not data.netrunner and _glitch_left <= 0.0:
 		_cooldown = data.fire_interval
 		_shoot(aim)
 
@@ -499,7 +595,8 @@ func _yaw_to(point: Vector3) -> float:
 
 func _closest_walkable(point: Vector3) -> Vector3:
 	var map := get_world_3d().navigation_map
-	if NavigationServer3D.map_get_iteration_id(map) == 0:
+	# 길찾기 지도가 없으면(지역이 하나도 없으면) 가장 가까운 점이 원점으로 나오므로 그대로 쓴다.
+	if NavigationServer3D.map_get_iteration_id(map) == 0 or NavigationServer3D.map_get_regions(map).is_empty():
 		return point
 	return NavigationServer3D.map_get_closest_point(map, point)
 
@@ -512,6 +609,10 @@ static func _flat_distance(a: Vector3, b: Vector3) -> float:
 
 func _on_damaged(info: DamageInfo, _amount: float) -> void:
 	if not multiplayer.is_server() or not is_active() or not health.is_alive():
+		return
+	# 맞으면 역해킹이 끊긴다. 과열 피해는 매 프레임 들어오므로 반응은 퀵핵을 받을 때 한 번만 한다.
+	_cancel_netrun()
+	if info.weapon_id == &"overheat":
 		return
 	# 맞으면 쏜 사람을 바로 알아챈다. 쏜 사람을 찾지 못하면 맞은 곳을 수색한다.
 	for node in get_tree().get_nodes_in_group(Player.GROUP):
@@ -529,6 +630,9 @@ func _on_died(_info: DamageInfo) -> void:
 
 
 func _go_down(new_condition: Condition) -> void:
+	_cancel_netrun()
+	_burn_left = 0.0
+	_glitch_left = 0.0
 	condition = new_condition
 	target = null
 	detection = 0.0

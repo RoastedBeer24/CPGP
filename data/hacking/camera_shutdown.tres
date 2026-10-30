@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="QuickhackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/hacking/quickhack_data.gd" id="1_hack"]
+
+[resource]
+script = ExtResource("1_hack")
+id = &"camera_shutdown"
+display_name = "카메라 차단"
+description = "카메라를 30초 동안 끈다."
+effect = 0
+ram_cost = 2
+upload_time = 0.6
+duration = 30.0
+damage_per_second = 0.0

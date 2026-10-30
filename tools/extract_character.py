@@ -13,18 +13,15 @@ import struct
 import sys
 
 # 게임에서 부르는 이름 -> 원본 애니메이션 이름. 동작을 더 쓰려면 여기에 추가한다.
+# 원래 속도(동작이 제자리에서 걸을 때 발이 뒤로 가는 속도): walk 약 1.0, run 4.3, sprint 6.2 m/s
 ROLES = {
     "idle": "A_actor_girl_idle_loop",
     "walk": "A_actor_girl_walk_loop",
     "run": "A_actor_girl_run_loop",
     "sprint": "A_actor_girl_sprint_loop",
-    # 조준하며 걷기(몸은 앞을 보고 발만 여러 방향으로)
-    "strafe_f": "A_actor_girl_battle_walk_loop_f",
-    "strafe_fl": "A_actor_girl_battle_walk_loop_fl",
-    "strafe_fr": "A_actor_girl_battle_walk_loop_fr",
-    "strafe_b": "A_actor_girl_battle_walk_loop_b",
-    "strafe_bl": "A_actor_girl_battle_walk_loop_bl",
-    "strafe_br": "A_actor_girl_battle_walk_loop_br",
+    # 점프: 도약(제자리, 달리며) -> 낙하 -> 착지(제자리, 달리며)
+    "jump_idle": "A_actor_girl_idle_jump_start_l",
+    "jump_run": "A_actor_girl_run_jump_start_l",
     "fall": "A_actor_girl_fall_loop_l",
     "land": "A_actor_girl_idle_jump_land_l",
     "run_land": "A_actor_girl_run_jump_land_l",
@@ -35,7 +32,7 @@ ROLES = {
 }
 
 # 루프로 재생할 동작 (glTF에는 반복 여부가 없어서 이름 끝에 -loop를 붙이면 Godot가 반복으로 가져온다)
-LOOPING = {"idle", "walk", "run", "sprint", "strafe_f", "strafe_fl", "strafe_fr", "strafe_b", "strafe_bl", "strafe_br", "fall"}
+LOOPING = {"idle", "walk", "run", "sprint", "fall"}
 
 
 def read_glb(path):

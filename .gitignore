@@ -11,3 +11,6 @@
 
 # 내보내는 도중에 멈추면 남는 빌드 번호 원본
 /src/core/build_info.gd.orig
+
+# 파이썬 캐시
+__pycache__/

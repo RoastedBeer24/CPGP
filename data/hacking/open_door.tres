@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="QuickhackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/hacking/quickhack_data.gd" id="1_hack"]
+
+[resource]
+script = ExtResource("1_hack")
+id = &"open_door"
+display_name = "문 열기"
+description = "잠긴 문을 연다."
+effect = 4
+ram_cost = 1
+upload_time = 1.5
+duration = 0.0
+damage_per_second = 0.0

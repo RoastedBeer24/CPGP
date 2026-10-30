@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/ai/enemy_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+display_name = "넷러너"
+body_color = Color(0.22, 0.18, 0.3, 1)
+visor_color = Color(0.75, 0.3, 1, 1)
+body_scale = 0.95
+max_health = 60.0
+armor = 0.0
+sight_range = 26.0
+engage_distance = 22.0
+netrunner = true

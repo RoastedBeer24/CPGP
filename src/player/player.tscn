@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://src/player/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://src/combat/health.gd" id="2_health"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://src/combat/viewmodel.gd" id="5_viewmodel"]
 [ext_resource type="Script" path="res://src/player/player_body.gd" id="6_body"]
 [ext_resource type="Script" path="res://src/player/interactor.gd" id="7_interactor"]
+[ext_resource type="Script" path="res://src/hacking/cyberdeck.gd" id="8_cyberdeck"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
 resource_local_to_scene = true
@@ -50,11 +51,32 @@ properties/4/replication_mode = 2
 properties/5/path = NodePath(".:combat_ready")
 properties/5/spawn = true
 properties/5/replication_mode = 2
+properties/6/path = NodePath(".:state")
+properties/6/spawn = true
+properties/6/replication_mode = 2
+properties/7/path = NodePath(".:jump_count")
+properties/7/spawn = true
+properties/7/replication_mode = 2
+properties/8/path = NodePath(".:dodge_count")
+properties/8/spawn = true
+properties/8/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_health"]
 properties/0/path = NodePath("Health:current")
 properties/0/spawn = true
 properties/0/replication_mode = 2
+properties/1/path = NodePath("Cyberdeck:ram")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath("Cyberdeck:upload_progress")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath("Cyberdeck:upload_label")
+properties/3/spawn = true
+properties/3/replication_mode = 2
+properties/4/path = NodePath("Cyberdeck:incoming_progress")
+properties/4/spawn = true
+properties/4/replication_mode = 1
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_head"]
 radius = 0.2
@@ -135,3 +157,6 @@ script = ExtResource("5_viewmodel")
 
 [node name="Interactor" type="Node" parent="."]
 script = ExtResource("7_interactor")
+
+[node name="Cyberdeck" type="Node" parent="."]
+script = ExtResource("8_cyberdeck")

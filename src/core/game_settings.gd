@@ -37,7 +37,7 @@ const REBINDABLE_ACTIONS: Array[StringName] = [
 	Actions.JUMP, Actions.SPRINT, Actions.CROUCH,
 	Actions.FIRE, Actions.AIM, Actions.RELOAD,
 	Actions.WEAPON_1, Actions.WEAPON_2, Actions.WEAPON_3, Actions.WEAPON_NEXT, Actions.WEAPON_PREV,
-	Actions.INTERACT, Actions.CAMERA_TOGGLE, Actions.FREE_LOOK,
+	Actions.INTERACT, Actions.SCAN, Actions.CAMERA_TOGGLE, Actions.FREE_LOOK,
 ]
 const ACTION_LABELS := {
 	Actions.MOVE_FORWARD: "앞으로",
@@ -58,6 +58,7 @@ const ACTION_LABELS := {
 	Actions.WEAPON_NEXT: "다음 무기",
 	Actions.WEAPON_PREV: "이전 무기",
 	Actions.FREE_LOOK: "자유 시야 (휠: 확대·축소)",
+	Actions.SCAN: "스캔 (누르는 동안, 1~3: 퀵핵)",
 }
 
 ## 저장 위치. 테스트는 사용자의 실제 설정을 건드리지 않도록 다른 파일로 바꾼다.

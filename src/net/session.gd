@@ -147,6 +147,8 @@ func _spawn_player(data: Variant) -> Node:
 	# 체력은 호스트가 판정하므로, 체력과 그 동기화만 호스트 권한으로 되돌린다.
 	player.get_node("Health").set_multiplayer_authority(1)
 	player.get_node("HealthSync").set_multiplayer_authority(1)
+	# RAM과 퀵핵 업로드도 호스트가 판정하므로 사이버덱도 호스트 권한이다.
+	player.get_node("Cyberdeck").set_multiplayer_authority(1)
 	player.position = info["position"]
 	player.use_device_input = use_device_input
 	var health := player.get_node("Health") as Health

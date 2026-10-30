@@ -104,17 +104,92 @@ func test_animated_body_turns_toward_movement_then_aim() -> void:
 	assert_true(player.body.facing().dot(Vector3.RIGHT) > 0.9, "움직이는 방향(오른쪽)을 본다: %s" % player.body.facing())
 	intent.aim_held = true
 	await _frames(40)
-	assert_true(player.body.facing().dot(Vector3.FORWARD) > 0.9, "조준하면 앞을 본다: %s" % player.body.facing())
-	assert_eq(player.body.dominant_animation(), &"strafe")
+	assert_true(player.body.chest_facing().dot(Vector3.FORWARD) > 0.95, "조준하면 상체는 앞을 본다: %s" % player.body.chest_facing())
+	assert_true(player.body.facing().dot(Vector3.RIGHT) > 0.5, "다리는 여전히 오른쪽으로 간다: %s" % player.body.facing())
+	intent.move = Vector2(0, -1)  # 조준한 채 뒤로
+	await _frames(40)
+	assert_true(player.body.facing().dot(Vector3.FORWARD) > 0.9, "뒷걸음은 앞을 본 채로: %s" % player.body.facing())
+	assert_true(player.body._backpedal)
 
 
-func test_animated_body_falls_in_air() -> void:
+func test_animated_jump_then_land() -> void:
 	if not await _spawn_with_model() or not player.body.animated:
 		return
+	await _frames(20)
 	intent.jump_pressed = true
-	await _frames(15)
+	await _frames(10)
+	assert_eq(player.body.dominant_animation(), &"jump", "뛰면 도약 동작")
+	var landed := false
+	for i in 90:
+		await _frames(1)
+		landed = landed or player.body.dominant_animation() == &"land"
+	assert_true(landed, "내려서면 착지 동작")
+
+
+func test_animated_body_falls_when_dropped() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	player.global_position.y = 8.0
+	await _frames(30)
 	assert_eq(player.body.dominant_animation(), &"fall")
 
+
+
+func test_motion_is_steady_when_screen_draws_faster_than_physics() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	# 화면(60번)이 물리(30번)보다 자주 그려져도 달리기 동작이 깜빡이지 않아야 한다.
+	var ticks := Engine.physics_ticks_per_second
+	Engine.physics_ticks_per_second = 30
+	intent.move = Vector2(0, 1)
+	for i in 40:
+		await tree.process_frame
+	var seen: Array[StringName] = []
+	for i in 40:
+		await tree.process_frame
+		if not seen.has(player.body.locomotion):
+			seen.append(player.body.locomotion)
+	Engine.physics_ticks_per_second = ticks
+	assert_eq(seen, [&"run"] as Array[StringName], "걷는 속도(4m/s) 내내 달리기 동작")
+
+
+func test_remote_body_reads_speed_from_sparse_updates() -> void:
+	# 원격 플레이어: 위치가 네트워크로 띄엄띄엄(두 프레임에 한 번) 와도 속도를 고르게 읽는다.
+	player = PLAYER_SCENE.instantiate()
+	player.use_device_input = false
+	player.set_multiplayer_authority(2)
+	add_child_autofree(player)
+	await _frames(2)
+	if not player.body.animated:
+		return
+	var seen: Array[StringName] = []
+	for i in 120:
+		if i % 2 == 0:
+			player.global_position += Vector3(0, 0, -4.0 * 2.0 / 60.0)
+		await tree.process_frame
+		if i > 40 and not seen.has(player.body.locomotion):
+			seen.append(player.body.locomotion)
+	assert_eq(seen, [&"run"] as Array[StringName])
+
+
+func test_foot_ik_finds_step_under_one_foot() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	# 왼발(-X 쪽) 밑에만 발이 딛는 디딤판(foot_ground 레이어)을 놓는다. 몸은 통과한다.
+	var step := StaticBody3D.new()
+	step.collision_layer = PlayerBody.FOOT_GROUND_LAYER
+	step.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(1.0, 0.2, 2.0)
+	shape.shape = box
+	step.add_child(shape)
+	step.position = Vector3(-0.55, 0.1, 0)
+	add_child_autofree(step)
+	await _frames(40)
+	assert_almost_eq(player.body.foot_offsets.x, 0.2, 0.04, "왼발 밑 디딤판 높이")
+	assert_almost_eq(player.body.foot_offsets.y, 0.0, 0.04, "오른발은 바닥")
+	assert_almost_eq(player.global_position.y, 0.0, 0.05, "몸(캡슐)은 디딤판에 걸리지 않는다")
 
 func test_blade_has_no_muzzle() -> void:
 	if not await _spawn_with_model():

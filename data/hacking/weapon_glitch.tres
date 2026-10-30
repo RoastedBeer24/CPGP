@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="QuickhackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/hacking/quickhack_data.gd" id="1_hack"]
+
+[resource]
+script = ExtResource("1_hack")
+id = &"weapon_glitch"
+display_name = "무기 오작동"
+description = "10초 동안 대상의 무기가 작동하지 않는다."
+effect = 3
+ram_cost = 3
+upload_time = 1.0
+duration = 10.0
+damage_per_second = 0.0

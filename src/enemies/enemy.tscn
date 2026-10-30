@@ -1,8 +1,12 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://src/enemies/enemy.gd" id="1_enemy"]
 [ext_resource type="Script" path="res://src/combat/health.gd" id="2_health"]
 [ext_resource type="Script" path="res://src/combat/hitbox.gd" id="3_hitbox"]
+[ext_resource type="Script" path="res://src/hacking/hackable.gd" id="4_hackable"]
+[ext_resource type="Resource" path="res://data/hacking/distract.tres" id="5_distract"]
+[ext_resource type="Resource" path="res://data/hacking/overheat.tres" id="6_overheat"]
+[ext_resource type="Resource" path="res://data/hacking/weapon_glitch.tres" id="7_glitch"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
 radius = 0.35
@@ -119,3 +123,9 @@ text = "?"
 path_desired_distance = 1.0
 target_desired_distance = 1.0
 radius = 0.4
+
+[node name="Hackable" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.75, 0)
+script = ExtResource("4_hackable")
+display_name = "경비"
+quickhacks = Array[Resource]([ExtResource("5_distract"), ExtResource("6_overheat"), ExtResource("7_glitch")])

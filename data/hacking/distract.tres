@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="QuickhackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/hacking/quickhack_data.gd" id="1_hack"]
+
+[resource]
+script = ExtResource("1_hack")
+id = &"distract"
+display_name = "주의 분산"
+description = "대상이 등 뒤쪽에서 난 소리를 확인하러 간다. 전투 중인 적에게는 듣지 않는다."
+effect = 1
+ram_cost = 2
+upload_time = 0.8
+duration = 0.0
+damage_per_second = 0.0

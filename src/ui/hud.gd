@@ -1,7 +1,7 @@
 class_name Hud
 extends CanvasLayer
 ## 게임 화면 위의 정보: 조준점과 명중 표시, 체력, 무기와 탄약, 피격 효과, 사망 화면, F3 디버그 표시,
-## 상호작용 안내("F: 제압" 등).
+## 상호작용 안내("F: 제압" 등), RAM, 스캔 화면, 퀵핵 업로드와 역해킹 경고.
 
 const HIT_MARKER_TIME := 0.15
 const HIT_COLOR := Color(1, 1, 1)
@@ -17,6 +17,11 @@ var _hit_marker_left := 0.0
 var _damage_flash := 0.0
 var _dead_time := 0.0
 var _prompt_label: Label
+var _ram_bar: ProgressBar
+var _ram_label: Label
+var _upload_label: Label
+var _warning_label: Label
+var _scan: ScanOverlay
 
 @onready var crosshair: ColorRect = $Crosshair
 @onready var hit_marker: Control = %HitMarker
@@ -45,6 +50,7 @@ func _ready() -> void:
 	_prompt_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	_prompt_label.add_theme_constant_override("outline_size", 6)
 	add_child(_prompt_label)
+	_build_hacking_hud()
 	debug_label.hide()
 	hit_marker.hide()
 	death_overlay.hide()
@@ -66,8 +72,75 @@ func _process(delta: float) -> void:
 	_update_weapon()
 	_update_hit_marker(delta)
 	_prompt_label.text = _player.interactor.prompt
+	_update_hacking()
 	if debug_label.visible:
 		_update_debug()
+
+
+func _build_hacking_hud() -> void:
+	_scan = ScanOverlay.new()
+	_scan.name = "ScanOverlay"
+	add_child(_scan)
+	# RAM 막대: 체력 막대 위
+	# 왼쪽 아래 기준 위치(offset)로 둔다. position을 쓰면 화면 크기에 따라 엉뚱한 곳에 뜬다.
+	_ram_label = _hud_label(20, Color(0.3, 0.95, 1))
+	_ram_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_ram_label.offset_left = 24.0
+	_ram_label.offset_right = 260.0
+	_ram_label.offset_top = -122.0
+	_ram_label.offset_bottom = -94.0
+	_ram_bar = ProgressBar.new()
+	_ram_bar.show_percentage = false
+	_ram_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_ram_bar.offset_left = 24.0
+	_ram_bar.offset_right = 224.0
+	_ram_bar.offset_top = -92.0
+	_ram_bar.offset_bottom = -82.0
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color(0.2, 0.85, 1)
+	_ram_bar.add_theme_stylebox_override("fill", fill)
+	add_child(_ram_bar)
+	# 업로드 진행: 조준점 아래, 상호작용 안내보다 아래
+	_upload_label = _hud_label(20, Color(0.3, 0.95, 1))
+	_upload_label.set_anchors_preset(Control.PRESET_CENTER)
+	_upload_label.offset_left = -300.0
+	_upload_label.offset_right = 300.0
+	_upload_label.offset_top = 80.0
+	_upload_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# 역해킹 경고: 화면 위쪽 가운데
+	_warning_label = _hud_label(26, Color(1, 0.25, 0.3))
+	_warning_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_warning_label.offset_left = -400.0
+	_warning_label.offset_right = 400.0
+	_warning_label.offset_top = 60.0
+	_warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+func _hud_label(font_size: int, color: Color) -> Label:
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 6)
+	add_child(label)
+	return label
+
+
+func _update_hacking() -> void:
+	var deck := _player.cyberdeck
+	_scan.player = _player
+	_ram_bar.max_value = deck.max_ram
+	_ram_bar.value = deck.ram
+	_ram_label.text = "RAM %d / %d" % [floori(deck.ram), int(deck.max_ram)]
+	if deck.upload_progress > 0.0:
+		var filled := int(deck.upload_progress * 20.0)
+		_upload_label.text = "업로드 중: %s  [%s%s]" % [deck.upload_label, "■".repeat(filled), "□".repeat(20 - filled)]
+	else:
+		_upload_label.text = ""
+	if deck.incoming_progress > 0.0:
+		_warning_label.text = "역해킹 감지! %d%%  — 넷러너의 시야에서 벗어나거나 공격하세요" % int(deck.incoming_progress * 100.0)
+	else:
+		_warning_label.text = ""
 
 
 func _attach(player: Player) -> void:

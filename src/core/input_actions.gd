@@ -22,6 +22,7 @@ const WEAPON_PREV := &"weapon_prev"
 const CAMERA_TOGGLE := &"camera_toggle"
 const INTERACT := &"interact"
 const FREE_LOOK := &"free_look"
+const SCAN := &"scan"
 
 const DEFAULT_KEYS := {
 	MOVE_FORWARD: [KEY_W],
@@ -42,6 +43,8 @@ const DEFAULT_KEYS := {
 	INTERACT: [KEY_F],
 	# 누르고 있는 동안 캐릭터 주변을 둘러본다 (휠로 확대·축소)
 	FREE_LOOK: [KEY_QUOTELEFT],
+	# 사이버펑크 2077처럼 Tab을 누르고 있는 동안 스캔한다. 스캔 중에는 1~3으로 퀵핵을 올린다.
+	SCAN: [KEY_TAB],
 }
 
 const DEFAULT_MOUSE_BUTTONS := {

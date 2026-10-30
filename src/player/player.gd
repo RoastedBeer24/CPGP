@@ -3,7 +3,8 @@ extends CharacterBody3D
 ## 플레이어. 걷기, 달리기, 웅크리기, 슬라이딩, 점프, 턱 오르기, 회피를 처리하고,
 ## 무기(WeaponHolder)와 체력(Health)을 가진다. 체력은 호스트가 관리한다.
 ## 기본은 1인칭이고, V로 어깨 너머 3인칭과 바꿀 수 있다. 시점은 각자 화면에만 적용된다.
-## ` 키를 누르고 있으면 자유 시야: 조준과 몸 방향은 그대로 두고 카메라만 캐릭터 주변을 돈다(휠로 확대·축소).
+## ` 키를 누르고 있으면 자유 시야: 카메라만 캐릭터 주변을 어느 방향으로든 돈다(휠로 크게 확대·축소).
+## 자유 시야 중에도 움직이고 조준하고 쏠 수 있다. 공격은 캐릭터가 보는 방향(머리 방향)으로 나간다.
 ##
 ## 네트워크: 이 플레이어를 조종하는 피어(멀티플레이 권한자)만 이동을 계산한다.
 ## 다른 피어에서는 MultiplayerSynchronizer가 위치와 시점을 받아 보여 주기만 한다.
@@ -28,10 +29,12 @@ const MOVE_ACTIONS := {
 ## 마지막으로 쏜 뒤 이 프레임 수(물리 60fps 기준 2초) 동안은 전투 자세를 유지한다.
 const COMBAT_READY_FRAMES := 120
 
-## 자유 시야에서 휠 한 칸에 바뀌는 카메라 거리(m)와 그 범위
-const ZOOM_STEP := 0.4
-const MIN_CAMERA_DISTANCE := 1.2
-const MAX_CAMERA_DISTANCE := 6.0
+## 자유 시야에서 휠 한 칸에 카메라 거리가 바뀌는 배율과 그 범위(m)
+const ZOOM_FACTOR := 1.2
+const MIN_CAMERA_DISTANCE := 0.6
+const MAX_CAMERA_DISTANCE := 30.0
+## 자유 시야에서 위아래로 돌릴 수 있는 한계(라디안). 바로 위·아래 직전까지.
+const FREE_LOOK_PITCH_LIMIT := 1.48
 
 ## 3인칭 조준점을 찾을 때 카메라에서 쏘는 광선의 길이(m)
 const AIM_PROBE_RANGE := 200.0
@@ -40,7 +43,11 @@ const AIM_PROBE_RANGE := 200.0
 ## false면 키보드·마우스를 읽지 않는다. 테스트나 원격 플레이어용.
 @export var use_device_input := true
 
+## 이동 상태. 원격 피어에도 동기화되어 몸 애니메이션(점프, 슬라이딩 등)에 쓰인다.
 var state := State.GROUND
+## 점프·회피를 할 때마다 1씩 는다. 원격 피어의 몸이 이 값의 변화를 보고 점프·회피 동작을 튼다.
+var jump_count := 0
+var dodge_count := 0
 var crouched := false
 ## 0이면 선 자세, 1이면 웅크린 자세. 원격 피어에도 동기화된다.
 var crouch_blend := 0.0
@@ -50,7 +57,7 @@ var combat_ready := false
 var third_person := false
 ## 0이면 1인칭, 1이면 3인칭 카메라 위치. 전환할 때 부드럽게 움직인다.
 var camera_blend := 0.0
-## 자유 시야 중인지. 쏠 수 없고, 카메라가 캐릭터를 중심으로 돈다.
+## 자유 시야 중인지. 카메라가 캐릭터를 중심으로 돈다. 움직이고 쏘는 것은 평소처럼 된다.
 var free_look := false
 ## 3인칭과 자유 시야의 카메라 거리. 자유 시야에서 휠로 바꾸면 3인칭에도 그대로 쓴다.
 var camera_distance := 0.0
@@ -73,8 +80,9 @@ var _last_fire_frame := -100000
 # 자유 시야의 카메라 회전 (머리 기준). 목표값과, 부드럽게 따라가는 지금 값.
 var _free_yaw := 0.0
 var _free_pitch := 0.0
-var _orbit := Vector2.ZERO
 var _free_amount := 0.0
+## 화면에 쓰는 카메라 거리. camera_distance를 부드럽게 따라간다.
+var _shown_distance := 0.0
 # 토글로 설정한 달리기와 조준의 지금 상태
 var _sprint_toggled := false
 var _aim_toggled := false
@@ -88,6 +96,7 @@ var _step_left := 0.0
 @onready var collision: CollisionShape3D = $CollisionShape3D
 @onready var body: PlayerBody = $Body
 @onready var interactor: Interactor = $Interactor
+@onready var cyberdeck: Cyberdeck = $Cyberdeck
 @onready var _capsule: CapsuleShape3D = collision.shape
 @onready var health: Health = $Health
 @onready var weapons: WeaponHolder = $Head/WeaponHolder
@@ -102,6 +111,7 @@ func _ready() -> void:
 	camera.current = local and use_device_input
 	camera.fov = GameSettings.fov
 	camera_distance = config.third_person_distance
+	_shown_distance = camera_distance
 	# 3인칭 카메라가 내 몸에 걸려 당겨지지 않게 한다.
 	camera_arm.add_excluded_object(get_rid())
 	health.died.connect(_on_died)
@@ -206,20 +216,21 @@ func set_free_look(enabled: bool) -> void:
 		return
 	free_look = enabled
 	if enabled:
+		# 지금 보던 방향에서 시작한다.
 		_free_yaw = 0.0
-		_free_pitch = 0.0
+		_free_pitch = head.rotation.x
 	_apply_view()
 
 
-## 자유 시야에서 카메라를 돌린다. x는 좌우, y는 상하(라디안).
+## 자유 시야에서 카메라를 돌린다. x는 좌우(제한 없음), y는 상하(라디안). 캐릭터는 돌지 않는다.
 func orbit(delta_radians: Vector2) -> void:
-	_free_yaw -= delta_radians.x
-	_free_pitch = clampf(_free_pitch - delta_radians.y, deg_to_rad(-70.0), deg_to_rad(60.0))
+	_free_yaw = wrapf(_free_yaw - delta_radians.x, -PI, PI)
+	_free_pitch = clampf(_free_pitch - delta_radians.y, -FREE_LOOK_PITCH_LIMIT, FREE_LOOK_PITCH_LIMIT)
 
 
-## 카메라를 당기거나(-) 민다(+). 휠 한 칸이 1이다.
+## 카메라를 당기거나(-) 민다(+). 휠 한 칸이 1이다. 가까울수록 조금씩, 멀수록 크게 바뀐다.
 func zoom(steps: int) -> void:
-	camera_distance = clampf(camera_distance + steps * ZOOM_STEP, MIN_CAMERA_DISTANCE, MAX_CAMERA_DISTANCE)
+	camera_distance = clampf(camera_distance * pow(ZOOM_FACTOR, steps), MIN_CAMERA_DISTANCE, MAX_CAMERA_DISTANCE)
 
 
 ## 공격 판정의 시작점. 시점과 관계없이 눈에서 쏜다. 3인칭 카메라 위치에서 쏘면
@@ -229,7 +240,10 @@ func aim_origin() -> Vector3:
 
 
 ## 공격 방향. 1인칭은 카메라가 보는 방향이고, 3인칭은 화면 가운데 조준점이 가리키는 곳을 향한다.
+## 자유 시야 중에는 카메라가 딴 곳을 볼 수 있으므로 캐릭터가 보는 방향(머리 방향)이다.
 func aim_direction() -> Vector3:
+	if free_look:
+		return -head.global_basis.z
 	var forward := -camera.global_basis.z
 	if camera_blend <= 0.0:
 		return forward
@@ -259,15 +273,17 @@ func _update_camera_arm(delta: float) -> void:
 	var target := 1.0 if third_person or free_look else 0.0
 	camera_blend = move_toward(camera_blend, target, config.camera_switch_speed * delta)
 	_free_amount = move_toward(_free_amount, 1.0 if free_look else 0.0, config.camera_switch_speed * delta)
+	_shown_distance = lerpf(_shown_distance, camera_distance, minf(delta * 10.0, 1.0))
 	var t := ease(camera_blend, -2.0)
 	# 자유 시야는 어깨가 아니라 머리를 중심으로 돈다.
 	var shoulder := Vector3(config.third_person_shoulder.x, config.third_person_shoulder.y, 0.0) * t * (1.0 - _free_amount)
-	camera_arm.spring_length = camera_distance * t
+	camera_arm.spring_length = _shown_distance * t
 	camera_arm.position = shoulder
-	# 자유 시야를 끄면 카메라 회전이 0으로 돌아온다.
-	var orbit_target := Vector2(_free_yaw, _free_pitch) if free_look else Vector2.ZERO
-	_orbit = _orbit.lerp(orbit_target, minf(delta * 12.0, 1.0))
-	camera_arm.rotation = Vector3(_orbit.y, _orbit.x, 0.0)
+	# 자유 시야의 회전은 머리(조준 높이)와 상관없이 세상 기준으로 정한다. 그래야 위아래 어디로든 돌 수 있다.
+	# 평소에는 머리를 그대로 따라가고, 켜고 끌 때는 두 방향 사이를 부드럽게 오간다.
+	var follow := head.global_basis.get_rotation_quaternion()
+	var orbiting := Basis.from_euler(Vector3(_free_pitch, rotation.y + _free_yaw, 0.0)).get_rotation_quaternion()
+	camera_arm.global_basis = Basis(follow.slerp(orbiting, ease(_free_amount, -2.0)))
 
 
 ## 시점과 생사에 따라 몸과 1인칭 무기 모델을 보이거나 숨긴다.
@@ -319,9 +335,14 @@ func _physics_process(delta: float) -> void:
 		_try_mantle()
 
 	var sprinting := intent.sprint and intent.move.y > 0.3 and not crouched
+	# 스캔 중에는 1~3 키가 무기 대신 퀵핵을 고른다.
+	cyberdeck.update_scan(intent.scan_held)
+	if cyberdeck.scanning and intent.weapon_slot > 0:
+		cyberdeck.request_hack(intent.weapon_slot)
+		intent.weapon_slot = 0
 	# 몸을 들고 있으면 쏠 수 없다.
-	# 몸을 들고 있거나 자유 시야로 둘러보는 중에는 쏠 수 없다.
-	weapons.tick(delta, intent, health.is_alive() and not sprinting and interactor.carrying == null and not free_look)
+	# 몸을 들고 있거나 스캔 중에는 쏠 수 없다.
+	weapons.tick(delta, intent, health.is_alive() and not sprinting and interactor.carrying == null and not cyberdeck.scanning)
 	combat_ready = weapons.aiming or Engine.get_physics_frames() - _last_fire_frame < COMBAT_READY_FRAMES
 	_update_fov(delta, intent)
 
@@ -489,6 +510,7 @@ func _start_slide() -> void:
 
 func _jump() -> void:
 	velocity.y = config.jump_velocity()
+	jump_count += 1
 	_jump_buffer = 0.0
 	_time_since_floor = config.coyote_time + 1.0
 	if crouched and can_stand():
@@ -525,6 +547,7 @@ func _try_dodge(direction: Vector2) -> bool:
 	state = State.DODGE
 	_dodge_time = 0.0
 	_dodge_cooldown = config.dodge_cooldown
+	dodge_count += 1
 	dodged.emit()
 	return true
 

@@ -50,6 +50,16 @@ extends Resource
 ## 의심 상태에서 확인하러 가는 시간
 @export var investigate_time := 8.0
 
+@export_group("넷러너 (역해킹)")
+## true면 총 대신 플레이어에게 역해킹을 올린다.
+@export var netrunner := false
+@export var hack_upload_time := 4.0
+@export var hack_range := 28.0
+@export var hack_damage_per_second := 7.0
+@export var hack_duration := 4.0
+## 역해킹이 끝난 뒤 다음 역해킹까지 쉬는 시간
+@export var hack_cooldown := 6.0
+
 @export_group("전투")
 @export var damage := 8.0
 @export var fire_interval := 1.2

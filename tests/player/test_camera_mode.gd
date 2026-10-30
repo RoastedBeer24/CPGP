@@ -136,12 +136,31 @@ func test_free_look_zoom_changes_distance_within_limits() -> void:
 	assert_almost_eq(player.camera_distance, Player.MIN_CAMERA_DISTANCE, 0.001, "가장 가까운 거리에서 멈춘다")
 
 
-func test_cannot_fire_during_free_look() -> void:
+func test_can_fire_during_free_look_toward_character_facing() -> void:
 	player.set_free_look(true)
+	player.orbit(Vector2(PI * 0.7, 0.4))
+	await _frames(30)
 	var ammo := player.weapons.ammo_in_magazine()
 	intent.fire_pressed = true
 	await _frames(3)
-	assert_eq(player.weapons.ammo_in_magazine(), ammo)
+	assert_eq(player.weapons.ammo_in_magazine(), ammo - 1, "둘러보는 중에도 쏜다")
+	assert_true(player.aim_direction().is_equal_approx(-player.head.global_basis.z), "카메라가 아니라 캐릭터가 보는 쪽으로")
+
+
+func test_free_look_orbits_all_the_way_around_and_far() -> void:
+	player.set_free_look(true)
+	player.orbit(Vector2(PI, 0.3))  # 반 바퀴 돌아 캐릭터 정면을 조금 위에서 본다
+	for i in 12:
+		player.zoom(1)
+	await _frames(120)
+	var offset := player.camera.global_position - player.head.global_position
+	assert_true(offset.z < -1.0, "앞쪽(캐릭터 정면)으로 돌아간다: %s" % offset)
+	assert_true(player.camera_distance > 15.0, "멀리까지 뺄 수 있다: %s" % player.camera_distance)
+	player.orbit(Vector2(0.0, -3.0))
+	assert_almost_eq(player._free_pitch, Player.FREE_LOOK_PITCH_LIMIT, 0.001, "위아래로 거의 수직까지 돌릴 수 있다")
+	for i in 40:
+		player.zoom(-1)
+	assert_almost_eq(player.camera_distance, Player.MIN_CAMERA_DISTANCE, 0.001)
 
 func _box(size: Vector3, center: Vector3) -> StaticBody3D:
 	var body := StaticBody3D.new()

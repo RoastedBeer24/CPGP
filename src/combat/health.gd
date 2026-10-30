@@ -42,7 +42,7 @@ func mitigate(raw_amount: float) -> float:
 func apply_damage(info: DamageInfo) -> float:
 	if not multiplayer.is_server() or not is_alive():
 		return 0.0
-	var amount := minf(mitigate(info.amount), current)
+	var amount := minf(info.amount if info.ignore_armor else mitigate(info.amount), current)
 	current -= amount
 	damaged.emit(info, amount)
 	if current <= 0.0:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="PackedScene" path="res://src/enemies/training_dummy.tscn" id="dummy"]
 [ext_resource type="PackedScene" path="res://src/enemies/enemy.tscn" id="enemy"]
@@ -7,6 +7,10 @@
 [ext_resource type="Resource" path="res://data/enemies/guard.tres" id="guard"]
 [ext_resource type="Resource" path="res://data/enemies/heavy.tres" id="heavy"]
 [ext_resource type="Resource" path="res://data/enemies/guard_arena.tres" id="guard_arena"]
+[ext_resource type="Resource" path="res://data/enemies/netrunner.tres" id="netrunner"]
+[ext_resource type="Script" path="res://src/hacking/security_camera.gd" id="security_camera"]
+[ext_resource type="Script" path="res://src/hacking/hack_door.gd" id="hack_door"]
+[ext_resource type="Script" path="res://src/hacking/turret.gd" id="turret"]
 
 [sub_resource type="StandardMaterial3D" id="mat_floor"]
 albedo_color = Color(0.26, 0.27, 0.32, 1)
@@ -55,6 +59,7 @@ fog_density = 0.015
 
 [sub_resource type="NavigationMesh" id="navmesh"]
 geometry_parsed_geometry_type = 1
+geometry_collision_mask = 1
 geometry_source_geometry_mode = 1
 geometry_source_group_name = &"navigation_geometry"
 agent_height = 2.0
@@ -201,61 +206,97 @@ text = "3.5m 틈"
 
 [node name="Step1" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 0.125, 5.75)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 0.25, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step2" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 0.25, 5.25)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 0.5, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step3" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 0.375, 4.75)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 0.75, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step4" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 0.5, 4.25)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 1.0, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step5" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 0.625, 3.75)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 1.25, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step6" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 0.75, 3.25)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 1.5, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step7" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 0.875, 2.75)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 1.75, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step8" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 1, 2.25)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 2.0, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step9" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 1.125, 1.75)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 2.25, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step10" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 1.25, 1.25)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 2.5, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step11" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 1.375, 0.75)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 2.75, 0.5)
 material = SubResource("mat_wall")
 
 [node name="Step12" type="CSGBox3D" parent="Geometry/Stairs"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -14, 1.5, 0.25)
+use_collision = true
+collision_layer = 16
+collision_mask = 0
 size = Vector3(3, 3.0, 0.5)
 material = SubResource("mat_wall")
 
@@ -555,22 +596,85 @@ size = Vector3(10, 4, 8)
 material = SubResource("mat_wall")
 
 [node name="Warehouse2" type="CSGBox3D" parent="Stealth"]
-transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -45, 2, 15)
-use_collision = true
-size = Vector3(10, 4, 8)
-material = SubResource("mat_wall")
-
-[node name="Warehouse3" type="CSGBox3D" parent="Stealth"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -71, 2, 0)
 use_collision = true
 size = Vector3(12, 4, 14)
 material = SubResource("mat_wall")
 
-[node name="Warehouse4" type="CSGBox3D" parent="Stealth"]
+[node name="Warehouse3" type="CSGBox3D" parent="Stealth"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -80, 2, -21)
 use_collision = true
 size = Vector3(8, 4, 8)
 material = SubResource("mat_wall")
+
+[node name="Vault" type="Node3D" parent="Stealth"]
+
+[node name="VaultNorth" type="CSGBox3D" parent="Stealth/Vault"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -45, 2, 11.2)
+use_collision = true
+size = Vector3(10, 4, 0.4)
+material = SubResource("mat_wall")
+
+[node name="VaultSouth" type="CSGBox3D" parent="Stealth/Vault"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -45, 2, 18.8)
+use_collision = true
+size = Vector3(10, 4, 0.4)
+material = SubResource("mat_wall")
+
+[node name="VaultEast" type="CSGBox3D" parent="Stealth/Vault"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -40.2, 2, 15)
+use_collision = true
+size = Vector3(0.4, 4, 8)
+material = SubResource("mat_wall")
+
+[node name="VaultWestA" type="CSGBox3D" parent="Stealth/Vault"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -49.8, 2, 12.3)
+use_collision = true
+size = Vector3(0.4, 4, 2.6)
+material = SubResource("mat_wall")
+
+[node name="VaultWestB" type="CSGBox3D" parent="Stealth/Vault"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -49.8, 2, 17.7)
+use_collision = true
+size = Vector3(0.4, 4, 2.6)
+material = SubResource("mat_wall")
+
+[node name="VaultRoof" type="CSGBox3D" parent="Stealth/Vault"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -45, 4.2, 15)
+use_collision = true
+size = Vector3(10, 0.4, 8)
+material = SubResource("mat_wall")
+
+[node name="VaultTerminal" type="CSGBox3D" parent="Stealth/Vault"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -42, 0.6, 15)
+use_collision = true
+size = Vector3(1.2, 1.2, 1.6)
+material = SubResource("mat_neon_cyan")
+
+[node name="VaultLabel" type="Label3D" parent="Stealth"]
+transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -51, 3.4, 15)
+billboard = 1
+font_size = 60
+outline_size = 8
+text = "보안 금고"
+
+[node name="VaultDoor" type="StaticBody3D" parent="Stealth"]
+transform = Transform3D(6.12323e-17, 0, 1, 0, 1, -0, -1, 0, 6.12323e-17, -49.8, 0, 15)
+script = ExtResource("hack_door")
+
+[node name="Devices" type="Node3D" parent="Stealth"]
+
+[node name="Camera1" type="Node3D" parent="Stealth/Devices"]
+transform = Transform3D(6.12323e-17, 0, 1, 0, 1, -0, -1, 0, 6.12323e-17, -31.2, 3.6, -3.5)
+script = ExtResource("security_camera")
+
+[node name="Camera2" type="Node3D" parent="Stealth/Devices"]
+transform = Transform3D(-1, 0, 1.22465e-16, 0, 1, -0, -1.22465e-16, -0, -1, -39.6, 4.3, -10.6)
+script = ExtResource("security_camera")
+
+[node name="Turret1" type="StaticBody3D" parent="Stealth/Devices"]
+transform = Transform3D(6.12323e-17, -0, -1, 0, 1, -0, 1, 0, 6.12323e-17, -87, 0, -4)
+script = ExtResource("turret")
 
 [node name="Crate1" type="CSGBox3D" parent="Stealth"]
 transform = Transform3D(1, 0, 0, 0, 1, -0, -0, 0, 1, -37, 0.6, -5)
@@ -840,4 +944,9 @@ respawn_delay = 60.0
 [node name="Sentry1" parent="Stealth/Enemies" instance=ExtResource("enemy")]
 transform = Transform3D(-0.707107, -0, -0.707107, 0, 1, -0, 0.707107, -0, -0.707107, -75, 0, -15)
 data = ExtResource("guard")
+respawn_delay = 60.0
+
+[node name="Netrunner1" parent="Stealth/Enemies" instance=ExtResource("enemy")]
+transform = Transform3D(6.12323e-17, -0, -1, 0, 1, -0, 1, 0, 6.12323e-17, -60, 0, 21)
+data = ExtResource("netrunner")
 respawn_delay = 60.0

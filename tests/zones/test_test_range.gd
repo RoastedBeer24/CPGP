@@ -42,7 +42,7 @@ func test_navigation_reaches_stealth_zone() -> void:
 
 func test_stealth_zone_has_enemies_routes_and_hide_spots() -> void:
 	var enemies := zone.get_node("Stealth/Enemies").get_children()
-	assert_eq(enemies.size(), 6)
+	assert_eq(enemies.size(), 7, "경비 넷, 중장갑병, 보초, 넷러너")
 	var heavy := 0
 	for node in enemies:
 		var enemy := node as Enemy

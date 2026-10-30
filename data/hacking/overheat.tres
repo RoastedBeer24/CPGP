@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="QuickhackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/hacking/quickhack_data.gd" id="1_hack"]
+
+[resource]
+script = ExtResource("1_hack")
+id = &"overheat"
+display_name = "과열"
+description = "5초 동안 장갑을 무시하는 화상 피해를 준다. 대상은 공격받은 곳을 수색한다."
+effect = 2
+ram_cost = 4
+upload_time = 1.2
+duration = 5.0
+damage_per_second = 9.0
