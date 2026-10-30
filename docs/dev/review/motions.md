@@ -58,3 +58,4 @@
 | 이펙트 밝기 | 색 값을 1.5에서 자름 (원작 강도 최대 100은 원작 화면에서 하얗게 날아가게 만든 값) | `vfx_base.gdshaderinc`의 `max_brightness` |
 | 이펙트가 없는 동작 | 궁극기·대시 공격은 임시 검기 유지 | `PlayerBody._update_actions` |
 | 타격 빛 | 흰 네모 → 가운데가 밝은 둥근 빛(더하기) | `src/combat/hit_spark.gd` |
+| 칼빛 메시의 가장자리 흐림 | 메시에 든 정점 알파(가장자리가 흐려짐)를 곱함. 사이트는 무시하지만 원작은 곱하는 것으로 보임 | `vfx_base.gdshaderinc`의 `particle_color` |
