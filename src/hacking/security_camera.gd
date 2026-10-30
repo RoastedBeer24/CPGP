@@ -57,13 +57,15 @@ func _build_cone() -> void:
 	_cone_material = StandardMaterial3D.new()
 	_cone_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_cone_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_cone_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# 바깥 면만 그린다. 원뿔 안(카메라에 보이는 자리)에 서면 화면 전체가 물들어 앞이 잘 안 보인다.
+	_cone_material.cull_mode = BaseMaterial3D.CULL_BACK
 	mesh.material = _cone_material
 	_cone = MeshInstance3D.new()
 	_cone.mesh = mesh
 	_cone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# 원뿔 꼭짓점을 렌즈에 두고 앞(-Z)으로 눕힌다. 보기 좋게 실제 시야의 1/3 길이만 그린다.
-	_cone.rotation.x = -PI * 0.5
+	# 원뿔 꼭짓점(원기둥의 위, +Y)을 렌즈에 두고 넓은 쪽이 앞(-Z)으로 가게 눕힌다(X축으로 +90도 돌리면 +Y가 +Z로 간다).
+	# 보기 좋게 실제 시야의 1/3 길이만 그린다.
+	_cone.rotation.x = PI * 0.5
 	_cone.position = Vector3(0, 0, -0.36 - mesh.height * 0.5)
 	head.add_child(_cone)
 

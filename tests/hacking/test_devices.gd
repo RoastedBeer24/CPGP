@@ -38,6 +38,18 @@ func test_camera_spots_player_and_calls_guards() -> void:
 	assert_true(guard.alert >= Enemy.Alert.SEARCHING, "근처 경비가 수색하러 온다: %s" % guard.alert)
 
 
+func test_camera_cone_widens_away_from_lens() -> void:
+	# 시야 원뿔은 렌즈에서 꼭짓점이 시작해 앞(-Z)으로 넓어진다. 거꾸로면 카메라 앞에 선 사람 화면을 덮는다.
+	var camera := _spawn_camera(Vector3(0, 3, -8), PI)
+	await _frames(1)
+	var mesh := camera._cone.mesh as CylinderMesh
+	var apex := camera.head.to_local(camera._cone.to_global(Vector3.UP * mesh.height * 0.5))
+	var base := camera.head.to_local(camera._cone.to_global(Vector3.DOWN * mesh.height * 0.5))
+	assert_almost_eq(apex.z, -0.36, 0.01, "꼭짓점은 렌즈에 있다")
+	assert_almost_eq(base.z, -0.36 - mesh.height, 0.01, "넓은 쪽은 앞에 있다")
+	assert_eq(mesh.top_radius, 0.0, "꼭짓점 쪽은 반지름이 0")
+
+
 func test_camera_shutdown_by_quickhack() -> void:
 	var camera := _spawn_camera(Vector3(0, 2, -8), PI)
 	player.head.rotation.x = atan2(2.0 - 1.6, 8.0)
