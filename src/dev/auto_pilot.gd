@@ -1,12 +1,14 @@
 class_name AutoPilot
 extends Node
 ## 개발용 자동 조종(명령줄 --autoplay). 화면을 찍어 확인할 때 내 플레이어가 저절로 싸운다.
+## 로비에서는 잠시 뒤 작전을 출발하고(방장일 때), 보상은 첫 번째 것을 고른다.
 ## 가까운 적에게 달려가 공격하고, SP가 차면 배틀 스킬, 에너지가 차면 궁극기를 쓰고, 근처 적이 예고하면 회피한다.
 
 var player: Player
 
 var _intent := PlayerIntent.new()
 var _cooldown := 0.0
+var _lobby_time := 0.0
 
 
 func _ready() -> void:
@@ -19,6 +21,16 @@ func _physics_process(delta: float) -> void:
 		return
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_intent.move = Vector2.ZERO
+	var session := player.get_parent().get_parent() as Session
+	if session != null:
+		if session.zone() is Lobby:
+			_lobby_time += delta
+			if _lobby_time > 1.5 and multiplayer.is_server():
+				session.run.start()
+			return
+		_lobby_time = 0.0
+		if session.run.choosing(player):
+			player.add_reward(session.run.offers_for(player)[0].id)
 	var target := _nearest_enemy()
 	if target == null:
 		return

@@ -55,11 +55,15 @@ extends Resource
 @export var camera_pivot_height := 1.45
 ## 중심에서 카메라까지의 거리(m). 휠로 바꾼다.
 @export var camera_distance := 4.2
-@export var camera_min_distance := 2.0
-@export var camera_max_distance := 8.0
+## 휠로 당기고 밀 수 있는 범위(m). 가까이 당기면 카메라 중심이 얼굴 높이로 올라간다.
+@export var camera_min_distance := 0.8
+@export var camera_max_distance := 18.0
+## 가까이 당겼을 때 카메라 중심 높이(m, 얼굴)와, 이 거리(m)보다 가까우면 그 높이로 옮긴다.
+@export var camera_close_pivot_height := 1.6
+@export var camera_close_distance := 2.0
 ## 위아래로 돌릴 수 있는 한계(도). 음수가 아래를 내려다보는 쪽이다.
-@export var camera_min_pitch := -70.0
-@export var camera_max_pitch := 45.0
+@export var camera_min_pitch := -85.0
+@export var camera_max_pitch := 75.0
 ## 대상 고정 중에 카메라가 대상 쪽으로 돌아가는 빠르기
 @export var lock_on_turn_speed := 6.0
 ## 질주할 때 시야각에 더하는 값(도)

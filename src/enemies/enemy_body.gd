@@ -53,7 +53,7 @@ func setup(owner_enemy: Enemy) -> void:
 func telegraph_progress() -> float:
 	if _telegraph == null or not _telegraph.visible or _telegraph_attack == null:
 		return -1.0
-	return clampf(_telegraph_time / maxf(_telegraph_attack.wind_up, 0.01), 0.0, 1.0)
+	return clampf(_telegraph_time / maxf(enemy.wind_up_time(_telegraph_attack), 0.01), 0.0, 1.0)
 
 
 func _process(delta: float) -> void:
@@ -121,7 +121,7 @@ func _update_telegraph(delta: float) -> void:
 		_telegraph = null
 		return
 	# 원거리는 길이가, 근접은 반지름이 차오른다.
-	if _telegraph_attack.projectile_speed > 0.0:
+	if _telegraph_attack.projectile_speed > 0.0 or _telegraph_attack.sweep_time > 0.0:
 		_telegraph_fill.scale = Vector3(1.0, 1.0, maxf(progress, 0.01))
 	else:
 		_telegraph_fill.scale = Vector3.ONE * maxf(progress, 0.01)
@@ -141,9 +141,9 @@ static func _telegraph_mesh(attack: EnemyAttackData, scale_value: float) -> Arra
 	var tool := SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	tool.set_normal(Vector3.UP)
-	if attack.projectile_speed > 0.0:
-		var half := 0.35
-		var length := RANGED_TELEGRAPH_LENGTH * scale_value
+	if attack.projectile_speed > 0.0 or attack.sweep_time > 0.0:
+		var half := 0.35 if attack.projectile_speed > 0.0 else attack.reach * 0.6
+		var length := (RANGED_TELEGRAPH_LENGTH if attack.projectile_speed > 0.0 else attack.lunge + attack.reach) * scale_value
 		var corners: Array[Vector3] = [Vector3(-half, 0, 0), Vector3(half, 0, 0), Vector3(half, 0, -length), Vector3(-half, 0, -length)]
 		for i: int in [0, 1, 2, 0, 2, 3]:
 			tool.add_vertex(corners[i])
@@ -304,6 +304,10 @@ func _animate_placeholder(delta: float) -> void:
 	var flash := _flash / FLASH_TIME
 	for material in _materials:
 		material.emission_energy_multiplier = flash * 2.5
+		# 격노한 보스는 붉게 빛난다.
+		material.emission = Color(1.0, 0.25, 0.15) if enemy.enraged and flash <= 0.0 else Color.WHITE
+		if enemy.enraged and flash <= 0.0:
+			material.emission_energy_multiplier = 0.6
 	if _eye_material != null:
 		_eye_material.emission_energy_multiplier = glow
 

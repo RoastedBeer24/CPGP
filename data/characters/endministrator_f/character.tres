@@ -6,5 +6,7 @@
 script = ExtResource("1_character")
 id = &"endministrator_f"
 display_name = "관리자 (여)"
+title = "엔드필드 공업 관리자"
+description = "오래 잠들어 있다가 깨어난 엔드필드 공업의 관리자. 원석을 다루는 힘으로 적에게 원석 결정을 새기고, 궁극기로 그 결정을 한꺼번에 깨뜨린다."
 appearance_path = "res://data/characters/endministrator_f/appearance.tres"
 kit_path = "res://data/characters/endministrator_f/kit.tres"

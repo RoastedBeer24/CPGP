@@ -25,6 +25,9 @@ MANIFEST_NAME = "assets.json"
 FILES = {
     "characters/endministrator_f.glb": "assets/characters/endministrator_f/endministrator_f.glb",
     "characters/endministrator_m.glb": "assets/characters/endministrator_m/endministrator_m.glb",
+    "characters/endministrator_f_fx.zip": "assets/characters/endministrator_f/endministrator_f_fx.zip",
+    "characters/endministrator_m_fx.zip": "assets/characters/endministrator_m/endministrator_m_fx.zip",
+    "weapons/tarr_11.glb": "assets/weapons/tarr_11.glb",
 }
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

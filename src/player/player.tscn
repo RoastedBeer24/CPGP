@@ -69,6 +69,9 @@ properties/11/replication_mode = 2
 properties/12/path = NodePath(".:reviving")
 properties/12/spawn = true
 properties/12/replication_mode = 2
+properties/13/path = NodePath(".:rewards")
+properties/13/spawn = true
+properties/13/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_health"]
 properties/0/path = NodePath("Health:current")
@@ -77,6 +80,9 @@ properties/0/replication_mode = 2
 properties/1/path = NodePath("Health:revive_progress")
 properties/1/spawn = true
 properties/1/replication_mode = 2
+properties/2/path = NodePath("Health:max_health")
+properties/2/spawn = true
+properties/2/replication_mode = 2
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2

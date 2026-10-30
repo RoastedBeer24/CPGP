@@ -1,0 +1,104 @@
+[gd_resource type="Resource" script_class="RewardPool" format=3]
+
+[ext_resource type="Script" path="res://src/run/reward_pool.gd" id="1_pool"]
+[ext_resource type="Script" path="res://src/run/reward_data.gd" id="2_reward"]
+
+[sub_resource type="Resource" id="sharp_edge"]
+script = ExtResource("2_reward")
+id = &"sharp_edge"
+title = "날 선 칼날"
+description = "공격력 +15%"
+stat = &"attack"
+value = 0.15
+
+[sub_resource type="Resource" id="exoskeleton"]
+script = ExtResource("2_reward")
+id = &"exoskeleton"
+title = "강화 외골격"
+description = "최대 체력 +25%, 체력 25% 회복"
+stat = &"max_health"
+value = 0.25
+heal = 0.25
+
+[sub_resource type="Resource" id="overclock"]
+script = ExtResource("2_reward")
+id = &"overclock"
+title = "연산 가속"
+description = "SP 회복 속도 +30%"
+stat = &"sp_regen"
+value = 0.3
+
+[sub_resource type="Resource" id="resonance"]
+script = ExtResource("2_reward")
+id = &"resonance"
+title = "공명 증폭"
+description = "궁극기 에너지 획득 +35%"
+stat = &"energy_gain"
+value = 0.35
+
+[sub_resource type="Resource" id="flurry"]
+script = ExtResource("2_reward")
+id = &"flurry"
+title = "연속 베기"
+description = "기본 공격 피해 +25%"
+stat = &"basic_damage"
+value = 0.25
+
+[sub_resource type="Resource" id="imprint"]
+script = ExtResource("2_reward")
+id = &"imprint"
+title = "결정 각인"
+description = "배틀 스킬 피해 +35%"
+stat = &"skill_damage"
+value = 0.35
+
+[sub_resource type="Resource" id="shatter_echo"]
+script = ExtResource("2_reward")
+id = &"shatter_echo"
+title = "파쇄 공명"
+description = "원석 결정을 깨뜨릴 때 추가 피해 +60%"
+stat = &"shatter_damage"
+value = 0.6
+
+[sub_resource type="Resource" id="fracture"]
+script = ExtResource("2_reward")
+id = &"fracture"
+title = "균열"
+description = "적에게 쌓는 경직 +30%"
+stat = &"stagger"
+value = 0.3
+
+[sub_resource type="Resource" id="executioner"]
+script = ExtResource("2_reward")
+id = &"executioner"
+title = "처형인"
+description = "처형 피해 +60%"
+stat = &"finisher_damage"
+value = 0.6
+
+[sub_resource type="Resource" id="first_aid"]
+script = ExtResource("2_reward")
+id = &"first_aid"
+title = "응급 처치"
+description = "체력 50% 회복"
+heal = 0.5
+
+[sub_resource type="Resource" id="afterimage"]
+script = ExtResource("2_reward")
+id = &"afterimage"
+title = "잔상"
+description = "회피 무적 시간 +0.12초"
+stat = &"dodge_invulnerable"
+value = 0.12
+
+[sub_resource type="Resource" id="final_calc"]
+script = ExtResource("2_reward")
+id = &"final_calc"
+title = "궁극 연산"
+description = "궁극기 피해 +30%"
+stat = &"ultimate_damage"
+value = 0.3
+
+[resource]
+script = ExtResource("1_pool")
+rewards = Array[ExtResource("2_reward")]([SubResource("sharp_edge"), SubResource("exoskeleton"), SubResource("overclock"), SubResource("resonance"), SubResource("flurry"), SubResource("imprint"), SubResource("shatter_echo"), SubResource("fracture"), SubResource("executioner"), SubResource("first_aid"), SubResource("afterimage"), SubResource("final_calc")])

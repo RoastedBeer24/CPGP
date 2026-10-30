@@ -51,8 +51,9 @@ const REVIVE_HEALTH := 0.3
 const SLOW_MOTION_SCALE := 0.3
 const SLOW_MOTION_TIME := 0.4
 ## 카메라가 머리에 이보다 가까우면 몸을 숨긴다(머리 속이 화면을 가리지 않게, m).
-const CAMERA_INSIDE_DISTANCE := 0.6
-const ZOOM_FACTOR := 1.15
+const CAMERA_INSIDE_DISTANCE := 0.35
+## 휠 한 칸에 카메라 거리가 바뀌는 배율. 가까울수록 조금씩, 멀수록 크게 바뀐다.
+const ZOOM_FACTOR := 1.12
 
 @export var config: MovementConfig = preload("res://data/player/default_movement.tres")
 ## 비워 두면 고른 캐릭터(character_id)의 전투 구성. 스크립트끼리 서로 참조하는 중에 리소스를 미리 불러오면
@@ -82,6 +83,12 @@ var invulnerable := false
 var in_combat := false
 ## 쓰러진 동료를 일으키는 중인지 (F를 누르고 있음)
 var reviving := false
+## 이번 작전에서 고른 보상(RewardData.id). 조종하는 피어가 고르고, 호스트는 피해 계산과 최대 체력에 쓴다.
+var rewards := PackedStringArray():
+	set(value):
+		rewards = value
+		_bonus_cache.clear()
+		_apply_reward_health()
 
 # ---- 조종하는 피어만 쓰는 값 ----
 var sp := 100.0
@@ -94,6 +101,11 @@ var camera_distance := 4.2
 var lock_target: Enemy
 ## 테스트에서 입력을 직접 넣을 때 쓴다. 설정되어 있으면 장치 입력 대신 이것을 읽는다.
 var intent_override: PlayerIntent
+## true면 키보드·마우스 입력을 받지 않는다(보상 고르기, 캐릭터 화면이 열렸을 때).
+var input_blocked := false
+## 캐릭터 화면: 카메라가 캐릭터를 앞에서 비춘다. showcase_yaw만큼 둘레를 돈다.
+var showcase := false
+var showcase_yaw := 0.0
 
 var _action: AttackData
 var _action_time := 0.0
@@ -121,6 +133,10 @@ var _camera_inside := false
 var _was_alive := true
 ## 호스트에서: 쓰러진 이 플레이어를 일으킨 정도(초)
 var _revive_elapsed := 0.0
+## 보상 수치 합(수치 이름 → 값). 보상이 바뀌면 다시 센다.
+var _bonus_cache: Dictionary[StringName, float] = {}
+## 호스트에서: 체력에 반영한 보상 수 (새 보상의 회복을 한 번만 준다)
+var _rewards_applied := 0
 
 @onready var collision: CollisionShape3D = $CollisionShape3D
 @onready var body: PlayerBody = $Body
@@ -156,7 +172,7 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_multiplayer_authority() or not use_device_input:
+	if not is_multiplayer_authority() or not use_device_input or input_blocked:
 		return
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		return
@@ -218,6 +234,64 @@ func ultimate_ready() -> bool:
 	return energy >= kit.max_energy
 
 
+## 고른 보상이 올려 준 수치 합 (예: attack 0.3이면 공격력 +30%)
+func bonus(stat: StringName) -> float:
+	if not _bonus_cache.has(stat):
+		var total := 0.0
+		var pool := _reward_pool()
+		for reward_id in rewards:
+			var reward := pool.find(StringName(reward_id)) if pool != null else null
+			if reward != null and reward.stat == stat:
+				total += reward.value
+		_bonus_cache[stat] = total
+	return _bonus_cache[stat]
+
+
+## 보상을 하나 고른다 (조종하는 피어). 동기화로 호스트에 간다.
+func add_reward(reward_id: StringName) -> void:
+	var next := rewards.duplicate()
+	next.append(String(reward_id))
+	rewards = next
+
+
+## 호스트가 작전을 시작하거나 끝낼 때 부른다: 보상을 비우고 SP와 에너지를 처음으로 되돌린다.
+@rpc("any_peer", "call_local", "reliable")
+func reset_for_run() -> void:
+	if multiplayer.get_remote_sender_id() != 1:
+		return
+	rewards = PackedStringArray()
+	sp = 100.0
+	energy = 0.0
+
+
+static var _pool: RewardPool
+
+
+static func _reward_pool() -> RewardPool:
+	if _pool == null:
+		_pool = load(Run.REWARD_POOL) as RewardPool
+	return _pool
+
+
+## 호스트: 보상에 따라 최대 체력을 바꾸고, 새로 고른 보상의 회복을 준다.
+func _apply_reward_health() -> void:
+	if not is_inside_tree() or not multiplayer.is_server() or kit == null:
+		return
+	var before := health.max_health
+	health.max_health = kit.max_health * (1.0 + bonus(&"max_health"))
+	if health.is_alive() and health.max_health > before:
+		health.current = minf(health.current + health.max_health - before, health.max_health)
+	var pool := _reward_pool()
+	while _rewards_applied < rewards.size():
+		var reward := pool.find(StringName(rewards[_rewards_applied])) if pool != null else null
+		if reward != null and reward.heal > 0.0:
+			health.heal(health.max_health * reward.heal)
+		_rewards_applied += 1
+	if rewards.is_empty():
+		_rewards_applied = 0
+		health.current = minf(health.current, health.max_health)
+
+
 # ---- 매 프레임 ----
 
 func _process(delta: float) -> void:
@@ -265,7 +339,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if state == State.GROUND or state == State.AIR:
 		state = State.GROUND if is_on_floor() else State.AIR
-	sp = minf(sp + kit.sp_regen * delta, kit.max_sp)
+	sp = minf(sp + kit.sp_regen * (1.0 + bonus(&"sp_regen")) * delta, kit.max_sp)
 	in_combat = _combat_left > 0.0
 	_update_fov(delta)
 
@@ -500,11 +574,14 @@ func _resolve_hit(peer: int, attack_id: StringName, index: int, origin: Vector3,
 	var flags := PackedInt32Array()
 	var energy_gain := 0.0
 	var sp_gain := 0.0
+	var power := kit.attack_power * (1.0 + bonus(&"attack")) * (1.0 + bonus(_damage_stat(attack)))
+	var stagger_scale := 1.0 + bonus(&"stagger")
+	var shatter_scale := 1.0 + bonus(&"shatter_damage")
 	for target in CombatQuery.melee(get_world_3d().direct_space_state, origin, forward, hit.reach, hit.arc, TEAM):
 		var enemy := target.owner as Enemy
 		if enemy == null or not enemy.is_alive():
 			continue
-		var outcome := enemy.receive_hit(peer, hit, kit.attack_power, origin)
+		var outcome := enemy.receive_hit(peer, hit, power, origin, stagger_scale, shatter_scale)
 		positions.append(target.global_position)
 		amounts.append(outcome.amount)
 		flags.append(outcome.flags)
@@ -518,6 +595,17 @@ func _resolve_hit(peer: int, attack_id: StringName, index: int, origin: Vector3,
 		_hit_results.rpc_id(peer, positions, amounts, flags, energy_gain, sp_gain)
 
 
+## 이 동작의 피해를 올리는 보상 수치
+func _damage_stat(attack: AttackData) -> StringName:
+	if attack == kit.battle_skill:
+		return &"skill_damage"
+	if attack == kit.ultimate:
+		return &"ultimate_damage"
+	if attack == kit.finisher:
+		return &"finisher_damage"
+	return &"basic_damage"
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func _hit_results(positions: PackedVector3Array, amounts: PackedFloat32Array, flags: PackedInt32Array, energy_gain: float, sp_gain: float) -> void:
 	if multiplayer.get_remote_sender_id() != 1:
@@ -526,7 +614,7 @@ func _hit_results(positions: PackedVector3Array, amounts: PackedFloat32Array, fl
 
 
 func _apply_hit_results(positions: PackedVector3Array, amounts: PackedFloat32Array, flags: PackedInt32Array, energy_gain: float, sp_gain: float) -> void:
-	energy = minf(energy + energy_gain, kit.max_energy)
+	energy = minf(energy + energy_gain * (1.0 + bonus(&"energy_gain")), kit.max_energy)
 	sp = minf(sp + sp_gain, kit.max_sp)
 	_combat_left = COMBAT_TIME
 	for i in positions.size():
@@ -564,7 +652,7 @@ func _process_dodge(delta: float, intent: PlayerIntent) -> void:
 	velocity.x = _dodge_direction.x * speed
 	velocity.z = _dodge_direction.z * speed
 	velocity.y = 0.0 if is_on_floor() else velocity.y - config.gravity * delta
-	if _dodge_time >= config.dodge_invulnerable:
+	if _dodge_time >= config.dodge_invulnerable + bonus(&"dodge_invulnerable"):
 		invulnerable = false
 	if _dodge_time < config.dodge_duration:
 		return
@@ -861,7 +949,7 @@ func _read_intent() -> PlayerIntent:
 		var copied := intent_override.copy()
 		intent_override.consume_edges()
 		return copied
-	if not use_device_input:
+	if not use_device_input or input_blocked:
 		return PlayerIntent.new()
 	return PlayerIntent.from_device()
 
@@ -869,6 +957,10 @@ func _read_intent() -> PlayerIntent:
 # ---- 카메라 ----
 
 func _update_camera(delta: float) -> void:
+	# 캐릭터 화면: 캐릭터 앞에서 온몸이 보이게 비춘다.
+	if showcase and delta > 0.0:
+		camera_yaw = lerp_angle(camera_yaw, rotation.y + PI + showcase_yaw, minf(6.0 * delta, 1.0))
+		camera_pitch = lerpf(camera_pitch, deg_to_rad(-4.0), minf(6.0 * delta, 1.0))
 	# 대상 고정 중에는 카메라가 대상 쪽으로 돌아간다.
 	if lock_target != null and is_instance_valid(lock_target) and delta > 0.0:
 		var to_target := lock_target.global_position - global_position
@@ -877,7 +969,12 @@ func _update_camera(delta: float) -> void:
 			var wanted := atan2(-to_target.x, -to_target.z)
 			camera_yaw = lerp_angle(camera_yaw, wanted, minf(config.lock_on_turn_speed * delta, 1.0))
 			camera_pitch = lerpf(camera_pitch, deg_to_rad(-14.0), minf(2.0 * delta, 1.0))
-	camera_rig.global_position = global_position + Vector3.UP * config.camera_pivot_height
+	# 가까이 당길수록 카메라 중심을 얼굴 높이로 올려서 캐릭터를 가까이서 볼 수 있게 한다.
+	var closeness := clampf(1.0 - (camera_arm.spring_length - config.camera_min_distance) / maxf(config.camera_close_distance - config.camera_min_distance, 0.01), 0.0, 1.0)
+	var pivot_height := lerpf(config.camera_pivot_height, config.camera_close_pivot_height, closeness)
+	if showcase:
+		pivot_height = lerpf(1.0, config.camera_close_pivot_height, closeness)
+	camera_rig.global_position = global_position + Vector3.UP * pivot_height
 	camera_rig.global_basis = Basis.from_euler(Vector3(camera_pitch, camera_yaw, 0.0))
 	camera_arm.spring_length = lerpf(camera_arm.spring_length, camera_distance, minf(delta * 10.0, 1.0)) if delta > 0.0 else camera_distance
 	# 흔들림: 세게 맞힐수록 크게, 빠르게 잦아든다.

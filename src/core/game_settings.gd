@@ -27,6 +27,10 @@ const WINDOW_SIZES: Array[Vector2i] = [
 ## 최대 프레임 후보. 0은 제한 없음.
 const MAX_FPS_CHOICES: Array[int] = [0, 30, 60, 120, 144, 165, 240]
 
+## 보이스 언어 코드와 메뉴에 보일 이름
+const VOICE_LANGUAGES: Array[String] = ["KR", "JP", "EN", "CN"]
+const VOICE_LANGUAGE_LABELS: Array[String] = ["한국어", "일본어", "영어", "중국어"]
+
 ## 기본 마우스 감도(픽셀당 라디안). 메뉴의 감도 값은 이것에 곱하는 배율이다.
 const BASE_MOUSE_SENSITIVITY := 0.0025
 
@@ -35,7 +39,7 @@ const BASE_MOUSE_SENSITIVITY := 0.0025
 const REBINDABLE_ACTIONS: Array[StringName] = [
 	Actions.MOVE_FORWARD, Actions.MOVE_BACK, Actions.MOVE_LEFT, Actions.MOVE_RIGHT,
 	Actions.JUMP, Actions.ATTACK, Actions.DODGE, Actions.SKILL, Actions.ULTIMATE,
-	Actions.LOCK_ON, Actions.INTERACT, Actions.TOGGLE_VISOR,
+	Actions.LOCK_ON, Actions.INTERACT, Actions.TOGGLE_VISOR, Actions.CHARACTER_MENU, Actions.START_RUN,
 ]
 const ACTION_LABELS := {
 	Actions.MOVE_FORWARD: "앞으로",
@@ -50,6 +54,8 @@ const ACTION_LABELS := {
 	Actions.LOCK_ON: "대상 고정",
 	Actions.INTERACT: "동료 일으키기 (누르고 있기)",
 	Actions.TOGGLE_VISOR: "바이저 쓰기 / 벗기",
+	Actions.CHARACTER_MENU: "캐릭터 화면 (로비)",
+	Actions.START_RUN: "작전 출발 (로비, 방장)",
 }
 
 const DEFAULT_PATH := "user://settings.cfg"
@@ -89,6 +95,8 @@ static var key_overrides: Dictionary[StringName, int] = {}
 # ---- 게임 ----
 ## 고른 캐릭터 (Characters의 이름)
 static var character_id := &"endministrator_f"
+## 캐릭터 보이스 언어: KR, JP, EN, CN
+static var voice_language := "KR"
 static var auto_update := true
 ## 캐릭터가 머리 장비(바이저)를 쓰고 있는지. 코옵에서도 남에게 그대로 보인다.
 static var visor_on := true
@@ -112,6 +120,7 @@ static func reset_to_defaults() -> void:
 	fov = 70.0
 	key_overrides = {}
 	character_id = &"endministrator_f"
+	voice_language = "KR"
 	auto_update = true
 	visor_on = true
 	asset_key = ""
@@ -175,6 +184,9 @@ static func load_settings() -> void:
 			if code != 0:
 				key_overrides[action] = code
 	character_id = StringName(str(config.get_value("game", "character_id", character_id)))
+	voice_language = str(config.get_value("game", "voice_language", voice_language))
+	if not VOICE_LANGUAGES.has(voice_language):
+		voice_language = "KR"
 	auto_update = bool(config.get_value("game", "auto_update", auto_update))
 	visor_on = bool(config.get_value("game", "visor_on", visor_on))
 	asset_key = str(config.get_value("game", "asset_key", asset_key)).strip_edges()
@@ -204,6 +216,7 @@ static func save() -> Error:
 	for action: StringName in key_overrides:
 		config.set_value("keys", String(action), key_overrides[action])
 	config.set_value("game", "character_id", String(character_id))
+	config.set_value("game", "voice_language", voice_language)
 	config.set_value("game", "auto_update", auto_update)
 	config.set_value("game", "visor_on", visor_on)
 	config.set_value("game", "asset_key", asset_key)

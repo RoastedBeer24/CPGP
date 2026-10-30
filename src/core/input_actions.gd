@@ -20,6 +20,9 @@ const LOCK_ON := &"lock_on"
 ## 쓰러진 동료 곁에서 누르고 있으면 일으킨다.
 const INTERACT := &"interact"
 const TOGGLE_VISOR := &"toggle_visor"
+## 로비: 캐릭터 화면 열기, 작전 출발(방장)
+const CHARACTER_MENU := &"character_menu"
+const START_RUN := &"start_run"
 const PAUSE := &"pause"
 const DEBUG_OVERLAY := &"debug_overlay"
 
@@ -35,6 +38,8 @@ const DEFAULT_KEYS := {
 	INTERACT: [KEY_F],
 	# 머리 장비(바이저)를 벗거나 쓴다. 엔드필드에는 없는 키라 비어 있는 H(Head)를 쓴다.
 	TOGGLE_VISOR: [KEY_H],
+	CHARACTER_MENU: [KEY_C],
+	START_RUN: [KEY_ENTER],
 	PAUSE: [KEY_ESCAPE],
 	DEBUG_OVERLAY: [KEY_F3],
 }

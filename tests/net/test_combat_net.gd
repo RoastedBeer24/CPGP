@@ -4,7 +4,7 @@ extends NetTestCase
 
 
 func test_client_attack_damages_enemy_judged_by_host() -> void:
-	var sessions := await connect_peers(1)
+	var sessions := await _connect_in_room()
 	var host := sessions[0]
 	var client := sessions[1]
 	var client_id := client.multiplayer.get_unique_id()
@@ -26,7 +26,7 @@ func test_client_attack_damages_enemy_judged_by_host() -> void:
 
 
 func test_enemy_attack_on_client_is_judged_by_host() -> void:
-	var sessions := await connect_peers(1)
+	var sessions := await _connect_in_room()
 	var host := sessions[0]
 	var client := sessions[1]
 	var client_id := client.multiplayer.get_unique_id()
@@ -58,6 +58,15 @@ func test_downed_teammate_can_be_revived() -> void:
 	assert_true(await wait_until_long(func() -> bool: return mine.is_alive()), "F를 누르고 있으면 일어난다")
 	assert_almost_eq(downed.health.current, downed.health.max_health * Player.REVIVE_HEALTH, 1.0)
 	assert_true(await wait_until(func() -> bool: return mine.state != Player.State.DOWN), "다시 움직인다")
+
+
+## 호스트와 참여자를 이은 뒤 전투 방으로 옮긴다(판은 로비에서 시작한다).
+func _connect_in_room() -> Array[Session]:
+	var sessions := await connect_peers(1)
+	sessions[0].change_zone("res://src/zones/combat_room/combat_room.tscn")
+	await wait_until(func() -> bool: return sessions[1].zone() is CombatRoom and sessions[0].zone() is CombatRoom)
+	await physics_frames(5)
+	return sessions
 
 
 ## 오래 걸리는 일(적이 다가와 예고하고 때리기, 일으키기)은 더 오래 기다린다.

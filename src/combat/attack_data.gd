@@ -9,6 +9,8 @@ extends Resource
 
 @export var id := &""
 @export var display_name := ""
+## 캐릭터 화면에 보이는 설명
+@export_multiline var description := ""
 ## 몸 모델에서 틀 동작 이름 (tools/extract_character.py의 ROLES 이름)
 @export var clip := &""
 ## 이 시간(초)이 지나면 동작이 끝난다.

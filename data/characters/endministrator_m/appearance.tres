@@ -6,6 +6,8 @@
 script = ExtResource("1_appearance")
 model_path = "res://assets/characters/endministrator_m/endministrator_m.glb"
 external_model_file = "characters/endministrator_m.glb"
+fx_path = "res://assets/characters/endministrator_m/endministrator_m_fx.zip"
+fx_external_file = "characters/endministrator_m_fx.zip"
 headgear_meshes = Array[StringName]([&"S_actor_endminm_cloth_03_lod0", &"S_actor_endminm_cloth_05_lod0"])
 cloth_chains = PackedStringArray("clothes_pifeng_L_a_1_jnt:clothes_pifeng_L_a_5_jnt", "clothes_pifeng_L_b_1_jnt:clothes_pifeng_L_b_5_jnt", "clothes_pifeng_L_c_1_jnt:clothes_pifeng_L_c_4_jnt", "clothes_pifeng_L_d_1_jnt:clothes_pifeng_L_d_4_jnt", "clothes_pifeng_R_a_1_jnt:clothes_pifeng_R_a_5_jnt", "clothes_pifeng_R_b_1_jnt:clothes_pifeng_R_b_5_jnt", "clothes_pifeng_R_c_1_jnt:clothes_pifeng_R_c_4_jnt", "clothes_pifeng_R_d_1_jnt:clothes_pifeng_R_d_4_jnt", "maozi_a1_M:maozi_a3_M")
 ribbon_chains = PackedStringArray("piaodai_back_La_0_skin_jnt:piaodai_back_La_4_skin_jnt", "piaodai_back_L_0_skin_jnt:piaodai_back_L_4_skin_jnt", "piaodai_back_Ra_0_skin_jnt:piaodai_back_Ra_4_skin_jnt", "piaodai_a_1_ctrl_jnt:piaodai_a_2_ctrl_jnt", "piaodai_c_1_ctrl_jnt:piaodai_c_2_ctrl_jnt")

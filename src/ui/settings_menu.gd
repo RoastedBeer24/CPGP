@@ -254,6 +254,8 @@ func _build_game(rows: VBoxContainer) -> void:
 			current = i
 	_add_options(rows, "캐릭터", names, current,
 		func(index: int) -> void: GameSettings.character_id = characters[index].id)
+	_add_options(rows, "보이스 언어", GameSettings.VOICE_LANGUAGE_LABELS, maxi(GameSettings.VOICE_LANGUAGES.find(GameSettings.voice_language), 0),
+		func(index: int) -> void: GameSettings.voice_language = GameSettings.VOICE_LANGUAGES[index])
 	_add_check(rows, "바이저 쓰기", GameSettings.visor_on,
 		func(on: bool) -> void: GameSettings.visor_on = on)
 	_add_check(rows, "자동 업데이트", GameSettings.auto_update,

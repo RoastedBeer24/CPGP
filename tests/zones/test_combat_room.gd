@@ -2,8 +2,11 @@ extends NetTestCase
 ## 전투 방: 웨이브가 차례로 나오고, 다 깨면 방 정리, 모두 쓰러지면 처음부터 다시 한다.
 
 
+const COMBAT_ROOM := "res://src/zones/combat_room/combat_room.tscn"
+
+
 func test_waves_spawn_and_advance_until_cleared() -> void:
-	var session := new_peer("Solo")
+	var session := _room_peer()
 	session.waves_enabled = true
 	session.start_single()
 	var room := session.zone() as CombatRoom
@@ -21,7 +24,7 @@ func test_waves_spawn_and_advance_until_cleared() -> void:
 
 
 func test_enemies_spawn_away_from_players() -> void:
-	var session := new_peer("Solo")
+	var session := _room_peer()
 	session.waves_enabled = true
 	session.start_single()
 	var room := session.zone() as CombatRoom
@@ -34,7 +37,7 @@ func test_enemies_spawn_away_from_players() -> void:
 
 
 func test_wipe_restarts_room() -> void:
-	var session := new_peer("Solo")
+	var session := _room_peer()
 	session.waves_enabled = true
 	session.start_single()
 	var room := session.zone() as CombatRoom
@@ -47,6 +50,12 @@ func test_wipe_restarts_room() -> void:
 	assert_true(await wait_until(func() -> bool: return room.phase == CombatRoom.Phase.WAITING or room.wave == 1 and room.phase == CombatRoom.Phase.FIGHTING), "다시 시작")
 	assert_true(player.is_alive(), "다시 시작하면 일어난다")
 	assert_eq(player.health.current, player.health.max_health)
+
+
+func _room_peer() -> Session:
+	var session := new_peer("Solo")
+	session.zone_scene = load(COMBAT_ROOM)
+	return session
 
 
 func _defeat_all(room: CombatRoom) -> void:

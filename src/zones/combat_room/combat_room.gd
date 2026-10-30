@@ -24,6 +24,8 @@ const SPAWN_CLEARANCE := 8.0
 @export var between_delay := 3.0
 @export var restart_delay := 8.0
 @export var failed_delay := 5.0
+## true면 방을 정리하거나 전멸한 뒤 처음부터 다시 한다(방 하나만 시험할 때). 작전(Run)은 끄고 다음 방으로 간다.
+@export var auto_restart := true
 
 # ---- 동기화되는 값 (호스트가 정한다) ----
 var phase := Phase.WAITING:
@@ -72,10 +74,10 @@ func _physics_process(delta: float) -> void:
 			if _phase_time >= between_delay:
 				_start_wave(wave + 1)
 		Phase.CLEARED:
-			if _phase_time >= restart_delay:
+			if auto_restart and _phase_time >= restart_delay:
 				restart(true)
 		Phase.FAILED:
-			if _phase_time >= failed_delay:
+			if auto_restart and _phase_time >= failed_delay:
 				restart(true)
 
 
@@ -87,6 +89,14 @@ func alive_enemies() -> int:
 		if enemy != null and enemy.is_alive():
 			count += 1
 	return count
+
+
+## 호스트: 적과 탄을 모두 치운다(구역을 바꾸기 전에).
+func clear_enemies() -> void:
+	if not multiplayer.is_server():
+		return
+	for node: Node in enemies.get_children():
+		node.queue_free()
 
 
 ## 호스트: 적을 모두 치우고 플레이어를 일으켜 처음부터 다시 한다.

@@ -5,6 +5,9 @@ extends Resource
 
 @export var id := &""
 @export var display_name := ""
+## 캐릭터 화면에 보이는 소개
+@export var title := ""
+@export_multiline var description := ""
 @export_file("*.tres") var appearance_path := ""
 @export_file("*.tres") var kit_path := ""
 

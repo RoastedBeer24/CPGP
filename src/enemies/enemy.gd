@@ -31,6 +31,11 @@ const CORPSE_TIME := 2.5
 const ENERGY_ON_HURT := 3.0
 ## 적끼리 떨어지려는 거리(m)
 const SEPARATION := 1.3
+## 내디딤과 밀려남이 줄어드는 빠르기(m/s²)
+const KNOCKBACK_DECAY := 18.0
+## 격노하면 예고 시간과 이동 속도에 곱하는 값
+const ENRAGED_WIND_UP := 0.75
+const ENRAGED_SPEED := 1.25
 
 ## 맞힌 결과 (호스트가 공격한 플레이어에게 돌려준다)
 class HitOutcome:
@@ -50,6 +55,8 @@ var hurt_count := 0
 var stagger := 0.0
 ## 원석 결정이 남은 시간(초). 0이면 없다.
 var crystal_left := 0.0
+## 격노했는지 (보스가 체력이 줄면)
+var enraged := false
 
 # ---- 호스트만 쓰는 값 ----
 var target: Player
@@ -61,6 +68,8 @@ var _since_hit := 100.0
 var _repath := 0.0
 ## 이번 공격을 이미 피한 플레이어 (완벽한 회피를 한 번만 알린다)
 var _dodged: Array[Player] = []
+## 이번 돌진 공격에 이미 맞은 플레이어
+var _struck: Array[Player] = []
 
 @onready var collision: CollisionShape3D = $CollisionShape3D
 @onready var body: EnemyBody = $Body
@@ -128,6 +137,11 @@ func state_time() -> float:
 	return _state_time
 
 
+## 지금 예고 시간(격노하면 짧다)
+func wind_up_time(attack: EnemyAttackData) -> float:
+	return attack.wind_up * (ENRAGED_WIND_UP if enraged else 1.0)
+
+
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
@@ -136,6 +150,8 @@ func _physics_process(delta: float) -> void:
 	crystal_left = maxf(crystal_left - delta, 0.0)
 	for id: StringName in _cooldowns:
 		_cooldowns[id] = maxf(_cooldowns[id] - delta, 0.0)
+	if data.enrage_below > 0.0 and not enraged and health.ratio() < data.enrage_below:
+		enraged = true
 	if _since_hit > STAGGER_DECAY_DELAY and state != State.STAGGERED:
 		stagger = maxf(stagger - data.stagger_max * STAGGER_DECAY_RATE * delta, 0.0)
 	var move := Vector3.ZERO
@@ -153,6 +169,8 @@ func _physics_process(delta: float) -> void:
 		State.WIND_UP:
 			_process_wind_up(delta)
 		State.RECOVER:
+			if _attack.sweep_time > 0.0 and _state_time <= _attack.sweep_time:
+				_sweep_strike(_attack)
 			if _state_time >= _attack.recovery:
 				_set_state(State.CHASE)
 		State.HURT:
@@ -166,7 +184,7 @@ func _physics_process(delta: float) -> void:
 			if _state_time >= CORPSE_TIME:
 				queue_free()
 			return
-	_knockback = _knockback.move_toward(Vector3.ZERO, 18.0 * delta)
+	_knockback = _knockback.move_toward(Vector3.ZERO, KNOCKBACK_DECAY * delta)
 	velocity.x = move.x + _knockback.x
 	velocity.z = move.z + _knockback.z
 	velocity.y = 0.0 if is_on_floor() else velocity.y - 18.0 * delta
@@ -217,8 +235,9 @@ func _process_chase(delta: float) -> Vector3:
 	elif distance > _closest_range() * 0.8:
 		direction = _path_direction(target.global_position, delta)
 	direction.y = 0.0
-	var move := direction.normalized() * data.move_speed if direction.length() > 0.01 else Vector3.ZERO
-	return move + _separation() * data.move_speed * 0.6
+	var speed := data.move_speed * (ENRAGED_SPEED if enraged else 1.0)
+	var move := direction.normalized() * speed if direction.length() > 0.01 else Vector3.ZERO
+	return move + _separation() * speed * 0.6
 
 
 func _closest_range() -> float:
@@ -262,15 +281,17 @@ func _start_attack(attack: EnemyAttackData) -> void:
 	attack_id = attack.id
 	attack_count += 1
 	_dodged.clear()
+	_struck.clear()
 	_cooldowns[attack.id] = attack.cooldown
 	_set_state(State.WIND_UP)
 
 
 func _process_wind_up(delta: float) -> void:
 	# 예고 앞부분에는 목표를 따라 돌고, 끝 무렵에는 방향을 굳힌다(그래야 피할 수 있다).
-	if target != null and is_instance_valid(target) and _state_time < _attack.wind_up * 0.6:
+	var wind_up := wind_up_time(_attack)
+	if target != null and is_instance_valid(target) and _state_time < wind_up * 0.6:
 		_face_toward(target.global_position, data.turn_speed * delta)
-	if _state_time < _attack.wind_up:
+	if _state_time < wind_up:
 		return
 	_execute_attack(_attack)
 	_set_state(State.RECOVER)
@@ -278,7 +299,11 @@ func _process_wind_up(delta: float) -> void:
 
 func _execute_attack(attack: EnemyAttackData) -> void:
 	if attack.lunge > 0.0:
-		_knockback = facing() * attack.lunge * 6.0
+		# 줄어드는 빠르기가 일정하므로, lunge(m)만큼 가려면 처음 속도는 sqrt(2 × 줄어드는 빠르기 × 거리)다.
+		_knockback = facing() * sqrt(2.0 * KNOCKBACK_DECAY * attack.lunge)
+	if attack.sweep_time > 0.0:
+		_sweep_strike(attack)
+		return
 	if attack.projectile_speed > 0.0:
 		var aim_at := target.global_position + Vector3.UP * 1.0 if target != null and is_instance_valid(target) else global_position + facing() * 10.0
 		var origin := global_position + Vector3.UP * (data.height * 0.7) + facing() * (data.radius + 0.2)
@@ -293,6 +318,21 @@ func _execute_attack(attack: EnemyAttackData) -> void:
 			continue
 		if attack.arc < 180.0 and to_player.length() > 0.3 and rad_to_deg(facing().angle_to(to_player)) > attack.arc:
 			continue
+		strike(player, attack)
+
+
+## 돌진 공격: 내디디는 동안 지금 자리에서 닿는 플레이어를 한 번씩 맞힌다.
+func _sweep_strike(attack: EnemyAttackData) -> void:
+	for player in Roster.players(self):
+		if _struck.has(player) or not player.is_alive():
+			continue
+		var to_player := player.global_position - global_position
+		to_player.y = 0.0
+		if to_player.length() > attack.reach + 0.35:
+			continue
+		if to_player.length() > 0.3 and rad_to_deg(facing().angle_to(to_player)) > attack.arc:
+			continue
+		_struck.append(player)
 		strike(player, attack)
 
 
@@ -321,13 +361,14 @@ func _fire_projectile(origin: Vector3, launch_velocity: Vector3, id: StringName)
 
 
 ## 플레이어의 공격에 맞았다(호스트). 피해·경직·원석 결정·밀려남을 처리하고 결과를 돌려준다.
-func receive_hit(attacker_peer: int, hit: HitData, attack_power: float, from: Vector3) -> HitOutcome:
+## stagger_scale과 shatter_scale은 공격한 플레이어의 보상(경직 증가, 결정 파쇄 피해 증가)이다.
+func receive_hit(attacker_peer: int, hit: HitData, attack_power: float, from: Vector3, stagger_scale: float = 1.0, shatter_scale: float = 1.0) -> HitOutcome:
 	var outcome := HitOutcome.new()
 	if not multiplayer.is_server() or not is_alive():
 		return outcome
 	_since_hit = 0.0
 	var amount := attack_power * hit.damage
-	var stagger_gain := hit.stagger
+	var stagger_gain := hit.stagger * stagger_scale
 	if is_staggered():
 		amount *= STAGGERED_DAMAGE
 	match hit.effect:
@@ -335,7 +376,7 @@ func receive_hit(attacker_peer: int, hit: HitData, attack_power: float, from: Ve
 			crystal_left = CRYSTAL_TIME
 		HitData.Effect.SHATTER_CRYSTAL:
 			if has_crystal():
-				amount += attack_power * SHATTER_BONUS
+				amount += attack_power * SHATTER_BONUS * shatter_scale
 				stagger_gain += SHATTER_STAGGER
 				crystal_left = 0.0
 				outcome.flags |= Player.HIT_SHATTER

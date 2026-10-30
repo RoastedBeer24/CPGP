@@ -25,6 +25,12 @@ extends Resource
 ## 이 거리(m) 안에 플레이어가 오면 싸움을 건다.
 @export var aggro_range := 30.0
 
+@export_group("보스")
+## 보스면 화면 위에 체력이 나온다.
+@export var boss := false
+## 체력이 이 비율 아래로 떨어지면 격노한다: 예고가 짧아지고 빨라진다. 0이면 격노하지 않는다.
+@export var enrage_below := 0.0
+
 @export_group("공격")
 @export var attacks: Array[EnemyAttackData] = []
 

@@ -6,6 +6,8 @@ extends CanvasLayer
 ##   - 위 가운데: 웨이브와 남은 적, 큰 알림(웨이브 시작, 완벽한 회피, 경직, 방 정리, 전멸)
 ##   - 왼쪽 위: 동료의 체력(쓰러지면 일으킨 정도)
 ##   - 적 머리 위: 체력과 경직 게이지, 원석 결정 표시, 경직되면 처형 안내 (HudOverlay가 그린다)
+##   - 보스가 있으면 화면 위에 보스 이름과 체력·경직
+##   - 로비: 캐릭터 화면(C), 출발(Enter, 방장). 작전 중에는 방 번호와 이름, 방을 깨면 보상 고르기
 ##   - 맞으면 화면 가장자리가 붉게 번쩍인다. F3은 디버그 정보.
 
 const HP_COLOR := Color(0.4, 0.92, 0.5)
@@ -33,12 +35,20 @@ var debug_label: Label
 var damage_flash: ColorRect
 var team_box: VBoxContainer
 var overlay: HudOverlay
+var boss_label: Label
+var boss_bar: ProgressBar
+var boss_stagger: ProgressBar
+var character_screen: CharacterScreen
+var reward_panel: RewardPanel
 
 var _player: Player
 var _room: CombatRoom
 var _banner_left := 0.0
 var _flash := 0.0
 var _team_rows: Dictionary[Player, Array] = {}
+var _run: Run
+## 보상을 이미 고른 선택 차례 (같은 차례에 패널을 다시 열지 않게)
+var _answered_round := -1
 
 
 func _ready() -> void:
@@ -144,6 +154,31 @@ func _ready() -> void:
 	team_box.position = Vector2(24, 24)
 	add_child(team_box)
 
+	# 위 가운데: 보스 체력
+	var boss_box := VBoxContainer.new()
+	boss_box.name = "BossBox"
+	boss_box.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	boss_box.offset_left = -360.0
+	boss_box.offset_right = 360.0
+	boss_box.offset_top = 58.0
+	add_child(boss_box)
+	boss_label = _label(20, Color(1, 0.6, 0.5))
+	boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boss_box.add_child(boss_label)
+	boss_bar = _bar(Vector2(720, 14), Color(0.92, 0.25, 0.22))
+	boss_box.add_child(boss_bar)
+	boss_stagger = _bar(Vector2(720, 5), Color(1.0, 0.85, 0.25))
+	boss_box.add_child(boss_stagger)
+	boss_box.visible = false
+
+	character_screen = CharacterScreen.new()
+	character_screen.name = "CharacterScreen"
+	add_child(character_screen)
+	reward_panel = RewardPanel.new()
+	reward_panel.name = "RewardPanel"
+	reward_panel.chosen.connect(_on_reward_chosen)
+	add_child(reward_panel)
+
 	debug_label = _label(16, Color(0.8, 1, 0.8))
 	debug_label.position = Vector2(24, 160)
 	debug_label.visible = false
@@ -153,6 +188,19 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(InputActions.DEBUG_OVERLAY):
 		debug_label.visible = not debug_label.visible
+	if not in_lobby() or _player == null or character_screen.visible:
+		return
+	if event.is_action_pressed(InputActions.CHARACTER_MENU):
+		character_screen.open_screen()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(InputActions.START_RUN) and multiplayer.is_server():
+		_run.start()
+		get_viewport().set_input_as_handled()
+
+
+## 로비에 있는지 (작전 전)
+func in_lobby() -> bool:
+	return session != null and session.zone() is Lobby
 
 
 func local_player() -> Player:
@@ -178,8 +226,10 @@ func _process(delta: float) -> void:
 		return
 	_update_self()
 	_update_room()
+	_update_boss()
 	_update_team()
 	_update_prompt()
+	_update_reward()
 	if debug_label.visible:
 		debug_label.text = "FPS %d\n상태 %s  동작 %s\n속도 %.1f  SP %.0f  에너지 %.0f\n몸 %s" % [
 			Engine.get_frames_per_second(), Player.State.keys()[_player.state], _player.action_id,
@@ -204,6 +254,14 @@ func _bind() -> void:
 		_room = zone
 		if _room != null:
 			_room.phase_changed.connect(_on_phase_changed)
+	var run := session.run if session != null else null
+	if run != _run:
+		_run = run
+		if _run != null:
+			_run.phase_changed.connect(_on_run_phase_changed)
+	character_screen.session = session
+	if not in_lobby() and character_screen.visible:
+		character_screen.close_screen()
 
 
 func _update_self() -> void:
@@ -232,18 +290,74 @@ func _update_self() -> void:
 
 
 func _update_room() -> void:
+	if in_lobby():
+		var start := "[Enter] 출발" if multiplayer.is_server() else "방장이 출발하면 시작합니다"
+		wave_label.text = "로비   ·   [C] 캐릭터 보기   ·   %s" % start
+		return
 	if _room == null:
 		wave_label.text = ""
 		return
+	var prefix := ""
+	if _run != null and _run.phase != Run.Phase.LOBBY:
+		prefix = "작전 %d/%d  %s   ·   " % [_run.stage + 1, _run.stage_count(), _run.current_stage().title]
 	match _room.phase:
 		CombatRoom.Phase.WAITING:
-			wave_label.text = "전투 준비"
+			wave_label.text = prefix + "전투 준비"
 		CombatRoom.Phase.FIGHTING, CombatRoom.Phase.BETWEEN:
-			wave_label.text = "웨이브 %d / %d   ·   남은 적 %d" % [_room.wave, _room.wave_count(), _room.enemies_left]
+			wave_label.text = prefix + "웨이브 %d / %d   ·   남은 적 %d" % [_room.wave, _room.wave_count(), _room.enemies_left]
 		CombatRoom.Phase.CLEARED:
-			wave_label.text = "방 정리 완료"
+			wave_label.text = prefix + "방 정리 완료"
 		CombatRoom.Phase.FAILED:
-			wave_label.text = "전멸"
+			wave_label.text = prefix + "전멸"
+
+
+## 살아 있는 보스가 있으면 화면 위에 이름과 체력·경직을 보여 준다.
+func _update_boss() -> void:
+	var boss: Enemy = null
+	for enemy in Roster.enemies(_player):
+		if enemy.data.boss and enemy.is_alive():
+			boss = enemy
+	var box := boss_bar.get_parent() as Control
+	box.visible = boss != null
+	if boss == null:
+		return
+	boss_label.text = boss.data.display_name + ("   (격노)" if boss.enraged else "")
+	boss_bar.max_value = boss.health.max_health
+	boss_bar.value = boss.health.current
+	boss_stagger.max_value = boss.data.stagger_max
+	boss_stagger.value = boss.data.stagger_max if boss.is_staggered() else boss.stagger
+
+
+## 방을 깨면 보상 고르기를 연다(한 선택 차례에 한 번).
+func _update_reward() -> void:
+	if _run == null or not _run.choosing(_player) or _answered_round == _run.reward_round:
+		if reward_panel.visible and (_run == null or not _run.choosing(_player)):
+			reward_panel.visible = false
+			_player.input_blocked = character_screen.visible
+		return
+	if not reward_panel.visible:
+		_player.input_blocked = true
+		reward_panel.show_offers(_run.offers_for(_player))
+
+
+func _on_reward_chosen(reward: RewardData) -> void:
+	_answered_round = _run.reward_round if _run != null else -1
+	if _player != null:
+		_player.add_reward(reward.id)
+		_player.input_blocked = false
+		show_banner(reward.title)
+
+
+func _on_run_phase_changed(phase: Run.Phase) -> void:
+	match phase:
+		Run.Phase.REWARD:
+			show_banner("방 정리 완료! 보상을 고르세요")
+		Run.Phase.VICTORY:
+			show_banner("작전 완료!")
+		Run.Phase.DEFEAT:
+			show_banner("작전 실패 — 로비로 돌아갑니다")
+		Run.Phase.LOBBY:
+			_answered_round = -1
 
 
 func _update_team() -> void:

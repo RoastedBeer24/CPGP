@@ -6,18 +6,28 @@ extends Node
 ## 싱글·호스트·참여가 모두 같은 코드 경로를 탄다.
 ## 플레이어 스폰과 제거는 호스트만 하고, MultiplayerSpawner가 다른 피어에 복제한다.
 ## 참여한 피어는 접속한 뒤 고른 캐릭터를 호스트에 알리고(_register), 호스트가 그 캐릭터로 스폰한다.
+##
+## 판은 로비에서 시작한다. 호스트가 구역을 바꾸면(change_zone) 모든 피어가 같은 구역을 불러오고 플레이어는 새 구역의
+## 시작 자리로 간다. 구역 노드 이름(Zone1, Zone2, ...)은 호스트가 정해서 보낸다. 적 복제는 노드 경로로 찾으므로
+## 나중에 들어온 피어도 이름이 같아야 한다.
+## 작전(전투 방) 중에는 새로 들어오는 사람을 받지 않는다(적 복제가 로비에 있는 피어와 맞지 않는다).
 
 signal started
 signal ended(reason: String)
 signal player_spawned(player: Player)
+signal zone_changed(zone: Node)
 
 enum Mode { NONE, SINGLE, HOST, CLIENT }
 
 const DEFAULT_PORT := 47820
+## 접속 인증에서 호스트가 보내는 답
+const ACCEPTED := "crossfield:ok"
+const REFUSED := "crossfield:refused"
 const MAX_PLAYERS := 3
 const PLAYER_SCENE := preload("res://src/player/player.tscn")
 
-@export var zone_scene: PackedScene = preload("res://src/zones/combat_room/combat_room.tscn")
+## 처음 불러올 구역 (로비)
+@export var zone_scene: PackedScene = preload("res://src/zones/lobby/lobby.tscn")
 ## false면 플레이어가 키보드·마우스를 읽지 않는다. 테스트용.
 @export var use_device_input := true
 ## false면 전투 방이 적을 불러내지 않는다. 테스트용.
@@ -25,12 +35,18 @@ const PLAYER_SCENE := preload("res://src/player/player.tscn")
 
 ## 내가 고른 캐릭터. 혼자 하거나 방을 만들면 바로 쓰고, 참여하면 접속한 뒤 호스트에 알린다.
 var character_id := Characters.DEFAULT_ID
+## false면 새로 들어오는 사람을 받지 않는다(작전 중). 호스트가 정한다. 접속 인증 단계에서 거절해서, 들어오려던
+## 피어에 지금 방의 적이 복제되지 않게 한다(그 피어는 로비를 불러 놓은 상태라 경로가 맞지 않는다).
+var accepting_players := true
+
+var _zone_serial := 0
 
 var mode := Mode.NONE
 
 @onready var world: Node3D = $World
 @onready var players: Node3D = $Players
 @onready var spawner: MultiplayerSpawner = $PlayerSpawner
+@onready var run: Run = $Run
 
 
 func _ready() -> void:
@@ -53,6 +69,7 @@ func host(port: int = DEFAULT_PORT) -> Error:
 	if error != OK:
 		return error
 	multiplayer.multiplayer_peer = peer
+	_use_authentication()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	mode = Mode.HOST
@@ -70,8 +87,9 @@ func join(address: String, port: int = DEFAULT_PORT) -> Error:
 	if error != OK:
 		return error
 	multiplayer.multiplayer_peer = peer
+	_use_authentication()
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
-	multiplayer.connection_failed.connect(_end.bind("호스트에 연결하지 못했습니다."))
+	multiplayer.connection_failed.connect(_end.bind("호스트에 연결하지 못했습니다. 작전 중이면 끝난 뒤에 다시 참여하세요."))
 	multiplayer.server_disconnected.connect(_end.bind("호스트와의 연결이 끊어졌습니다."))
 	mode = Mode.CLIENT
 	# 스폰 메시지가 오기 전에 구역이 있어야 내 플레이어가 바닥 위에 선다.
@@ -145,8 +163,65 @@ func respawn_players(reset_resources: bool) -> void:
 
 
 func _load_zone() -> void:
-	world.add_child(zone_scene.instantiate())
+	_set_zone(zone_scene, "Zone0")
+
+
+## 호스트: 모든 피어를 다른 구역으로 옮긴다. 지금 구역의 적은 먼저 치워 둔다(Run이 맡는다).
+func change_zone(scene_path: String) -> void:
+	if not multiplayer.is_server():
+		return
+	_zone_serial += 1
+	_change_zone.rpc(scene_path, "Zone%d" % _zone_serial)
+
+
+@rpc("authority", "call_local", "reliable")
+func _change_zone(scene_path: String, zone_name: String) -> void:
+	var scene := load(scene_path) as PackedScene
+	if scene == null:
+		return
+	_set_zone(scene, zone_name)
+	if multiplayer.is_server():
+		respawn_players(false)
+
+
+func _set_zone(scene: PackedScene, zone_name: String) -> void:
+	for node: Node in world.get_children():
+		world.remove_child(node)
+		node.queue_free()
+	var next := scene.instantiate()
+	next.name = zone_name
+	world.add_child(next)
 	GameSettings.apply_brightness(get_viewport())
+	zone_changed.emit(next)
+
+
+## 로비에서 캐릭터를 바꾼다. 내 플레이어를 새 캐릭터로 다시 스폰해 달라고 호스트에 부탁한다.
+func request_character(chosen: StringName) -> void:
+	character_id = chosen
+	if multiplayer.is_server():
+		change_character(multiplayer.get_unique_id(), chosen)
+	else:
+		_request_character.rpc_id(1, String(chosen))
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_character(chosen: String) -> void:
+	if multiplayer.is_server():
+		change_character(multiplayer.get_remote_sender_id(), StringName(chosen))
+
+
+## 호스트: 플레이어를 그 자리에서 다른 캐릭터로 바꾼다(지우고 새로 스폰). 로비에서만 쓴다.
+func change_character(peer_id: int, chosen: StringName) -> void:
+	if not multiplayer.is_server() or not accepting_players:
+		return
+	var old := get_player(peer_id)
+	if old == null or old.character_id == Characters.find(chosen).id:
+		return
+	var at := old.global_position
+	players.remove_child(old)
+	old.free()
+	var player := spawner.spawn({"peer_id": peer_id, "position": at, "character": String(chosen)}) as Player
+	player_spawned.emit(player)
 
 
 func _spawn_for(peer_id: int, chosen: StringName) -> void:
@@ -171,7 +246,7 @@ func _register(chosen: String) -> void:
 	if not multiplayer.is_server():
 		return
 	var peer := multiplayer.get_remote_sender_id()
-	if get_player(peer) != null:
+	if get_player(peer) != null or not accepting_players:
 		return
 	_spawn_for(peer, StringName(chosen))
 
@@ -198,6 +273,40 @@ func _on_spawned(node: Node) -> void:
 func _on_peer_connected(peer_id: int) -> void:
 	# 플레이어는 그 피어가 고른 캐릭터를 알려 오면(_register) 스폰한다.
 	print("[세션] 참가: 피어 %d" % peer_id)
+
+
+## 접속 인증: 호스트가 들어오는 피어에게 받을지 먼저 알린다. 인증이 끝나야 복제가 시작되므로, 작전 중에 거절하면
+## 지금 방의 적이 그 피어에 복제되지 않는다.
+func _use_authentication() -> void:
+	var scene_multiplayer := multiplayer as SceneMultiplayer
+	if scene_multiplayer == null:
+		return
+	scene_multiplayer.auth_callback = _on_auth
+	scene_multiplayer.peer_authenticating.connect(_on_peer_authenticating)
+
+
+func _on_peer_authenticating(peer_id: int) -> void:
+	var scene_multiplayer := multiplayer as SceneMultiplayer
+	if not multiplayer.is_server():
+		return
+	scene_multiplayer.send_auth(peer_id, (ACCEPTED if accepting_players else REFUSED).to_utf8_buffer())
+	if accepting_players:
+		scene_multiplayer.complete_auth(peer_id)
+	else:
+		# 거절한다는 답이 건너갈 틈을 두고 끊는다.
+		get_tree().create_timer(0.5, true, false, true).timeout.connect(func() -> void:
+			if multiplayer.multiplayer_peer != null:
+				scene_multiplayer.disconnect_peer(peer_id))
+
+
+## 참여하는 피어: 호스트의 답을 받는다.
+func _on_auth(peer_id: int, data: PackedByteArray) -> void:
+	if multiplayer.is_server():
+		return
+	if data.get_string_from_utf8() == ACCEPTED:
+		(multiplayer as SceneMultiplayer).complete_auth(peer_id)
+	else:
+		_end("작전이 진행 중입니다. 방장이 로비로 돌아온 뒤에 참여해 주세요.")
 
 
 func _on_peer_disconnected(peer_id: int) -> void:

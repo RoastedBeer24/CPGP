@@ -71,7 +71,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _notification(what: int) -> void:
 	# 창이 포커스를 잃으면 마우스를 풀어 준다.
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and session != null and not pause_menu.visible:
+	# 자동 조종(화면 확인용)은 창이 포커스를 잃어도 멈추지 않는다.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and session != null and not pause_menu.visible and not autoplay:
 		open_pause_menu()
 	# 창을 닫을 때 받아 둔 업데이트가 있으면 설치한다.
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:

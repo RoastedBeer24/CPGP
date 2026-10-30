@@ -87,10 +87,10 @@ const STRAND_RADIUS := 0.02
 const FOOT_GROUND_LAYER := 16
 const FOOT_RAY_MASK := 1 | FOOT_GROUND_LAYER
 
-## 검: 손잡이 끝에서 칼끝까지(m)와, 무기 자리 기준으로 칼날이 뻗는 방향
+## 무기 모델이 없을 때 코드로 만드는 검: 손잡이 끝에서 칼끝까지(m)와, 무기 자리 기준으로 칼날이 뻗는 방향
 const SWORD_LENGTH := 1.0
 const SWORD_AXIS := Vector3.UP
-## 무기 자리(wep_R)를 찾지 못한 모델에서 오른손 뼈 기준으로 검을 쥐는 위치
+## 무기 자리를 찾지 못한 모델에서 손 뼈 기준으로 검을 쥐는 위치
 const SWORD_HAND_OFFSET := Vector3(0.07, 0.02, 0.0)
 
 ## 비워 두면 플레이어가 고른 캐릭터의 모습을 쓴다.
@@ -146,6 +146,8 @@ var _cloth: SpringBoneSimulator3D
 var _cloth_ground: SpringBoneCollisionPlane3D
 var _last_position := Vector3.ZERO
 var _sword: Node3D
+## 동작에 맞춰 원작 소리·보이스를 낸다. 꾸러미가 없으면 소리 없이 돈다.
+var fx: CharacterFx
 
 # 움직임 재기 (원격 플레이어는 위치가 네트워크로 띄엄띄엄 오므로 바뀐 시간 간격으로 잰다)
 var _sample_position := Vector3.ZERO
@@ -380,7 +382,11 @@ func _load_model(scene: PackedScene) -> void:
 	_setup_materials()
 	_setup_animation()
 	_setup_cloth()
-	_attach_sword()
+	_attach_weapon()
+	fx = CharacterFx.new()
+	fx.name = "Fx"
+	add_child(fx)
+	fx.setup(appearance.fx_file())
 
 ## 원본 게임 전용 셰이더로 그리던 재질을 Godot에서 비슷하게 보이게 바꾼다.
 ##   - 만화풍(셀 셰이딩, toon.gdshader): 빛을 받는 정도를 원본의 색 띠(ramp)로 칠하고, 테두리 빛과 외곽선
@@ -810,6 +816,8 @@ func _play_action(clip: StringName, length: float) -> void:
 	_action_clip = clip
 	_action_end = length
 	_action_elapsed = 0.0
+	if fx != null:
+		fx.play(clip)
 
 func _pick_locomotion(speed: float) -> StringName:
 	# 지금 동작에서 벗어날 때만 여유(HYSTERESIS)를 둬서 경계에서 깜빡이지 않게 한다.
@@ -961,22 +969,36 @@ func _set_global_basis(index: int, global: Basis) -> void:
 	_skeleton.set_bone_pose_rotation(index, (parent_basis.inverse() * global).get_rotation_quaternion())
 
 # ---- 검 ----
-## 오른손의 무기 자리(wep_R)에 검을 쥐여 준다. 원본 모델에는 무기 메시가 없어서 코드로 만든다.
-## 무기 자리가 없는 모델이면 오른손 뼈에 붙인다.
-func _attach_sword() -> void:
-	var anchor := _model.find_child("wep_R", true, false) as Node3D
+## 원작의 무기 자리(관리자는 왼손 wep_L)에 무기를 쥐여 준다. 무기 모델(타르 11)이 없으면 코드로 만든 검을 쥔다.
+## 무기 자리가 없는 모델이면 손 뼈에 붙인다.
+func _attach_weapon() -> void:
+	var anchor := _model.find_child(String(appearance.weapon_mount), true, false) as Node3D
 	if anchor == null:
 		var attachment := BoneAttachment3D.new()
-		attachment.name = "SwordHand"
+		attachment.name = "WeaponHand"
 		_skeleton.add_child(attachment)
-		attachment.bone_name = _skeleton.get_bone_name(_bone[&"hand_r"])
+		var left := String(appearance.weapon_mount).ends_with("_L")
+		attachment.bone_name = _skeleton.get_bone_name(_bone[&"hand_l" if left else &"hand_r"])
 		anchor = Node3D.new()
 		anchor.position = SWORD_HAND_OFFSET
-		anchor.rotation.x = PI * 0.5
+		anchor.rotation.x = -PI * 0.5 if left else PI * 0.5
 		attachment.add_child(anchor)
-	_sword = _build_sword()
+	var scene := appearance.load_weapon_scene()
+	if scene != null:
+		_sword = scene.instantiate() as Node3D
+		_sword.name = "Weapon"
+		_sword.scale = Vector3.ONE * appearance.weapon_scale
+		for geometry: Node in _sword.find_children("*", "GeometryInstance3D", true, false):
+			(geometry as GeometryInstance3D).layers |= CHARACTER_RENDER_LAYER
+	else:
+		_sword = _build_sword()
 	anchor.add_child(_sword)
 	_sword.visible = false
+
+
+## 원작 무기 모델을 쥐었는지 (없으면 코드로 만든 검)
+func has_weapon_model() -> bool:
+	return _sword != null and _sword.name == "Weapon"
 
 
 ## 검: 손잡이, 코등이, 칼날(가장자리가 은은히 빛난다). SWORD_AXIS 쪽으로 뻗는다.

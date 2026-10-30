@@ -119,6 +119,20 @@ static var _runtime_images: Dictionary[String, Dictionary] = {}
 ## 따로 움직이는데 처음 자세 그대로면 동공 밖 흰자에 떠 있다.
 @export var hidden_bones: Array[StringName] = [&"faceLfHighlightJoint", &"faceRtHighlightJoint"]
 
+@export_group("소리")
+## 원작 소리·보이스 꾸러미(zip, tools/extract_character_fx.py): 프로젝트 안 경로와 실행 파일 옆 경로
+@export var fx_path := "res://assets/characters/endministrator_f/endministrator_f_fx.zip"
+@export var fx_external_file := "characters/endministrator_f_fx.zip"
+
+@export_group("무기")
+## 무기 모델(.glb): 프로젝트 안 경로와, 실행 파일 옆에서 찾을 경로. 없으면 코드로 만든 임시 검을 쥔다.
+## 관리자의 무기는 원작의 타르 11(wpn_sword_0003)이다. 손잡이가 원점이고 칼날이 +Y로 뻗는다.
+@export_file("*.glb") var weapon_model_path := "res://assets/weapons/tarr_11.glb"
+@export var weapon_external_file := "weapons/tarr_11.glb"
+## 무기를 붙일 노드(원본의 무기 자리). 관리자는 왼손(wep_L)에 쥔다(원작 무기 연결 정보).
+@export var weapon_mount := &"wep_L"
+@export var weapon_scale := 1.0
+
 ## 지금 쓰는 모델의 이미지 (실행 중에 읽은 glTF일 때만)
 var _images: Dictionary = {}
 
@@ -133,6 +147,34 @@ func load_model_scene() -> PackedScene:
 	var scene := load_gltf_file(file)
 	_images = _runtime_images.get(_cache_key(file), {})
 	return scene
+
+
+## 소리 꾸러미의 실제 경로. 없으면 빈 문자열.
+func fx_file() -> String:
+	var project := ProjectSettings.globalize_path(fx_path) if not fx_path.is_empty() else ""
+	if not project.is_empty() and FileAccess.file_exists(project):
+		return project
+	var external := executable_relative(fx_external_file)
+	return external if not external.is_empty() and FileAccess.file_exists(external) else ""
+
+
+## 무기 장면. 찾지 못하면 null이다(그러면 코드로 만든 검을 쥔다).
+func load_weapon_scene() -> PackedScene:
+	if not weapon_model_path.is_empty() and ResourceLoader.exists(weapon_model_path):
+		return load(weapon_model_path) as PackedScene
+	var file := executable_relative(weapon_external_file)
+	if file.is_empty() or not FileAccess.file_exists(file):
+		return null
+	return load_gltf_file(file)
+
+
+## 실행 파일 폴더 기준 경로를 실제 경로로 바꾼다. 비어 있으면 빈 문자열.
+static func executable_relative(file: String) -> String:
+	if file.is_empty():
+		return ""
+	if file.is_absolute_path():
+		return file
+	return OS.get_executable_path().get_base_dir().path_join(file)
 
 
 ## 모델에 들어 있는 이미지를 이름으로 찾는다(재질이 쓰지 않는 색 띠·마스크 포함). 없으면 null.

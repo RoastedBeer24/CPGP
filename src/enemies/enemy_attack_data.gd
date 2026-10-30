@@ -22,5 +22,7 @@ extends Resource
 @export var arc := 60.0
 ## 맞히는 순간 앞으로 내딛는 거리(m)
 @export var lunge := 0.0
+## 0보다 크면 돌진 공격: 내디디는 동안(초) 지나는 길의 플레이어를 맞힌다(한 사람당 한 번).
+@export var sweep_time := 0.0
 ## 0보다 크면 원거리 공격: 이 속도(m/s)로 날아가는 탄을 쏜다. reach와 arc는 쓰지 않는다.
 @export var projectile_speed := 0.0

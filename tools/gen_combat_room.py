@@ -1,4 +1,4 @@
-"""첫 전투 방(src/zones/combat_room/combat_room.tscn)을 만드는 스크립트.
+"""전투 방들(src/zones/combat_room/의 combat_room, combat_room_b, boss_room)을 만드는 스크립트.
 
     python3 tools/gen_combat_room.py
 
@@ -8,7 +8,7 @@
 import math
 import os
 
-out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "zones", "combat_room", "combat_room.tscn")
+out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "zones", "combat_room")
 
 # 넓이: 바닥 한 변(m)과 울타리 높이
 SIZE = 44.0
@@ -116,66 +116,81 @@ def marker(name, parent, pos, yaw=0.0):
     nodes.append('[node name="%s" type="Marker3D" parent="%s"]\ntransform = %s' % (name, parent, tf(pos, 0.0, yaw)))
 
 
-nodes.append('[node name="CombatRoom" type="Node3D"]\nscript = ExtResource("room")')
-nodes.append('[node name="Navigation" type="NavigationRegion3D" parent="."]\nnavigation_mesh = SubResource("navmesh")')
-nodes.append('[node name="Environment" type="WorldEnvironment" parent="."]\nenvironment = SubResource("env")')
-nodes.append('[node name="Sun" type="DirectionalLight3D" parent="."]\ntransform = %s\nlight_color = Color(1, 0.94, 0.84, 1)\n'
-             'light_energy = 1.1\nshadow_enabled = true\ndirectional_shadow_max_distance = 60.0' % tf((0, 20, 0), -50, 35))
 
-# 플레이어 시작 자리: 남쪽(+Z)에서 가운데를 본다.
-group("SpawnPoints")
-for i, x in enumerate([0.0, 2.0, -2.0]):
-    marker("Spawn%d" % (i + 1), "SpawnPoints", (x, 0.05, 13.0))
+def build(file_name, pillars, crates, plate_size):
+    """방 하나를 만든다. pillars: 기둥 (x, z), crates: 낮은 상자 (x, z, 회전)."""
+    nodes.clear()
+    nodes.append('[node name="CombatRoom" type="Node3D"]\nscript = ExtResource("room")')
+    nodes.append('[node name="Navigation" type="NavigationRegion3D" parent="."]\nnavigation_mesh = SubResource("navmesh")')
+    nodes.append('[node name="Environment" type="WorldEnvironment" parent="."]\nenvironment = SubResource("env")')
+    nodes.append('[node name="Sun" type="DirectionalLight3D" parent="."]\ntransform = %s\nlight_color = Color(1, 0.94, 0.84, 1)\n'
+                 'light_energy = 1.1\nshadow_enabled = true\ndirectional_shadow_max_distance = 60.0' % tf((0, 20, 0), -50, 35))
 
-# 적이 나오는 자리: 북쪽과 양옆
-group("EnemySpawns")
-spawn_points = [(-12, -14), (0, -16), (12, -14), (-17, -4), (17, -4), (-16, 8), (16, 8), (-6, -10), (6, -10)]
-for i, (x, z) in enumerate(spawn_points):
-    marker("EnemySpawn%d" % (i + 1), "EnemySpawns", (x, 0.05, z))
+    # 플레이어 시작 자리: 남쪽(+Z)에서 가운데를 본다.
+    group("SpawnPoints")
+    for i, x in enumerate([0.0, 2.0, -2.0]):
+        marker("Spawn%d" % (i + 1), "SpawnPoints", (x, 0.05, 13.0))
 
-group("Geometry", groups=["navigation_geometry"])
-half = SIZE / 2.0
-box("Floor", "Geometry", (0, -0.5, 0), (SIZE, 1, SIZE), "floor")
-# 바닥 판: 가운데 원형 전투장 느낌을 내는 넓은 판(높이 차이 없음)
-box("CenterPlate", "Geometry", (0, 0.005, 0), (20, 0.01, 20), "plate", collide=False, rot_y=45)
-# 울타리 (흰 판 + 노란 띠)
-for name, pos, size in [
-    ("WallN", (0, WALL_HEIGHT / 2, -half), (SIZE, WALL_HEIGHT, 1)),
-    ("WallS", (0, WALL_HEIGHT / 2, half), (SIZE, WALL_HEIGHT, 1)),
-    ("WallW", (-half, WALL_HEIGHT / 2, 0), (1, WALL_HEIGHT, SIZE)),
-    ("WallE", (half, WALL_HEIGHT / 2, 0), (1, WALL_HEIGHT, SIZE)),
-]:
-    box(name, "Geometry", pos, size, "wall")
-    trim_size = (size[0] + 0.02, 0.25, size[2] + 0.02)
-    box(name + "Trim", "Geometry", (pos[0], WALL_HEIGHT - 0.4, pos[2]), trim_size, "trim", collide=False)
+    # 적이 나오는 자리: 북쪽과 양옆
+    group("EnemySpawns")
+    spawn_points = [(-12, -14), (0, -16), (12, -14), (-17, -4), (17, -4), (-16, 8), (16, 8), (-6, -10), (6, -10)]
+    for i, (x, z) in enumerate(spawn_points):
+        marker("EnemySpawn%d" % (i + 1), "EnemySpawns", (x, 0.05, z))
 
-# 기둥 네 개: 적의 공격을 피해 돌아 들어가거나, 원거리 적의 탄을 막는다.
-for i, (x, z) in enumerate([(-8, -8), (8, -8), (-8, 6), (8, 6)]):
-    box("Pillar%d" % (i + 1), "Geometry", (x, 2.0, z), (1.8, 4.0, 1.8), "pillar")
-    box("PillarStripe%d" % (i + 1), "Geometry", (x, 1.0, z), (1.84, 0.3, 1.84), "stripe", collide=False)
+    group("Geometry", groups=["navigation_geometry"])
+    half = SIZE / 2.0
+    box("Floor", "Geometry", (0, -0.5, 0), (SIZE, 1, SIZE), "floor")
+    # 바닥 판: 가운데 전투장 느낌을 내는 넓은 판(높이 차이 없음)
+    box("CenterPlate", "Geometry", (0, 0.005, 0), (plate_size, 0.01, plate_size), "plate", collide=False, rot_y=45)
+    # 울타리 (흰 판 + 노란 띠)
+    for name, pos, size in [
+        ("WallN", (0, WALL_HEIGHT / 2, -half), (SIZE, WALL_HEIGHT, 1)),
+        ("WallS", (0, WALL_HEIGHT / 2, half), (SIZE, WALL_HEIGHT, 1)),
+        ("WallW", (-half, WALL_HEIGHT / 2, 0), (1, WALL_HEIGHT, SIZE)),
+        ("WallE", (half, WALL_HEIGHT / 2, 0), (1, WALL_HEIGHT, SIZE)),
+    ]:
+        box(name, "Geometry", pos, size, "wall")
+        trim_size = (size[0] + 0.02, 0.25, size[2] + 0.02)
+        box(name + "Trim", "Geometry", (pos[0], WALL_HEIGHT - 0.4, pos[2]), trim_size, "trim", collide=False)
 
-# 낮은 상자: 넘어가지는 못하지만 몸을 가린다.
-for i, (x, z, rot) in enumerate([(0, -12, 0), (-14, 2, 30), (14, -2, -20), (-4, 16, 0), (5, 15.5, 15)]):
-    box("Crate%d" % (i + 1), "Geometry", (x, 0.6, z), (2.4, 1.2, 1.2), "crate", rot_y=rot)
+    # 기둥: 적의 공격을 피해 돌아 들어가거나, 원거리 적의 탄을 막는다.
+    for i, (x, z) in enumerate(pillars):
+        box("Pillar%d" % (i + 1), "Geometry", (x, 2.0, z), (1.8, 4.0, 1.8), "pillar")
+        box("PillarStripe%d" % (i + 1), "Geometry", (x, 1.0, z), (1.84, 0.3, 1.84), "stripe", collide=False)
 
-# 원석 결정 무더기(꾸밈, 부딪히지 않음): 울타리 가장자리
-group("Crystals")
-for i, (x, z, s) in enumerate([(-19, -18, 1.4), (18, -19, 1.1), (-19.5, 14, 1.0), (19, 12, 1.3), (-2, -19.5, 0.9)]):
-    for k in range(3):
-        angle = k * 2.1
-        px, pz = x + math.cos(angle) * 0.6 * s, z + math.sin(angle) * 0.6 * s
-        nodes.append('[node name="Crystal%d_%d" type="MeshInstance3D" parent="Crystals"]\ntransform = %s\nmesh = SubResource("crystal_mesh")'
-                     % (i + 1, k + 1, tf((px, 0.6 * s, pz), 12 * math.cos(angle), angle * 40, 12 * math.sin(angle))))
-    nodes.append('[node name="CrystalLight%d" type="OmniLight3D" parent="Crystals"]\ntransform = %s\nlight_color = Color(1, 0.6, 0.2, 1)\n'
-                 'light_energy = 1.5\nomni_range = 5.0' % (i + 1, tf((x, 1.2, z))))
+    # 낮은 상자: 넘어가지는 못하지만 몸을 가린다.
+    for i, (x, z, rot) in enumerate(crates):
+        box("Crate%d" % (i + 1), "Geometry", (x, 0.6, z), (2.4, 1.2, 1.2), "crate", rot_y=rot)
 
-nodes.append('[node name="Enemies" type="Node3D" parent="."]')
-nodes.append('[node name="EnemySpawner" type="MultiplayerSpawner" parent="."]\nspawn_path = NodePath("../Enemies")')
-nodes.append('[node name="RoomSync" type="MultiplayerSynchronizer" parent="."]\nreplication_config = SubResource("room_sync")')
+    # 원석 결정 무더기(꾸밈, 부딪히지 않음): 울타리 가장자리
+    group("Crystals")
+    for i, (x, z, s) in enumerate([(-19, -18, 1.4), (18, -19, 1.1), (-19.5, 14, 1.0), (19, 12, 1.3), (-2, -19.5, 0.9)]):
+        for k in range(3):
+            angle = k * 2.1
+            px, pz = x + math.cos(angle) * 0.6 * s, z + math.sin(angle) * 0.6 * s
+            nodes.append('[node name="Crystal%d_%d" type="MeshInstance3D" parent="Crystals"]\ntransform = %s\nmesh = SubResource("crystal_mesh")'
+                         % (i + 1, k + 1, tf((px, 0.6 * s, pz), 12 * math.cos(angle), angle * 40, 12 * math.sin(angle))))
+        nodes.append('[node name="CrystalLight%d" type="OmniLight3D" parent="Crystals"]\ntransform = %s\nlight_color = Color(1, 0.6, 0.2, 1)\n'
+                     'light_energy = 1.5\nomni_range = 5.0' % (i + 1, tf((x, 1.2, z))))
 
-header = '[gd_scene format=3]\n\n[ext_resource type="Script" path="res://src/zones/combat_room/combat_room.gd" id="room"]\n'
-text = header + "\n" + "\n\n".join(sub) + "\n\n" + "\n\n".join(nodes) + "\n"
-os.makedirs(os.path.dirname(out), exist_ok=True)
-with open(out, "w", encoding="utf-8", newline="\n") as f:
-    f.write(text)
-print(os.path.normpath(out))
+    nodes.append('[node name="Enemies" type="Node3D" parent="."]')
+    nodes.append('[node name="EnemySpawner" type="MultiplayerSpawner" parent="."]\nspawn_path = NodePath("../Enemies")')
+    nodes.append('[node name="RoomSync" type="MultiplayerSynchronizer" parent="."]\nreplication_config = SubResource("room_sync")')
+
+    header = '[gd_scene format=3]\n\n[ext_resource type="Script" path="res://src/zones/combat_room/combat_room.gd" id="room"]\n'
+    text = header + "\n" + "\n\n".join(sub) + "\n\n" + "\n\n".join(nodes) + "\n"
+    path = os.path.join(out_dir, file_name)
+    os.makedirs(out_dir, exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    print(os.path.normpath(path))
+
+
+# 방 A: 기둥 네 개가 가운데를 둘러싼다.
+build("combat_room.tscn", [(-8, -8), (8, -8), (-8, 6), (8, 6)],
+      [(0, -12, 0), (-14, 2, 30), (14, -2, -20), (-4, 16, 0), (5, 15.5, 15)], 20)
+# 방 B: 가운데 기둥 하나와 양옆 기둥, 상자가 북쪽에 몰려 있다.
+build("combat_room_b.tscn", [(0, -4), (-11, 2), (11, 2), (-5, -13), (5, -13)],
+      [(-7, -9, 15), (7, -9, -15), (-15, -8, 0), (15, 8, 0), (0, 12, 0)], 16)
+# 보스 방: 가운데가 트인 넓은 전투장. 기둥은 구석에만 있다.
+build("boss_room.tscn", [(-15, -15), (15, -15), (-15, 12), (15, 12)], [], 30)

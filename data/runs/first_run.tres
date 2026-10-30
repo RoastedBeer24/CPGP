@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="RunData" format=3]
+
+[ext_resource type="Script" path="res://src/run/run_data.gd" id="1_run"]
+[ext_resource type="Script" path="res://src/run/run_stage.gd" id="2_stage"]
+
+[sub_resource type="Resource" id="stage_1"]
+script = ExtResource("2_stage")
+title = "외곽 정찰"
+scene_path = "res://src/zones/combat_room/combat_room.tscn"
+waves = Array[PackedStringArray]([PackedStringArray("grunt", "grunt", "grunt"), PackedStringArray("grunt", "grunt", "shooter", "shooter")])
+
+[sub_resource type="Resource" id="stage_2"]
+script = ExtResource("2_stage")
+title = "보급로 차단"
+scene_path = "res://src/zones/combat_room/combat_room_b.tscn"
+waves = Array[PackedStringArray]([PackedStringArray("grunt", "grunt", "grunt", "shooter"), PackedStringArray("heavy", "grunt", "grunt")])
+
+[sub_resource type="Resource" id="stage_3"]
+script = ExtResource("2_stage")
+title = "중간 보스: 중장병 대장"
+scene_path = "res://src/zones/combat_room/boss_room.tscn"
+waves = Array[PackedStringArray]([PackedStringArray("heavy_captain", "grunt", "grunt")])
+boss = true
+
+[sub_resource type="Resource" id="stage_4"]
+script = ExtResource("2_stage")
+title = "적 거점 돌파"
+scene_path = "res://src/zones/combat_room/combat_room.tscn"
+waves = Array[PackedStringArray]([PackedStringArray("shooter", "shooter", "shooter", "grunt", "grunt"), PackedStringArray("heavy", "heavy", "grunt", "grunt")])
+
+[sub_resource type="Resource" id="stage_5"]
+script = ExtResource("2_stage")
+title = "최종 보스: 약탈자 우두머리"
+scene_path = "res://src/zones/combat_room/boss_room.tscn"
+waves = Array[PackedStringArray]([PackedStringArray("raider_chief", "shooter", "shooter")])
+boss = true
+
+[resource]
+script = ExtResource("1_run")
+display_name = "첫 작전: 탈로스-II 외곽"
+stages = Array[ExtResource("2_stage")]([SubResource("stage_1"), SubResource("stage_2"), SubResource("stage_3"), SubResource("stage_4"), SubResource("stage_5")])

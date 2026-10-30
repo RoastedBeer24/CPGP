@@ -7,5 +7,5 @@ var body: PlayerBody
 
 
 func _process_modification() -> void:
-	if body != null and is_instance_valid(body) and body.visible:
+	if body != null and is_instance_valid(body) and body.is_inside_tree() and body.visible:
 		body.apply_overlays()
