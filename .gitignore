@@ -5,9 +5,11 @@
 # 내보내기 결과물
 /build/
 
-# 재배포할 수 없는 캐릭터 모델. 각자 PC에만 두고 저장소에는 올리지 않는다 (docs/assets.md 참고)
+# 재배포할 수 없는 캐릭터·적 모델. 각자 PC에만 두고 저장소에는 올리지 않는다 (docs/assets.md 참고)
 /!File/
 /assets/characters/endministrator_f/
+/assets/characters/endministrator_m/
+/assets/enemies/
 
 # 내보내는 도중에 멈추면 남는 빌드 번호 원본
 /src/core/build_info.gd.orig

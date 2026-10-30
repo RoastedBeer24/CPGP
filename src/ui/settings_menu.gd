@@ -226,22 +226,8 @@ func _build_controls(rows: VBoxContainer) -> void:
 		func(value: float) -> void: GameSettings.mouse_sensitivity = value / 100.0)
 	_add_check(rows, "마우스 상하 반전", GameSettings.invert_y,
 		func(on: bool) -> void: GameSettings.invert_y = on)
-	_add_slider(rows, "시야각 (FOV)", GameSettings.fov, 60.0, 110.0, 1.0, "%d°",
+	_add_slider(rows, "시야각 (FOV)", GameSettings.fov, 50.0, 100.0, 1.0, "%d°",
 		func(value: float) -> void: GameSettings.fov = value)
-
-	var modes := Label.new()
-	modes.text = "누르는 방식"
-	modes.add_theme_color_override("font_color", Color(0.4, 0.85, 1))
-	rows.add_child(modes)
-	var choices: Array[String] = ["누를 때마다 켜고 끄기", "누르고 있는 동안"]
-	_add_options(rows, "웅크리기", choices, 0 if GameSettings.crouch_toggle else 1,
-		func(index: int) -> void: GameSettings.crouch_toggle = index == 0)
-	_add_options(rows, "달리기", choices, 0 if GameSettings.sprint_toggle else 1,
-		func(index: int) -> void: GameSettings.sprint_toggle = index == 0)
-	_add_options(rows, "조준", choices, 0 if GameSettings.aim_toggle else 1,
-		func(index: int) -> void: GameSettings.aim_toggle = index == 0)
-	_add_options(rows, "자유 시야", choices, 0 if GameSettings.free_look_toggle else 1,
-		func(index: int) -> void: GameSettings.free_look_toggle = index == 0)
 
 	var header := Label.new()
 	header.text = "키 설정"
@@ -254,12 +240,20 @@ func _build_controls(rows: VBoxContainer) -> void:
 		button.pressed.connect(_start_rebind.bind(action, button))
 		_key_buttons[action] = button
 		_add_row(rows, str(GameSettings.ACTION_LABELS[action]), button)
-	_add_note(rows, "버튼을 누른 뒤 키보드 키나 마우스 버튼을 누르면 바뀝니다. 다른 동작이 쓰던 입력이면 서로 맞바꿉니다. 회피(방향키 두 번)는 이동 키를 따릅니다.")
+	_add_note(rows, "버튼을 누른 뒤 키보드 키나 마우스 버튼을 누르면 바뀝니다. 다른 동작이 쓰던 입력이면 서로 맞바꿉니다. "
+		+ "궁극기는 배틀 스킬 키를 길게 눌러도 나갑니다. 마우스 휠로 카메라 거리를 바꿉니다.")
 
 
 func _build_game(rows: VBoxContainer) -> void:
-	_add_options(rows, "시작 시점", ["1인칭", "3인칭"], 1 if GameSettings.start_third_person else 0,
-		func(index: int) -> void: GameSettings.start_third_person = index == 1)
+	var characters := Characters.all()
+	var names: Array[String] = []
+	var current := 0
+	for i in characters.size():
+		names.append(characters[i].display_name)
+		if characters[i].id == GameSettings.character_id:
+			current = i
+	_add_options(rows, "캐릭터", names, current,
+		func(index: int) -> void: GameSettings.character_id = characters[index].id)
 	_add_check(rows, "바이저 쓰기", GameSettings.visor_on,
 		func(on: bool) -> void: GameSettings.visor_on = on)
 	_add_check(rows, "자동 업데이트", GameSettings.auto_update,
@@ -267,7 +261,8 @@ func _build_game(rows: VBoxContainer) -> void:
 	_add_text(rows, "에셋 키", GameSettings.asset_key, "비공개 에셋 저장소의 GitHub 토큰",
 		func(text: String) -> void: GameSettings.asset_key = text.strip_edges())
 	_add_note(rows, "자동 업데이트는 게임 실행 파일과 캐릭터 모델을 받습니다. 캐릭터 모델은 공개할 수 없어서 비공개 저장소에 두고, "
-		+ "에셋 키가 있어야 받습니다. 바이저는 게임 중에 H 키로도 쓰고 벗습니다. 자동 업데이트와 에셋 키는 다음에 켤 때부터 적용됩니다.")
+		+ "에셋 키가 있어야 받습니다. 바이저는 게임 중에 H 키로도 쓰고 벗습니다. 캐릭터는 다음 판부터, "
+		+ "자동 업데이트와 에셋 키는 다음에 켤 때부터 적용됩니다.")
 
 
 # ---- 줄 만들기 ----

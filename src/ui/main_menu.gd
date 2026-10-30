@@ -1,7 +1,7 @@
 class_name MainMenu
 extends Control
-## 메인 메뉴. 혼자 하기, 방 만들기, 참여하기, 종료.
-## 마지막으로 입력한 참여 주소를 기억한다.
+## 메인 메뉴. 캐릭터 고르기, 혼자 하기, 방 만들기, 참여하기, 설정, 종료.
+## 마지막으로 입력한 참여 주소와 고른 캐릭터를 기억한다.
 
 signal single_requested
 signal host_requested
@@ -21,6 +21,8 @@ signal quit_requested
 
 ## 에셋 업데이트 상태 줄. 처음 쓸 때 게임 업데이트 줄을 본떠 만든다.
 var _asset_label: Label
+## 캐릭터 고르기
+var character_option: OptionButton
 
 
 func _ready() -> void:
@@ -35,6 +37,31 @@ func _ready() -> void:
 		version_label.text += " (빌드 %d)" % BuildInfo.NUMBER
 	update_label.text = ""
 	address_edit.text = _load_last_address()
+	_build_character_picker()
+
+
+## 혼자 하기 버튼 위에 캐릭터 고르기를 둔다. 고른 캐릭터는 설정에 저장되어 다음에도 그대로다.
+func _build_character_picker() -> void:
+	var row := HBoxContainer.new()
+	row.name = "CharacterRow"
+	var label := Label.new()
+	label.text = "캐릭터"
+	label.custom_minimum_size.x = 80.0
+	row.add_child(label)
+	character_option = OptionButton.new()
+	character_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var characters := Characters.all()
+	for i in characters.size():
+		character_option.add_item(characters[i].display_name, i)
+		if characters[i].id == GameSettings.character_id:
+			character_option.select(i)
+	character_option.item_selected.connect(func(index: int) -> void:
+		GameSettings.character_id = characters[index].id
+		GameSettings.save())
+	row.add_child(character_option)
+	var panel := single_button.get_parent()
+	panel.add_child(row)
+	panel.move_child(row, single_button.get_index())
 
 
 ## 메뉴를 다시 보여 준다. 메시지가 있으면 함께 표시한다(연결 끊김 사유 등).

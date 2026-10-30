@@ -1,131 +1,80 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://src/enemies/enemy.gd" id="1_enemy"]
-[ext_resource type="Script" path="res://src/combat/health.gd" id="2_health"]
-[ext_resource type="Script" path="res://src/combat/hitbox.gd" id="3_hitbox"]
-[ext_resource type="Script" path="res://src/hacking/hackable.gd" id="4_hackable"]
-[ext_resource type="Resource" path="res://data/hacking/distract.tres" id="5_distract"]
-[ext_resource type="Resource" path="res://data/hacking/overheat.tres" id="6_overheat"]
-[ext_resource type="Resource" path="res://data/hacking/weapon_glitch.tres" id="7_glitch"]
+[ext_resource type="Script" path="res://src/enemies/enemy_body.gd" id="2_body"]
+[ext_resource type="Script" path="res://src/combat/health.gd" id="3_health"]
+[ext_resource type="Script" path="res://src/combat/hitbox.gd" id="4_hitbox"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
-radius = 0.35
-height = 1.8
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
-albedo_color = Color(0.35, 0.38, 0.45, 1)
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
-material = SubResource("StandardMaterial3D_body")
-radius = 0.35
-height = 1.8
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_visor"]
-albedo_color = Color(1, 0.15, 0.15, 1)
-emission_enabled = true
-emission = Color(1, 0.1, 0.1, 1)
-emission_energy_multiplier = 3.0
-
-[sub_resource type="BoxMesh" id="BoxMesh_visor"]
-material = SubResource("StandardMaterial3D_visor")
-size = Vector3(0.5, 0.1, 0.2)
-
-[sub_resource type="SphereShape3D" id="SphereShape3D_head"]
-radius = 0.2
+radius = 0.45
+height = 1.7
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_hitbox"]
-radius = 0.38
-height = 1.45
+radius = 0.55
+height = 1.7
 
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_state"]
-properties/0/path = NodePath(".:transform")
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_enemy"]
+properties/0/path = NodePath(".:position")
 properties/0/spawn = true
 properties/0/replication_mode = 1
-properties/1/path = NodePath("Health:current")
+properties/1/path = NodePath(".:rotation")
 properties/1/spawn = true
-properties/1/replication_mode = 2
-properties/2/path = NodePath(".:alert")
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:state")
 properties/2/spawn = true
 properties/2/replication_mode = 2
-properties/3/path = NodePath(".:detection")
+properties/3/path = NodePath(".:attack_id")
 properties/3/spawn = true
 properties/3/replication_mode = 2
-properties/4/path = NodePath(".:condition")
+properties/4/path = NodePath(".:attack_count")
 properties/4/spawn = true
 properties/4/replication_mode = 2
-properties/5/path = NodePath(".:stashed")
+properties/5/path = NodePath(".:hurt_count")
 properties/5/spawn = true
 properties/5/replication_mode = 2
-properties/6/path = NodePath(".:carrier_peer")
+properties/6/path = NodePath(".:stagger")
 properties/6/spawn = true
 properties/6/replication_mode = 2
+properties/7/path = NodePath(".:crystal_left")
+properties/7/spawn = true
+properties/7/replication_mode = 2
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_health"]
+properties/0/path = NodePath("Health:current")
+properties/0/spawn = true
+properties/0/replication_mode = 2
 
 [node name="Enemy" type="CharacterBody3D"]
 collision_layer = 2
-collision_mask = 1
+collision_mask = 3
+floor_snap_length = 0.3
 script = ExtResource("1_enemy")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
 shape = SubResource("CapsuleShape3D_body")
 
-[node name="Body" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
-mesh = SubResource("CapsuleMesh_body")
-
-[node name="Visor" type="MeshInstance3D" parent="Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, -0.28)
-mesh = SubResource("BoxMesh_visor")
+[node name="Body" type="Node3D" parent="."]
+script = ExtResource("2_body")
 
 [node name="Health" type="Node" parent="."]
-script = ExtResource("2_health")
+script = ExtResource("3_health")
 
-[node name="StateSync" type="MultiplayerSynchronizer" parent="."]
-replication_config = SubResource("SceneReplicationConfig_state")
-
-[node name="HeadHitbox" type="Area3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
-script = ExtResource("3_hitbox")
-part = 1
+[node name="Hitbox" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+script = ExtResource("4_hitbox")
 health_path = NodePath("../Health")
 
-[node name="Shape" type="CollisionShape3D" parent="HeadHitbox"]
-shape = SubResource("SphereShape3D_head")
-
-[node name="BodyHitbox" type="Area3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.725, 0)
-script = ExtResource("3_hitbox")
-health_path = NodePath("../Health")
-
-[node name="Shape" type="CollisionShape3D" parent="BodyHitbox"]
+[node name="Shape" type="CollisionShape3D" parent="Hitbox"]
 shape = SubResource("CapsuleShape3D_hitbox")
-
-[node name="HealthLabel" type="Label3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.15, 0)
-billboard = 1
-font_size = 64
-outline_size = 8
-modulate = Color(1, 0.4, 0.4, 1)
-text = "80"
-
-[node name="AlertLabel" type="Label3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
-visible = false
-pixel_size = 0.0006
-billboard = 1
-no_depth_test = true
-fixed_size = true
-font_size = 72
-outline_size = 10
-text = "?"
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
 path_desired_distance = 1.0
 target_desired_distance = 1.0
-radius = 0.4
+path_max_distance = 3.0
 
-[node name="Hackable" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.75, 0)
-script = ExtResource("4_hackable")
-display_name = "경비"
-quickhacks = Array[Resource]([ExtResource("5_distract"), ExtResource("6_overheat"), ExtResource("7_glitch")])
+[node name="Synchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_enemy")
+
+[node name="HealthSync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_health")

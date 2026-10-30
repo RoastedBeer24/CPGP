@@ -1,63 +1,69 @@
 extends NetTestCase
-## 코옵 전투: 참여자가 쏜 공격을 호스트가 판정하고, 결과가 모두에게 퍼지는지 확인한다.
-
-const DUMMY_PATH := "World/TestRange/ShootingRange/Dummy1"
-
-
-func test_client_shot_is_judged_by_host_and_synced() -> void:
-	var sessions := await connect_peers(1)
-	var host := sessions[0]
-	var client := sessions[1]
-	var shooter := client.get_local_player()
-	var host_dummy := host.get_node(DUMMY_PATH) as TrainingDummy
-	var client_dummy := client.get_node(DUMMY_PATH) as TrainingDummy
-
-	var confirmations: Array[float] = []
-	shooter.weapons.hit_confirmed.connect(
-		func(_p: Vector3, amount: float, _h: bool, _k: bool) -> void: confirmations.append(amount)
-	)
-	_aim(shooter, host_dummy.global_position + Vector3.UP * 0.9)
-	await physics_frames(2)
-	var intent := PlayerIntent.new()
-	intent.fire_pressed = true
-	shooter.intent_override = intent
-
-	assert_true(await wait_until(func() -> bool: return host_dummy.health.current < 100.0), "호스트에서 피해 판정")
-	assert_true(await wait_until(func() -> bool: return client_dummy.health.current == host_dummy.health.current), "클라이언트에 체력 동기화")
-	assert_true(await wait_until(func() -> bool: return not confirmations.is_empty()), "쏜 사람에게 명중 확인")
+## 코옵 전투: 판정은 호스트가 한다. 참여한 사람의 공격이 호스트의 적을 맞히고, 결과가 모두에게 퍼진다.
+## 적의 공격도 호스트가 판정해 참여한 사람의 체력이 준다. 쓰러진 동료를 일으킨다.
 
 
-func test_players_cannot_hurt_each_other() -> void:
-	var sessions := await connect_peers(1)
-	var host := sessions[0]
-	var client := sessions[1]
-	var shooter := client.get_local_player()
-	var host_player := host.get_local_player()
-	_aim(shooter, host_player.global_position + Vector3.UP * 1.2)
-	await physics_frames(2)
-	var intent := PlayerIntent.new()
-	intent.fire_pressed = true
-	shooter.intent_override = intent
-	await physics_frames(30)
-	assert_eq(host_player.health.current, host_player.health.max_health, "같은 편 공격은 피해 없음")
-
-
-func test_dead_client_player_respawns_on_every_peer() -> void:
+func test_client_attack_damages_enemy_judged_by_host() -> void:
 	var sessions := await connect_peers(1)
 	var host := sessions[0]
 	var client := sessions[1]
 	var client_id := client.multiplayer.get_unique_id()
-	var on_host := host.get_player(client_id)
-	var on_client := client.get_player(client_id)
-	on_host.health.apply_damage(DamageInfo.create(1000.0, 0, Vector3.ZERO, &"test", false))
-	assert_true(await wait_until(func() -> bool: return not on_client.health.is_alive()), "클라이언트도 사망을 알아야 함")
-	await physics_frames(ceili(Session.RESPAWN_DELAY * 60.0) + 5)
-	assert_true(await wait_until(func() -> bool: return on_client.health.is_alive()), "클라이언트에서도 부활")
+	var mine := client.get_player(client_id)
+	var room := host.zone() as CombatRoom
+	var enemy := room.spawn_enemy("grunt", mine.global_position + Vector3(0, 0, -2.0))
+	enemy.ai_enabled = false
+	assert_true(await wait_until(func() -> bool: return (client.zone() as CombatRoom).enemies.get_child_count() == 1), "적이 참여한 사람에게도 보인다")
+	var mirror := (client.zone() as CombatRoom).enemies.get_child(0) as Enemy
+	var numbers: Array[float] = []
+	mine.hit_confirmed.connect(func(_at: Vector3, amount: float, _flags: int) -> void: numbers.append(amount))
+	var intent := PlayerIntent.new()
+	mine.intent_override = intent
+	intent.attack_pressed = true
+	assert_true(await wait_until(func() -> bool: return enemy.health.current < enemy.data.max_health), "호스트의 적이 다친다")
+	assert_true(await wait_until(func() -> bool: return mirror.health.current == enemy.health.current), "체력이 참여한 사람에게도 퍼진다")
+	assert_true(await wait_until(func() -> bool: return not numbers.is_empty()), "때린 사람에게 피해 숫자가 돌아온다")
+	assert_true(await wait_until(func() -> bool: return mine.energy > 0.0), "때린 사람의 궁극기 에너지가 찬다")
 
 
-## 플레이어가 target을 바라보도록 몸과 고개를 돌린다.
-func _aim(player: Player, target: Vector3) -> void:
-	var eye := player.camera.global_position
-	var flat := Vector3(target.x - eye.x, 0.0, target.z - eye.z)
-	player.rotation.y = atan2(-flat.x, -flat.z)
-	player.head.rotation.x = atan2(target.y - eye.y, flat.length())
+func test_enemy_attack_on_client_is_judged_by_host() -> void:
+	var sessions := await connect_peers(1)
+	var host := sessions[0]
+	var client := sessions[1]
+	var client_id := client.multiplayer.get_unique_id()
+	var mine := client.get_player(client_id)
+	# 호스트는 멀리 보내 두고, 참여한 사람 옆에 적을 둔다.
+	host.get_player(1).global_position += Vector3(15, 0, 0)
+	var room := host.zone() as CombatRoom
+	room.spawn_enemy("grunt", mine.global_position + Vector3(0, 0, -2.0))
+	var hits: Array[bool] = []
+	mine.got_hit.connect(func(heavy: bool) -> void: hits.append(heavy))
+	assert_true(await wait_until_long(func() -> bool: return mine.health.current < mine.health.max_health), "참여한 사람이 맞는다")
+	assert_true(await wait_until(func() -> bool: return not hits.is_empty()), "맞은 것을 알린다")
+
+
+func test_downed_teammate_can_be_revived() -> void:
+	var sessions := await connect_peers(1)
+	var host := sessions[0]
+	var client := sessions[1]
+	var client_id := client.multiplayer.get_unique_id()
+	var downed := host.get_player(client_id)
+	downed.health.apply_damage(DamageInfo.create(99999.0, 0, Vector3.ZERO, &"test"))
+	var mine := client.get_player(client_id)
+	assert_true(await wait_until(func() -> bool: return mine.state == Player.State.DOWN), "쓰러진다")
+	var helper := host.get_player(1)
+	helper.global_position = downed.global_position + Vector3(1.0, 0, 0)
+	var intent := PlayerIntent.new()
+	intent.interact_held = true
+	helper.intent_override = intent
+	assert_true(await wait_until_long(func() -> bool: return mine.is_alive()), "F를 누르고 있으면 일어난다")
+	assert_almost_eq(downed.health.current, downed.health.max_health * Player.REVIVE_HEALTH, 1.0)
+	assert_true(await wait_until(func() -> bool: return mine.state != Player.State.DOWN), "다시 움직인다")
+
+
+## 오래 걸리는 일(적이 다가와 예고하고 때리기, 일으키기)은 더 오래 기다린다.
+func wait_until_long(condition: Callable) -> bool:
+	for i in 600:
+		if condition.call():
+			return true
+		await tree.physics_frame
+	return condition.call()

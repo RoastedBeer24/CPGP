@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3]
+
+[ext_resource type="Script" path="res://src/player/character_data.gd" id="1_character"]
+
+[resource]
+script = ExtResource("1_character")
+id = &"endministrator_m"
+display_name = "관리자 (남)"
+appearance_path = "res://data/characters/endministrator_m/appearance.tres"
+kit_path = "res://data/characters/endministrator_m/kit.tres"

@@ -34,10 +34,8 @@ const BASE_MOUSE_SENSITIVITY := 0.0025
 ## 입력 코드: 양수는 물리 키 코드, 음수는 -(마우스 버튼 번호)다.
 const REBINDABLE_ACTIONS: Array[StringName] = [
 	Actions.MOVE_FORWARD, Actions.MOVE_BACK, Actions.MOVE_LEFT, Actions.MOVE_RIGHT,
-	Actions.JUMP, Actions.SPRINT, Actions.CROUCH,
-	Actions.FIRE, Actions.AIM, Actions.RELOAD,
-	Actions.WEAPON_1, Actions.WEAPON_2, Actions.WEAPON_3, Actions.WEAPON_4, Actions.WEAPON_NEXT, Actions.WEAPON_PREV,
-	Actions.INTERACT, Actions.SCAN, Actions.CAMERA_TOGGLE, Actions.FREE_LOOK, Actions.TOGGLE_VISOR,
+	Actions.JUMP, Actions.ATTACK, Actions.DODGE, Actions.SKILL, Actions.ULTIMATE,
+	Actions.LOCK_ON, Actions.INTERACT, Actions.TOGGLE_VISOR,
 ]
 const ACTION_LABELS := {
 	Actions.MOVE_FORWARD: "앞으로",
@@ -45,26 +43,21 @@ const ACTION_LABELS := {
 	Actions.MOVE_LEFT: "왼쪽",
 	Actions.MOVE_RIGHT: "오른쪽",
 	Actions.JUMP: "점프",
-	Actions.SPRINT: "달리기",
-	Actions.CROUCH: "웅크리기 / 슬라이딩",
-	Actions.RELOAD: "재장전",
-	Actions.WEAPON_1: "무기 1",
-	Actions.WEAPON_2: "무기 2",
-	Actions.WEAPON_3: "무기 3",
-	Actions.WEAPON_4: "맨손",
-	Actions.CAMERA_TOGGLE: "1인칭 / 3인칭 전환",
-	Actions.INTERACT: "상호작용 (제압, 몸 들기)",
-	Actions.FIRE: "공격",
-	Actions.AIM: "조준",
-	Actions.WEAPON_NEXT: "다음 무기",
-	Actions.WEAPON_PREV: "이전 무기",
-	Actions.FREE_LOOK: "자유 시야 (휠: 확대·축소)",
-	Actions.SCAN: "스캔 (누르는 동안, 1~3: 퀵핵)",
+	Actions.ATTACK: "공격",
+	Actions.DODGE: "회피 (누르고 있으면 질주)",
+	Actions.SKILL: "배틀 스킬 (길게: 궁극기)",
+	Actions.ULTIMATE: "궁극기",
+	Actions.LOCK_ON: "대상 고정",
+	Actions.INTERACT: "동료 일으키기 (누르고 있기)",
 	Actions.TOGGLE_VISOR: "바이저 쓰기 / 벗기",
 }
 
+const DEFAULT_PATH := "user://settings.cfg"
+## 게임 이름을 바꾸기 전(CyberUniverse)의 사용자 데이터 폴더 이름. 설정이 거기 남아 있다.
+const LEGACY_DATA_DIR := "CyberUniverse"
+
 ## 저장 위치. 테스트는 사용자의 실제 설정을 건드리지 않도록 다른 파일로 바꾼다.
-static var path := "user://settings.cfg"
+static var path := DEFAULT_PATH
 
 # ---- 소리 (0~1) ----
 static var volumes: Dictionary[StringName, float] = {}
@@ -88,18 +81,14 @@ static var shadow_quality := ShadowQuality.MEDIUM
 # ---- 조작 ----
 static var mouse_sensitivity := 1.0
 static var invert_y := false
-## true면 키를 누를 때마다 켜고 끄는 토글, false면 누르고 있는 동안만
-static var crouch_toggle := true
-static var sprint_toggle := false
-static var aim_toggle := false
-static var free_look_toggle := false
-## 기본 시야각(도). 달리기·슬라이딩 때는 여기에 더해지고, 조준하면 무기의 시야각으로 좁아진다.
-static var fov := 80.0
+## 시야각(도). 질주할 때는 여기에 조금 더해진다.
+static var fov := 70.0
 ## 동작별로 바꾼 입력 코드(양수는 키, 음수는 마우스 버튼). 없는 동작은 기본 입력을 쓴다.
 static var key_overrides: Dictionary[StringName, int] = {}
 
 # ---- 게임 ----
-static var start_third_person := false
+## 고른 캐릭터 (Characters의 이름)
+static var character_id := &"endministrator_f"
 static var auto_update := true
 ## 캐릭터가 머리 장비(바이저)를 쓰고 있는지. 코옵에서도 남에게 그대로 보인다.
 static var visor_on := true
@@ -120,13 +109,9 @@ static func reset_to_defaults() -> void:
 	shadow_quality = ShadowQuality.MEDIUM
 	mouse_sensitivity = 1.0
 	invert_y = false
-	crouch_toggle = true
-	sprint_toggle = false
-	aim_toggle = false
-	free_look_toggle = false
-	fov = 80.0
+	fov = 70.0
 	key_overrides = {}
-	start_third_person = false
+	character_id = &"endministrator_f"
 	auto_update = true
 	visor_on = true
 	asset_key = ""
@@ -148,6 +133,21 @@ static func look_delta(mouse_relative: Vector2) -> Vector2:
 
 # ---- 저장과 불러오기 ----
 
+## 옛 이름(CyberUniverse)으로 쓰던 설정 파일. 사용자 데이터 폴더는 게임 이름을 따라 바뀐다.
+static func legacy_path() -> String:
+	return OS.get_user_data_dir().get_base_dir().path_join(LEGACY_DATA_DIR).path_join("settings.cfg")
+
+
+## 새 설정 파일이 아직 없고 옛 설정 파일이 있으면 한 번 복사해 온다(에셋 키를 다시 넣지 않게).
+## 옛 파일의 지금은 없는 항목(총 조준 방식 등)은 불러올 때 무시된다. 복사했으면 true.
+static func copy_legacy_settings(from: String, to: String) -> bool:
+	var target := ProjectSettings.globalize_path(to)
+	if FileAccess.file_exists(target) or not FileAccess.file_exists(from):
+		return false
+	DirAccess.make_dir_recursive_absolute(target.get_base_dir())
+	return DirAccess.copy_absolute(from, target) == OK
+
+
 static func load_settings() -> void:
 	reset_to_defaults()
 	var config := ConfigFile.new()
@@ -168,17 +168,13 @@ static func load_settings() -> void:
 	shadow_quality = clampi(int(config.get_value("graphics", "shadow_quality", shadow_quality)), 0, ShadowQuality.size() - 1) as ShadowQuality
 	mouse_sensitivity = clampf(float(config.get_value("controls", "mouse_sensitivity", mouse_sensitivity)), 0.1, 3.0)
 	invert_y = bool(config.get_value("controls", "invert_y", invert_y))
-	crouch_toggle = bool(config.get_value("controls", "crouch_toggle", crouch_toggle))
-	sprint_toggle = bool(config.get_value("controls", "sprint_toggle", sprint_toggle))
-	aim_toggle = bool(config.get_value("controls", "aim_toggle", aim_toggle))
-	free_look_toggle = bool(config.get_value("controls", "free_look_toggle", free_look_toggle))
-	fov = clampf(float(config.get_value("controls", "fov", fov)), 60.0, 110.0)
+	fov = clampf(float(config.get_value("controls", "fov", fov)), 50.0, 100.0)
 	if config.has_section("keys"):
 		for action in REBINDABLE_ACTIONS:
 			var code := int(config.get_value("keys", String(action), 0))
 			if code != 0:
 				key_overrides[action] = code
-	start_third_person = bool(config.get_value("game", "start_third_person", start_third_person))
+	character_id = StringName(str(config.get_value("game", "character_id", character_id)))
 	auto_update = bool(config.get_value("game", "auto_update", auto_update))
 	visor_on = bool(config.get_value("game", "visor_on", visor_on))
 	asset_key = str(config.get_value("game", "asset_key", asset_key)).strip_edges()
@@ -204,14 +200,10 @@ static func save() -> Error:
 	config.set_value("graphics", "shadow_quality", shadow_quality)
 	config.set_value("controls", "mouse_sensitivity", mouse_sensitivity)
 	config.set_value("controls", "invert_y", invert_y)
-	config.set_value("controls", "crouch_toggle", crouch_toggle)
-	config.set_value("controls", "sprint_toggle", sprint_toggle)
-	config.set_value("controls", "aim_toggle", aim_toggle)
-	config.set_value("controls", "free_look_toggle", free_look_toggle)
 	config.set_value("controls", "fov", fov)
 	for action: StringName in key_overrides:
 		config.set_value("keys", String(action), key_overrides[action])
-	config.set_value("game", "start_third_person", start_third_person)
+	config.set_value("game", "character_id", String(character_id))
 	config.set_value("game", "auto_update", auto_update)
 	config.set_value("game", "visor_on", visor_on)
 	config.set_value("game", "asset_key", asset_key)

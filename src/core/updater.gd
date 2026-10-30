@@ -9,6 +9,10 @@ extends Node
 ##      새 파일을 실행 파일 폴더에 덮어쓰고, 원하면 게임을 다시 실행한다.
 ##      실행 중인 exe는 스스로 덮어쓸 수 없어서 별도 프로세스가 바꾼다.
 ## 실행 파일 폴더의 다른 파일(캐릭터 모델 등)은 건드리지 않는다.
+##
+## 게임 이름을 CyberUniverse에서 크로스필드(Crossfield)로 바꿨다. 릴리스에는 같은 게임을 두 이름으로 묶은 zip이
+## 함께 올라간다. 실행 파일 이름을 보고 같은 이름의 zip을 받으므로(asset_name_for), 옛 이름으로 설치한 게임은
+## CyberUniverse.exe가 그대로 새 버전으로 바뀐다.
 
 signal status_changed(message: String)
 signal update_ready
@@ -17,7 +21,11 @@ enum State { IDLE, CHECKING, DOWNLOADING, READY, INSTALLING, UP_TO_DATE, FAILED 
 
 const REPOSITORY := "RoastedBeer24/CPGP"
 const TAG_PREFIX := "build-"
-const ASSET_NAME := "CyberUniverse-windows.zip"
+const GAME_NAME := "Crossfield"
+## 이름을 바꾸기 전에 설치한 게임의 실행 파일 이름
+const LEGACY_NAME := "CyberUniverse"
+const ASSET_SUFFIX := "-windows.zip"
+const ASSET_NAME := GAME_NAME + ASSET_SUFFIX
 const STAGING_DIR := "user://update"
 
 var state := State.IDLE
@@ -28,6 +36,8 @@ var current_build := BuildInfo.NUMBER
 var release_url := "https://api.github.com/repos/%s/releases/latest" % REPOSITORY
 ## 새 파일을 덮어쓸 폴더
 var install_dir := OS.get_executable_path().get_base_dir()
+## 받을 zip 이름 (실행 파일 이름에 맞춘다)
+var asset_name := asset_name_for(OS.get_executable_path())
 
 var _download: HTTPRequest
 
@@ -37,8 +47,17 @@ static func can_self_update() -> bool:
 	return OS.has_feature("template") and OS.get_name() == "Windows" and BuildInfo.NUMBER > 0
 
 
+## 실행 파일에 맞는 zip 이름. 옛 이름(CyberUniverse.exe)으로 설치한 게임은 옛 이름의 zip을 받아야 한다.
+## 새 이름의 zip을 받으면 Crossfield.exe만 새로 생기고, 다시 켜는 옛 exe는 그대로라 업데이트를 끝없이 되풀이한다.
+static func asset_name_for(executable_path: String) -> String:
+	var base := executable_path.get_file().get_basename().trim_suffix(".console")
+	if base.to_lower() == LEGACY_NAME.to_lower():
+		return LEGACY_NAME + ASSET_SUFFIX
+	return ASSET_NAME
+
+
 ## 릴리스 응답(JSON)에서 빌드 번호와 zip 주소를 꺼낸다. 형식이 맞지 않으면 빈 사전.
-static func parse_release(json_text: String) -> Dictionary:
+static func parse_release(json_text: String, wanted_asset: String = ASSET_NAME) -> Dictionary:
 	# JSON.parse_string은 실패하면 엔진 오류를 남기므로, 오류 코드만 돌려주는 parse를 쓴다.
 	var json := JSON.new()
 	if json.parse(json_text) != OK or typeof(json.data) != TYPE_DICTIONARY:
@@ -54,7 +73,7 @@ static func parse_release(json_text: String) -> Dictionary:
 		if typeof(asset) != TYPE_DICTIONARY:
 			continue
 		var entry: Dictionary = asset
-		if str(entry.get("name", "")) == ASSET_NAME:
+		if str(entry.get("name", "")) == wanted_asset:
 			return {"build": tag.trim_prefix(TAG_PREFIX).to_int(), "url": str(entry.get("browser_download_url", ""))}
 	return {}
 
@@ -89,7 +108,7 @@ func check() -> void:
 	if int(result[0]) != HTTPRequest.RESULT_SUCCESS or int(result[1]) != 200:
 		_fail("업데이트 서버에 연결하지 못했습니다.")
 		return
-	var release := parse_release(body.get_string_from_utf8())
+	var release := parse_release(body.get_string_from_utf8(), asset_name)
 	if release.is_empty():
 		_fail("업데이트 정보를 읽지 못했습니다.")
 		return
@@ -103,7 +122,7 @@ func check() -> void:
 func _download_release(url: String) -> void:
 	_set_state(State.DOWNLOADING, "새 버전(빌드 %d)을 받는 중..." % latest_build)
 	DirAccess.make_dir_recursive_absolute(_global(STAGING_DIR))
-	var zip_path := _global(STAGING_DIR.path_join(ASSET_NAME))
+	var zip_path := _global(STAGING_DIR.path_join(asset_name))
 	_download = HTTPRequest.new()
 	_download.timeout = 600.0
 	_download.download_file = zip_path
@@ -163,7 +182,7 @@ func apply(relaunch: bool) -> Error:
 
 
 ## 설치 스크립트. Windows PowerShell 5.1은 BOM 없는 파일을 시스템 코드 페이지로 읽으므로 영어로만 쓴다.
-## 내용이 같은 파일은 건너뛴다. 콘솔판(CyberUniverse.console.exe)은 게임을 띄운 뒤에도 살아 있어서
+## 내용이 같은 파일은 건너뛴다. 콘솔판(Crossfield.console.exe)은 게임을 띄운 뒤에도 살아 있어서
 ## 덮어쓸 수 없는데, 빌드마다 같은 실행기라 바꿀 필요가 없다.
 ## 한 파일을 못 바꿔도 나머지는 계속 바꾸고, 못 바꾼 파일을 기록에 남긴다. 게임 본체를 못 바꿨으면
 ## 빌드 번호가 그대로라 다음에 켤 때 다시 받는다.
@@ -226,7 +245,7 @@ func _extract(zip_path: String, destination: String) -> bool:
 
 func _headers(extra: Array[String]) -> PackedStringArray:
 	# GitHub API는 User-Agent가 없는 요청을 거절한다.
-	var headers := PackedStringArray(["User-Agent: CyberUniverse-Updater"])
+	var headers := PackedStringArray(["User-Agent: Crossfield-Updater"])
 	headers.append_array(PackedStringArray(extra))
 	return headers
 

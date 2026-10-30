@@ -1,5 +1,5 @@
 extends TestCase
-## 체력, 장갑, 죽음과 부활, 무기 데이터를 확인한다.
+## 체력, 장갑, 쓰러짐과 일으키기, 캐릭터 전투 구성(kit)과 적 데이터를 확인한다.
 
 var health: Health
 
@@ -11,52 +11,82 @@ func before_each() -> void:
 
 
 func test_damage_reduces_health() -> void:
-	var dealt := health.apply_damage(DamageInfo.create(30.0, 0, Vector3.ZERO, &"test", false))
+	var dealt := health.apply_damage(DamageInfo.create(30.0, 0, Vector3.ZERO, &"test"))
 	assert_eq(dealt, 30.0)
 	assert_eq(health.current, 70.0)
 
 
 func test_armor_reduces_damage() -> void:
 	health.armor = 100.0
-	health.apply_damage(DamageInfo.create(40.0, 0, Vector3.ZERO, &"test", false))
+	health.apply_damage(DamageInfo.create(40.0, 0, Vector3.ZERO, &"test"))
 	assert_almost_eq(health.current, 80.0, 0.001, "장갑 100이면 피해 절반")
 
 
 func test_dies_once_and_ignores_further_damage() -> void:
 	var deaths: Array[int] = []
 	health.died.connect(func(_info: DamageInfo) -> void: deaths.append(1))
-	health.apply_damage(DamageInfo.create(150.0, 0, Vector3.ZERO, &"test", false))
+	health.apply_damage(DamageInfo.create(150.0, 0, Vector3.ZERO, &"test"))
 	assert_eq(health.current, 0.0, "체력은 0 아래로 내려가지 않음")
 	assert_false(health.is_alive())
-	health.apply_damage(DamageInfo.create(10.0, 0, Vector3.ZERO, &"test", false))
+	health.apply_damage(DamageInfo.create(10.0, 0, Vector3.ZERO, &"test"))
 	assert_eq(deaths.size(), 1)
 
 
-func test_heal_is_capped_and_revive_restores() -> void:
-	health.apply_damage(DamageInfo.create(50.0, 0, Vector3.ZERO, &"test", false))
+func test_heal_is_capped_and_revive_restores_a_fraction() -> void:
+	health.apply_damage(DamageInfo.create(50.0, 0, Vector3.ZERO, &"test"))
 	health.heal(80.0)
 	assert_eq(health.current, 100.0)
-	health.apply_damage(DamageInfo.create(200.0, 0, Vector3.ZERO, &"test", false))
+	health.apply_damage(DamageInfo.create(200.0, 0, Vector3.ZERO, &"test"))
 	health.heal(50.0)
-	assert_eq(health.current, 0.0, "죽은 뒤에는 회복되지 않음")
-	health.revive()
-	assert_eq(health.current, 100.0)
+	assert_eq(health.current, 0.0, "쓰러진 뒤에는 회복되지 않음")
+	var revived: Array[int] = []
+	health.revived.connect(func() -> void: revived.append(1))
+	health.revive(0.3)
+	assert_almost_eq(health.current, 30.0, 0.001, "동료가 일으키면 30%")
+	assert_eq(revived.size(), 1)
+	health.revive(1.0)
+	assert_eq(health.current, 100.0, "방을 다시 시작하면 가득")
 
 
-func test_weapon_data_files_are_valid() -> void:
-	for file_name in DirAccess.get_files_at("res://data/weapons"):
-		if not file_name.ends_with(".tres"):
-			continue
-		var weapon := load("res://data/weapons/" + file_name) as WeaponData
-		assert_not_null(weapon, file_name)
-		assert_eq(String(weapon.id), file_name.get_basename(), "id와 파일 이름이 같아야 함")
-		assert_true(weapon.damage > 0.0 and weapon.fire_interval > 0.0, file_name)
-		if not weapon.is_melee():
-			assert_true(weapon.magazine_size > 0 and weapon.pellets > 0, file_name)
+func test_character_kits_are_consistent() -> void:
+	var characters := Characters.all()
+	assert_eq(characters.size(), 2, "관리자(여·남)")
+	for character in characters:
+		var kit := character.kit()
+		assert_not_null(kit, String(character.id))
+		assert_not_null(character.appearance(), String(character.id))
+		assert_eq(kit.basic_chain.size(), 5, "기본 공격 5단계")
+		for attack in kit.all_attacks():
+			var label := "%s/%s" % [character.id, attack.id]
+			assert_true(PlayerBody.ACTION_CLIPS.has(attack.clip), "몸이 틀 수 있는 동작: " + label)
+			assert_true(attack.hits.size() > 0, "타격이 있음: " + label)
+			var last := -1.0
+			for hit in attack.hits:
+				assert_true(hit.time > last and hit.time < attack.duration, "타격 시각이 차례대로 동작 안에: " + label)
+				last = hit.time
+			for i in range(1, attack.advance.size()):
+				assert_true(attack.advance[i].x > attack.advance[i - 1].x and attack.advance[i].y >= attack.advance[i - 1].y,
+					"내디딤 거리는 앞으로만 는다: " + label)
+		assert_true(kit.battle_skill.sp_cost > 0.0, "배틀 스킬은 SP를 쓴다")
+		assert_eq(kit.ultimate.energy_cost, kit.max_energy, "궁극기는 에너지를 다 쓴다")
+		assert_eq(kit.battle_skill.hits[0].effect, HitData.Effect.APPLY_CRYSTAL, "배틀 스킬이 원석 결정을 붙인다")
+		assert_eq(kit.ultimate.hits[kit.ultimate.hits.size() - 1].effect, HitData.Effect.SHATTER_CRYSTAL, "궁극기가 깨뜨린다")
 
 
-func test_falloff_reduces_damage_with_distance() -> void:
-	var weapon := load("res://data/weapons/shotgun.tres") as WeaponData
-	assert_eq(weapon.falloff(1.0), 1.0)
-	assert_true(weapon.falloff(20.0) < 1.0)
-	assert_almost_eq(weapon.falloff(1000.0), weapon.falloff_min_ratio, 0.001)
+func test_attack_advance_interpolates() -> void:
+	var attack := AttackData.new()
+	attack.advance = PackedVector2Array([Vector2(0, 0), Vector2(0.2, 1.0), Vector2(0.4, 1.5)])
+	assert_almost_eq(attack.advance_at(0.1), 0.5, 0.001)
+	assert_almost_eq(attack.advance_at(0.3), 1.25, 0.001)
+	assert_almost_eq(attack.advance_at(2.0), 1.5, 0.001, "끝난 뒤에는 그대로")
+
+
+func test_enemy_data_is_consistent() -> void:
+	for kind: String in ["grunt", "shooter", "heavy"]:
+		var data := load("res://data/enemies/%s.tres" % kind) as EnemyData
+		assert_not_null(data, kind)
+		assert_true(data.max_health > 0.0 and data.stagger_max > 0.0, kind)
+		assert_true(data.attacks.size() > 0, kind)
+		for attack in data.attacks:
+			assert_true(attack.wind_up >= 0.5, "예고 시간이 있어야 피할 수 있다: %s/%s" % [kind, attack.id])
+			assert_true(attack.max_range > attack.min_range, "%s/%s" % [kind, attack.id])

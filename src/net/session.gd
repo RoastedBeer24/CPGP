@@ -1,10 +1,11 @@
 class_name Session
 extends Node
-## 한 판의 게임. 구역을 불러오고, 참가한 피어마다 플레이어를 스폰한다.
+## 한 판의 게임. 구역(전투 방)을 불러오고, 참가한 피어마다 그 사람이 고른 캐릭터로 플레이어를 스폰한다.
 ##
 ## 싱글 플레이는 OfflineMultiplayerPeer로 "혼자 호스트하는 코옵"처럼 돌아가므로,
 ## 싱글·호스트·참여가 모두 같은 코드 경로를 탄다.
 ## 플레이어 스폰과 제거는 호스트만 하고, MultiplayerSpawner가 다른 피어에 복제한다.
+## 참여한 피어는 접속한 뒤 고른 캐릭터를 호스트에 알리고(_register), 호스트가 그 캐릭터로 스폰한다.
 
 signal started
 signal ended(reason: String)
@@ -14,13 +15,16 @@ enum Mode { NONE, SINGLE, HOST, CLIENT }
 
 const DEFAULT_PORT := 47820
 const MAX_PLAYERS := 3
-## 죽은 뒤 되살아나기까지의 시간(초). 저장 시스템(M6)이 생기면 사망 처리를 다시 정한다.
-const RESPAWN_DELAY := 3.0
 const PLAYER_SCENE := preload("res://src/player/player.tscn")
 
-@export var zone_scene: PackedScene = preload("res://src/zones/test_range/test_range.tscn")
+@export var zone_scene: PackedScene = preload("res://src/zones/combat_room/combat_room.tscn")
 ## false면 플레이어가 키보드·마우스를 읽지 않는다. 테스트용.
 @export var use_device_input := true
+## false면 전투 방이 적을 불러내지 않는다. 테스트용.
+@export var waves_enabled := true
+
+## 내가 고른 캐릭터. 혼자 하거나 방을 만들면 바로 쓰고, 참여하면 접속한 뒤 호스트에 알린다.
+var character_id := Characters.DEFAULT_ID
 
 var mode := Mode.NONE
 
@@ -38,7 +42,7 @@ func start_single() -> Error:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	mode = Mode.SINGLE
 	_load_zone()
-	_spawn_for(multiplayer.get_unique_id())
+	_spawn_for(multiplayer.get_unique_id(), character_id)
 	started.emit()
 	return OK
 
@@ -53,7 +57,7 @@ func host(port: int = DEFAULT_PORT) -> Error:
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	mode = Mode.HOST
 	_load_zone()
-	_spawn_for(multiplayer.get_unique_id())
+	_spawn_for(multiplayer.get_unique_id(), character_id)
 	started.emit()
 	return OK
 
@@ -82,6 +86,8 @@ func leave() -> void:
 	for node: Node in players.get_children() + world.get_children():
 		node.get_parent().remove_child(node)
 		node.free()
+	# 완벽한 회피의 느린 시간 중에 끝나도 다음 판은 제 속도로 시작한다.
+	Engine.time_scale = 1.0
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
@@ -119,23 +125,55 @@ func get_local_player() -> Player:
 	return get_player(multiplayer.get_unique_id())
 
 
+## 지금 구역(전투 방). 아직 불러오지 않았으면 null.
+func zone() -> Node:
+	return world.get_child(0) if world.get_child_count() > 0 else null
+
+
+## 호스트: 모든 플레이어를 일으켜 시작 위치로 옮긴다(방을 다시 시작할 때).
+func respawn_players(reset_resources: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	var index := 0
+	for node: Node in players.get_children():
+		var player := node as Player
+		if player == null:
+			continue
+		player.health.revive(1.0)
+		player.respawn_at.rpc_id(player.get_multiplayer_authority(), _spawn_position(index), reset_resources)
+		index += 1
+
+
 func _load_zone() -> void:
 	world.add_child(zone_scene.instantiate())
 	GameSettings.apply_brightness(get_viewport())
 
 
-func _spawn_for(peer_id: int) -> void:
+func _spawn_for(peer_id: int, chosen: StringName) -> void:
 	# 호스트 쪽에서는 spawned 시그널이 오지 않으므로 직접 알린다.
-	var player := spawner.spawn({"peer_id": peer_id, "position": _next_spawn_position()}) as Player
+	var info := {"peer_id": peer_id, "position": _spawn_position(players.get_child_count()), "character": String(chosen)}
+	var player := spawner.spawn(info) as Player
 	player_spawned.emit(player)
 
 
-func _next_spawn_position() -> Vector3:
-	var points := world.get_child(0).get_node_or_null("SpawnPoints")
+func _spawn_position(index: int) -> Vector3:
+	var room := zone()
+	var points := room.get_node_or_null("SpawnPoints") if room != null else null
 	if points == null or points.get_child_count() == 0:
 		return Vector3.ZERO
-	var marker := points.get_child(players.get_child_count() % points.get_child_count()) as Node3D
+	var marker := points.get_child(index % points.get_child_count()) as Node3D
 	return marker.global_position
+
+
+## 참여한 피어가 고른 캐릭터를 알린다(호스트에서 실행). 호스트가 그 캐릭터로 플레이어를 스폰한다.
+@rpc("any_peer", "call_remote", "reliable")
+func _register(chosen: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var peer := multiplayer.get_remote_sender_id()
+	if get_player(peer) != null:
+		return
+	_spawn_for(peer, StringName(chosen))
 
 
 func _spawn_player(data: Variant) -> Node:
@@ -147,24 +185,10 @@ func _spawn_player(data: Variant) -> Node:
 	# 체력은 호스트가 판정하므로, 체력과 그 동기화만 호스트 권한으로 되돌린다.
 	player.get_node("Health").set_multiplayer_authority(1)
 	player.get_node("HealthSync").set_multiplayer_authority(1)
-	# RAM과 퀵핵 업로드도 호스트가 판정하므로 사이버덱도 호스트 권한이다.
-	player.get_node("Cyberdeck").set_multiplayer_authority(1)
 	player.position = info["position"]
+	player.character_id = Characters.find(StringName(str(info.get("character", "")))).id
 	player.use_device_input = use_device_input
-	var health := player.get_node("Health") as Health
-	health.died.connect(func(_info: DamageInfo) -> void: _on_player_died(peer_id))
 	return player
-
-
-func _on_player_died(peer_id: int) -> void:
-	if not multiplayer.is_server():
-		return
-	await get_tree().create_timer(RESPAWN_DELAY, false).timeout
-	var player := get_player(peer_id)
-	if player == null or mode == Mode.NONE:
-		return
-	player.respawn_at.rpc_id(peer_id, _next_spawn_position())
-	player.health.revive()
 
 
 func _on_spawned(node: Node) -> void:
@@ -172,8 +196,8 @@ func _on_spawned(node: Node) -> void:
 
 
 func _on_peer_connected(peer_id: int) -> void:
+	# 플레이어는 그 피어가 고른 캐릭터를 알려 오면(_register) 스폰한다.
 	print("[세션] 참가: 피어 %d" % peer_id)
-	_spawn_for(peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -185,6 +209,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 func _on_connected_to_server() -> void:
 	print("[세션] 호스트에 접속함 (내 피어 %d)" % multiplayer.get_unique_id())
+	_register.rpc_id(1, String(character_id))
 	started.emit()
 
 

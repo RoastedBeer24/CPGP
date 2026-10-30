@@ -35,6 +35,8 @@ func new_peer(peer_name: String) -> Session:
 	tree.set_multiplayer(SceneMultiplayer.new(), branch.get_path())
 	var session := SESSION_SCENE.instantiate() as Session
 	session.use_device_input = false
+	# 적 웨이브는 그것을 보는 테스트만 켠다.
+	session.waves_enabled = false
 	branch.add_child(session)
 	_branches.append(branch)
 	return session

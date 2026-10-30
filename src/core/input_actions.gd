@@ -1,31 +1,27 @@
 extends Node
-## 게임 입력 동작을 등록한다. 기본 키 배치는 사이버펑크 2077을 따른다.
-## 키 재설정(설정 메뉴)은 이 기본값 위에 덮어쓰는 방식으로 나중에 추가한다.
+## 게임 입력 동작을 등록한다. 기본 키 배치는 아크나이츠: 엔드필드 PC판을 따른다.
+##   왼쪽 클릭 공격, 오른쪽 클릭·Shift 회피(누르고 있으면 질주), 1 배틀 스킬(길게 누르면 궁극기),
+##   가운데 클릭 대상 고정, Space 점프.
+## 키 재설정(설정 메뉴)은 이 기본값 위에 덮어쓴다(GameSettings.key_overrides).
 
 const MOVE_FORWARD := &"move_forward"
 const MOVE_BACK := &"move_back"
 const MOVE_LEFT := &"move_left"
 const MOVE_RIGHT := &"move_right"
 const JUMP := &"jump"
-const SPRINT := &"sprint"
-const CROUCH := &"crouch"
+const ATTACK := &"attack"
+## 회피. 회피한 뒤에도 누르고 있으면 질주한다.
+const DODGE := &"dodge"
+## 배틀 스킬. 궁극기 에너지가 차 있으면 길게 눌러 궁극기를 쓴다.
+const SKILL := &"skill"
+## 궁극기만 따로 쓰는 키. 엔드필드에는 없지만 캐릭터가 한 명이라 하나 더 둔다.
+const ULTIMATE := &"ultimate"
+const LOCK_ON := &"lock_on"
+## 쓰러진 동료 곁에서 누르고 있으면 일으킨다.
+const INTERACT := &"interact"
+const TOGGLE_VISOR := &"toggle_visor"
 const PAUSE := &"pause"
 const DEBUG_OVERLAY := &"debug_overlay"
-const FIRE := &"fire"
-const AIM := &"aim"
-const RELOAD := &"reload"
-const WEAPON_1 := &"weapon_1"
-const WEAPON_2 := &"weapon_2"
-const WEAPON_3 := &"weapon_3"
-## 맨손 (무기를 넣는다)
-const WEAPON_4 := &"weapon_4"
-const WEAPON_NEXT := &"weapon_next"
-const WEAPON_PREV := &"weapon_prev"
-const CAMERA_TOGGLE := &"camera_toggle"
-const INTERACT := &"interact"
-const FREE_LOOK := &"free_look"
-const SCAN := &"scan"
-const TOGGLE_VISOR := &"toggle_visor"
 
 const DEFAULT_KEYS := {
 	MOVE_FORWARD: [KEY_W],
@@ -33,31 +29,20 @@ const DEFAULT_KEYS := {
 	MOVE_LEFT: [KEY_A],
 	MOVE_RIGHT: [KEY_D],
 	JUMP: [KEY_SPACE],
-	SPRINT: [KEY_SHIFT],
-	CROUCH: [KEY_CTRL, KEY_C],
+	DODGE: [KEY_SHIFT],
+	SKILL: [KEY_1],
+	ULTIMATE: [KEY_Q],
+	INTERACT: [KEY_F],
+	# 머리 장비(바이저)를 벗거나 쓴다. 엔드필드에는 없는 키라 비어 있는 H(Head)를 쓴다.
+	TOGGLE_VISOR: [KEY_H],
 	PAUSE: [KEY_ESCAPE],
 	DEBUG_OVERLAY: [KEY_F3],
-	RELOAD: [KEY_R],
-	WEAPON_1: [KEY_1],
-	WEAPON_2: [KEY_2],
-	WEAPON_3: [KEY_3],
-	WEAPON_4: [KEY_4],
-	# 사이버펑크 2077은 걸어 다닐 때 3인칭이 없어서, 차량 시점 전환 키(V)를 따른다.
-	CAMERA_TOGGLE: [KEY_V],
-	INTERACT: [KEY_F],
-	# 누르고 있는 동안 캐릭터 주변을 둘러본다 (휠로 확대·축소)
-	FREE_LOOK: [KEY_QUOTELEFT],
-	# 사이버펑크 2077처럼 Tab을 누르고 있는 동안 스캔한다. 스캔 중에는 1~3으로 퀵핵을 올린다.
-	SCAN: [KEY_TAB],
-	# 머리 장비(바이저)를 벗거나 쓴다. 사이버펑크 2077에는 없는 키라 비어 있는 H(Head)를 쓴다.
-	TOGGLE_VISOR: [KEY_H],
 }
 
 const DEFAULT_MOUSE_BUTTONS := {
-	FIRE: [MOUSE_BUTTON_LEFT],
-	AIM: [MOUSE_BUTTON_RIGHT],
-	WEAPON_NEXT: [MOUSE_BUTTON_WHEEL_DOWN],
-	WEAPON_PREV: [MOUSE_BUTTON_WHEEL_UP],
+	ATTACK: [MOUSE_BUTTON_LEFT],
+	DODGE: [MOUSE_BUTTON_RIGHT],
+	LOCK_ON: [MOUSE_BUTTON_MIDDLE],
 }
 
 
@@ -76,9 +61,17 @@ static func register_defaults() -> void:
 			event.physical_keycode = keycode
 			InputMap.action_add_event(action, event)
 	for action: StringName in DEFAULT_MOUSE_BUTTONS:
-		if InputMap.has_action(action):
+		if not InputMap.has_action(action):
+			InputMap.add_action(action)
+		elif DEFAULT_KEYS.has(action):
+			# 키와 마우스 버튼을 함께 쓰는 동작(회피)은 키를 넣은 뒤 버튼도 넣는다.
+			var has_button := false
+			for event in InputMap.action_get_events(action):
+				has_button = has_button or event is InputEventMouseButton
+			if has_button:
+				continue
+		else:
 			continue
-		InputMap.add_action(action)
 		for button: MouseButton in DEFAULT_MOUSE_BUTTONS[action]:
 			var event := InputEventMouseButton.new()
 			event.button_index = button

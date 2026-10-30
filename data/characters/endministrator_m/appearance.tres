@@ -1,0 +1,51 @@
+[gd_resource type="Resource" script_class="CharacterAppearance" format=3]
+
+[ext_resource type="Script" path="res://src/player/character_appearance.gd" id="1_appearance"]
+
+[resource]
+script = ExtResource("1_appearance")
+model_path = "res://assets/characters/endministrator_m/endministrator_m.glb"
+external_model_file = "characters/endministrator_m.glb"
+headgear_meshes = Array[StringName]([&"S_actor_endminm_cloth_03_lod0", &"S_actor_endminm_cloth_05_lod0"])
+cloth_chains = PackedStringArray("clothes_pifeng_L_a_1_jnt:clothes_pifeng_L_a_5_jnt", "clothes_pifeng_L_b_1_jnt:clothes_pifeng_L_b_5_jnt", "clothes_pifeng_L_c_1_jnt:clothes_pifeng_L_c_4_jnt", "clothes_pifeng_L_d_1_jnt:clothes_pifeng_L_d_4_jnt", "clothes_pifeng_R_a_1_jnt:clothes_pifeng_R_a_5_jnt", "clothes_pifeng_R_b_1_jnt:clothes_pifeng_R_b_5_jnt", "clothes_pifeng_R_c_1_jnt:clothes_pifeng_R_c_4_jnt", "clothes_pifeng_R_d_1_jnt:clothes_pifeng_R_d_4_jnt", "maozi_a1_M:maozi_a3_M")
+ribbon_chains = PackedStringArray("piaodai_back_La_0_skin_jnt:piaodai_back_La_4_skin_jnt", "piaodai_back_L_0_skin_jnt:piaodai_back_L_4_skin_jnt", "piaodai_back_Ra_0_skin_jnt:piaodai_back_Ra_4_skin_jnt", "piaodai_a_1_ctrl_jnt:piaodai_a_2_ctrl_jnt", "piaodai_c_1_ctrl_jnt:piaodai_c_2_ctrl_jnt")
+face_materials = Array[StringName]([&"M_actor_endminm_face_01", &"M_actor_endminm_brow_01", &"M_actor_endminm_iris_01"])
+hidden_meshes = Array[StringName]([&"S_actor_endminm_eyeshadow_01_lod0"])
+toon_ramps = Dictionary[StringName, String]({
+&"M_actor_endminf_cloth_03": "T_actor_common_cloth_04_RD",
+&"M_actor_endminm_body_01": "T_actor_common_body_01_RD",
+&"M_actor_endminm_brow_01": "T_actor_common_face_01_RD",
+&"M_actor_endminm_cloth_01": "T_actor_common_cloth_04_RD",
+&"M_actor_endminm_cloth_02": "T_actor_common_cloth_04_RD",
+&"M_actor_endminm_cloth_04": "T_actor_common_cloth_04_RD",
+&"M_actor_endminm_face_01": "T_actor_common_face_01_RD",
+&"M_actor_endminm_hair_01": "T_actor_common_hair_01_RD",
+&"M_actor_endminm_hairt_01": "T_actor_common_hair_01_RD",
+&"M_actor_endminm_iris_01": "T_actor_common_face_01_RD"
+})
+normal_maps = Dictionary[StringName, String]({
+&"M_actor_endminf_cloth_03": "T_actor_endminf_cloth_03_N",
+&"M_actor_endminm_body_01": "T_actor_endminm_body_01_N",
+&"M_actor_endminm_cloth_01": "T_actor_endminm_cloth_01_N",
+&"M_actor_endminm_cloth_02": "T_actor_endminm_cloth_02_N",
+&"M_actor_endminm_cloth_04": "T_actor_endminm_cloth_04_N"
+})
+emission_masks = Dictionary[StringName, String]({
+&"M_actor_endminm_cloth_04": "T_actor_endminm_cloth_04_E"
+})
+outline_widths = Dictionary[StringName, float]({
+&"M_actor_endminm_body_01": 1.0,
+&"M_actor_endminm_cloth_01": 1.0,
+&"M_actor_endminm_cloth_02": 1.0,
+&"M_actor_endminm_cloth_04": 1.0,
+&"M_actor_endminm_face_01": 0.6,
+&"M_actor_endminm_hair_01": 1.0
+})
+gloss_materials = Dictionary[StringName, float]({
+&"M_actor_endminm_hair_01": 0.35
+})
+face_shadow_map = "T_actor_common_male_face_05_SDF"
+face_shadow_materials = Array[StringName]([&"M_actor_endminm_face_01"])
+depth_biases = Dictionary[StringName, float]({
+&"M_actor_endminm_brow_01": 0.035
+})

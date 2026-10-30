@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Windows 실행 파일(.exe)을 만들고 zip으로 묶는다.
-#   tools/export_windows.sh            -> build/CyberUniverse-windows.zip
+#   tools/export_windows.sh            -> build/Crossfield-windows.zip
+#                                         build/CyberUniverse-windows.zip (옛 이름으로 설치한 게임의 자동 업데이트용)
 # 내보내기 템플릿이 없으면 공식 배포본을 내려받아 SHA-512로 검증한 뒤 Windows용만 꺼내 둔다.
 #
 # 빌드 번호는 커밋 수(git rev-list --count HEAD)다. 자동 업데이트가 이 번호로 새 버전을 판단한다.
 # 이 PC에 캐릭터 모델(저장소에 없는 에셋)이 있으면 모델을 함께 넣은 zip도 만든다:
-#   build/CyberUniverse-windows-with-model.zip   (가족 PC에 처음 설치할 때 쓴다. 어디에도 올리지 않는다)
+#   build/Crossfield-windows-with-model.zip   (가족 PC에 처음 설치할 때 쓴다. 어디에도 올리지 않는다)
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -66,21 +67,33 @@ out_dir="$ROOT/build/windows"
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
 export_log="$ROOT/build/export.log"
-if ! "$godot_bin" --headless --path "$ROOT" --export-release "Windows Desktop" "$out_dir/CyberUniverse.exe" >"$export_log" 2>&1; then
+if ! "$godot_bin" --headless --path "$ROOT" --export-release "Windows Desktop" "$out_dir/Crossfield.exe" >"$export_log" 2>&1; then
   echo "내보내기에 실패했습니다. 기록: $export_log" >&2
   grep -i "error" "$export_log" | tail -n 20 >&2
   exit 1
 fi
 cp "$ROOT/tools/windows_readme.txt" "$out_dir/README.txt"
 
-zip_path="$ROOT/build/CyberUniverse-windows.zip"
-make_zip "$zip_path" "$out_dir" CyberUniverse.exe CyberUniverse.console.exe README.txt
+zip_path="$ROOT/build/Crossfield-windows.zip"
+make_zip "$zip_path" "$out_dir" Crossfield.exe Crossfield.console.exe README.txt
 echo "$zip_path"
+
+# 게임 이름을 CyberUniverse에서 크로스필드로 바꿨다. 옛 이름으로 설치한 게임은 실행 파일 이름에 맞는 zip을 받으므로
+# (src/core/updater.gd), 같은 실행 파일을 옛 이름으로 바꿔 담은 zip도 만든다. 콘솔판은 자기 이름에서 .console을 뺀
+# 실행 파일을 띄우므로 둘 다 옛 이름으로 바꾼다.
+legacy_dir="$ROOT/build/windows_legacy"
+rm -rf "$legacy_dir"
+mkdir -p "$legacy_dir"
+cp "$out_dir/Crossfield.exe" "$legacy_dir/CyberUniverse.exe"
+cp "$out_dir/Crossfield.console.exe" "$legacy_dir/CyberUniverse.console.exe"
+cp "$out_dir/README.txt" "$legacy_dir/README.txt"
+make_zip "$ROOT/build/CyberUniverse-windows.zip" "$legacy_dir" CyberUniverse.exe CyberUniverse.console.exe README.txt
+echo "$ROOT/build/CyberUniverse-windows.zip"
 
 model="$ROOT/assets/characters/endministrator_f/endministrator_f.glb"
 if [[ -f "$model" ]]; then
   mkdir -p "$out_dir/characters"
   cp "$model" "$out_dir/characters/endministrator_f.glb"
-  make_zip "$ROOT/build/CyberUniverse-windows-with-model.zip" "$out_dir" CyberUniverse.exe CyberUniverse.console.exe README.txt characters
-  echo "$ROOT/build/CyberUniverse-windows-with-model.zip"
+  make_zip "$ROOT/build/Crossfield-windows-with-model.zip" "$out_dir" Crossfield.exe Crossfield.console.exe README.txt characters
+  echo "$ROOT/build/Crossfield-windows-with-model.zip"
 fi

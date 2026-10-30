@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://src/enemies/enemy_data.gd" id="1_data"]
+[ext_resource type="Script" path="res://src/enemies/enemy_attack_data.gd" id="2_attack"]
+
+[sub_resource type="Resource" id="shot"]
+script = ExtResource("2_attack")
+id = &"shot"
+clip = &"shoot"
+min_range = 3.0
+max_range = 16.0
+wind_up = 0.9
+recovery = 0.6
+cooldown = 2.8
+damage = 70.0
+projectile_speed = 16.0
+
+[sub_resource type="Resource" id="bash"]
+script = ExtResource("2_attack")
+id = &"bash"
+clip = &"attack"
+max_range = 1.6
+wind_up = 0.6
+recovery = 0.8
+cooldown = 3.0
+damage = 60.0
+reach = 2.0
+arc = 70.0
+
+[resource]
+script = ExtResource("1_data")
+id = &"shooter"
+display_name = "사수"
+max_health = 650.0
+stagger_max = 80.0
+move_speed = 3.0
+preferred_range = 9.0
+attacks = Array[ExtResource("2_attack")]([SubResource("bash"), SubResource("shot")])
+color = Color(0.42, 0.55, 0.62, 1)

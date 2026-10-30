@@ -40,10 +40,10 @@ jobs:
       - name: 실행 파일 올리기
         uses: actions/upload-artifact@v4
         with:
-          name: CyberUniverse-windows
+          name: Crossfield-windows
           path: |
-            build/windows/CyberUniverse.exe
-            build/windows/CyberUniverse.console.exe
+            build/windows/Crossfield.exe
+            build/windows/Crossfield.console.exe
             build/windows/README.txt
           retention-days: 30
 
@@ -55,10 +55,12 @@ jobs:
           build="$(git rev-list --count HEAD)"
           tag="build-$build"
           notes="$(git log -1 --format='%s%n%n커밋 %h')"
+          # 옛 이름(CyberUniverse)으로 설치한 게임은 옛 이름의 zip을 받는다(src/core/updater.gd). 둘 다 올린다.
+          zips=(build/Crossfield-windows.zip build/CyberUniverse-windows.zip)
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" build/CyberUniverse-windows.zip --clobber
+            gh release upload "$tag" "${zips[@]}" --clobber
           else
-            gh release create "$tag" build/CyberUniverse-windows.zip \
+            gh release create "$tag" "${zips[@]}" \
               --target "$GITHUB_SHA" --title "빌드 $build" --notes "$notes" --latest
           fi
           # 오래된 릴리스는 최근 5개만 남긴다. 목록은 최신순이다.

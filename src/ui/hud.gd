@@ -1,210 +1,352 @@
 class_name Hud
 extends CanvasLayer
-## 게임 화면 위의 정보: 조준점과 명중 표시, 체력, 무기와 탄약, 피격 효과, 사망 화면, F3 디버그 표시,
-## 상호작용 안내("F: 제압" 등), RAM, 스캔 화면, 퀵핵 업로드와 역해킹 경고.
+## 게임 화면 위의 정보. 코드로 만든다.
+##   - 왼쪽 아래: 내 캐릭터 이름과 체력
+##   - 오른쪽 아래: SP(100마다 한 칸, 세 칸), 배틀 스킬, 궁극기 에너지, 회피 안내
+##   - 위 가운데: 웨이브와 남은 적, 큰 알림(웨이브 시작, 완벽한 회피, 경직, 방 정리, 전멸)
+##   - 왼쪽 위: 동료의 체력(쓰러지면 일으킨 정도)
+##   - 적 머리 위: 체력과 경직 게이지, 원석 결정 표시, 경직되면 처형 안내 (HudOverlay가 그린다)
+##   - 맞으면 화면 가장자리가 붉게 번쩍인다. F3은 디버그 정보.
 
-const HIT_MARKER_TIME := 0.15
-const HIT_COLOR := Color(1, 1, 1)
-const HEADSHOT_COLOR := Color(1, 0.85, 0.2)
-const KILL_COLOR := Color(1, 0.25, 0.25)
-const CROSSHAIR_COLOR := Color(0.3, 0.95, 1, 0.9)
+const HP_COLOR := Color(0.4, 0.92, 0.5)
+const HP_LOW_COLOR := Color(0.96, 0.32, 0.26)
+const SP_COLOR := Color(0.98, 0.82, 0.2)
+const ENERGY_COLOR := Color(0.45, 0.85, 1.0)
+const DIM_COLOR := Color(1, 1, 1, 0.35)
+const BANNER_TIME := 2.0
+const SP_SEGMENT := 100.0
 
 var session: Session
 
-var _player: Player
-var _last_health := -1.0
-var _hit_marker_left := 0.0
-var _damage_flash := 0.0
-var _dead_time := 0.0
-var _prompt_label: Label
-var _ram_bar: ProgressBar
-var _ram_label: Label
-var _upload_label: Label
-var _warning_label: Label
-var _scan: ScanOverlay
+var name_label: Label
+var health_label: Label
+var health_bar: ProgressBar
+var sp_bars: Array[ProgressBar] = []
+var skill_label: Label
+var ultimate_label: Label
+var ultimate_bar: ProgressBar
+var wave_label: Label
+var banner_label: Label
+var prompt_label: Label
+var down_label: Label
+var debug_label: Label
+var damage_flash: ColorRect
+var team_box: VBoxContainer
+var overlay: HudOverlay
 
-@onready var crosshair: ColorRect = $Crosshair
-@onready var hit_marker: Control = %HitMarker
-@onready var debug_label: Label = %DebugLabel
-@onready var health_bar: ProgressBar = %HealthBar
-@onready var health_label: Label = %HealthLabel
-@onready var weapon_label: Label = %WeaponLabel
-@onready var ammo_label: Label = %AmmoLabel
-@onready var damage_flash: ColorRect = %DamageFlash
-@onready var death_overlay: Control = %DeathOverlay
-@onready var death_label: Label = %DeathLabel
+var _player: Player
+var _room: CombatRoom
+var _banner_left := 0.0
+var _flash := 0.0
+var _team_rows: Dictionary[Player, Array] = {}
 
 
 func _ready() -> void:
-	# 조준점 바로 아래에 상호작용 안내를 띄운다.
-	_prompt_label = Label.new()
-	_prompt_label.name = "PromptLabel"
-	_prompt_label.set_anchors_preset(Control.PRESET_CENTER)
-	_prompt_label.offset_left = -200.0
-	_prompt_label.offset_right = 200.0
-	_prompt_label.offset_top = 36.0
-	_prompt_label.offset_bottom = 70.0
-	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_prompt_label.add_theme_font_size_override("font_size", 22)
-	_prompt_label.add_theme_color_override("font_color", Color(1, 0.9, 0.4))
-	_prompt_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	_prompt_label.add_theme_constant_override("outline_size", 6)
-	add_child(_prompt_label)
-	_build_hacking_hud()
-	debug_label.hide()
-	hit_marker.hide()
-	death_overlay.hide()
-	damage_flash.color.a = 0.0
+	damage_flash = ColorRect.new()
+	damage_flash.name = "DamageFlash"
+	damage_flash.color = Color(0.9, 0.1, 0.05, 0.0)
+	damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	damage_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(damage_flash)
+
+	overlay = HudOverlay.new()
+	overlay.name = "Overlay"
+	overlay.hud = self
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(overlay)
+
+	# 왼쪽 아래: 이름과 체력
+	var health_box := VBoxContainer.new()
+	health_box.name = "HealthBox"
+	health_box.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	health_box.position = Vector2(32, -110)
+	health_box.custom_minimum_size = Vector2(340, 0)
+	add_child(health_box)
+	health_box.anchor_top = 1.0
+	health_box.anchor_bottom = 1.0
+	health_box.offset_top = -100.0
+	health_box.offset_left = 32.0
+	name_label = _label(22, Color(1, 1, 1))
+	health_box.add_child(name_label)
+	health_bar = _bar(Vector2(340, 16), HP_COLOR)
+	health_box.add_child(health_bar)
+	health_label = _label(18, Color(0.9, 0.95, 0.9))
+	health_box.add_child(health_label)
+
+	# 오른쪽 아래: SP, 스킬, 궁극기
+	var skill_box := VBoxContainer.new()
+	skill_box.name = "SkillBox"
+	skill_box.anchor_left = 1.0
+	skill_box.anchor_right = 1.0
+	skill_box.anchor_top = 1.0
+	skill_box.anchor_bottom = 1.0
+	skill_box.offset_left = -360.0
+	skill_box.offset_right = -32.0
+	skill_box.offset_top = -150.0
+	skill_box.offset_bottom = -24.0
+	skill_box.alignment = BoxContainer.ALIGNMENT_END
+	add_child(skill_box)
+	var sp_row := HBoxContainer.new()
+	sp_row.add_theme_constant_override("separation", 6)
+	skill_box.add_child(sp_row)
+	for i in 3:
+		var segment := _bar(Vector2(104, 10), SP_COLOR)
+		segment.max_value = SP_SEGMENT
+		sp_row.add_child(segment)
+		sp_bars.append(segment)
+	skill_label = _label(20, Color(1, 1, 1))
+	skill_box.add_child(skill_label)
+	ultimate_label = _label(20, Color(1, 1, 1))
+	skill_box.add_child(ultimate_label)
+	ultimate_bar = _bar(Vector2(0, 8), ENERGY_COLOR)
+	skill_box.add_child(ultimate_bar)
+	var hint := _label(15, Color(1, 1, 1, 0.65))
+	hint.text = "클릭 공격 · Shift 회피 · 휠 클릭 대상 고정"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	skill_box.add_child(hint)
+
+	# 위 가운데: 웨이브와 큰 알림
+	wave_label = _label(22, Color(1, 1, 1))
+	wave_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	wave_label.offset_left = -300.0
+	wave_label.offset_right = 300.0
+	wave_label.offset_top = 18.0
+	wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(wave_label)
+	banner_label = _label(40, Color(1, 0.86, 0.3))
+	banner_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	banner_label.offset_left = -500.0
+	banner_label.offset_right = 500.0
+	banner_label.offset_top = 120.0
+	banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(banner_label)
+
+	# 가운데 아래: 동료 일으키기 안내
+	prompt_label = _label(22, Color(1, 0.9, 0.4))
+	prompt_label.set_anchors_preset(Control.PRESET_CENTER)
+	prompt_label.offset_left = -300.0
+	prompt_label.offset_right = 300.0
+	prompt_label.offset_top = 90.0
+	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(prompt_label)
+	down_label = _label(30, Color(1, 0.5, 0.45))
+	down_label.set_anchors_preset(Control.PRESET_CENTER)
+	down_label.offset_left = -500.0
+	down_label.offset_right = 500.0
+	down_label.offset_top = -40.0
+	down_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(down_label)
+
+	# 왼쪽 위: 동료
+	team_box = VBoxContainer.new()
+	team_box.name = "TeamBox"
+	team_box.position = Vector2(24, 24)
+	add_child(team_box)
+
+	debug_label = _label(16, Color(0.8, 1, 0.8))
+	debug_label.position = Vector2(24, 160)
+	debug_label.visible = false
+	add_child(debug_label)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if visible and event.is_action_pressed(InputActions.DEBUG_OVERLAY):
+	if event.is_action_pressed(InputActions.DEBUG_OVERLAY):
 		debug_label.visible = not debug_label.visible
 
 
+func local_player() -> Player:
+	return _player
+
+
+func room() -> CombatRoom:
+	return _room
+
+
+func show_banner(text: String) -> void:
+	banner_label.text = text
+	_banner_left = BANNER_TIME
+
+
 func _process(delta: float) -> void:
-	var player := session.get_local_player() if session != null else null
-	if player != _player:
-		_attach(player)
+	_bind()
+	_banner_left = maxf(_banner_left - delta, 0.0)
+	banner_label.modulate.a = clampf(_banner_left / 0.4, 0.0, 1.0)
+	_flash = maxf(_flash - delta * 2.5, 0.0)
+	damage_flash.color.a = _flash * 0.35
 	if _player == null:
 		return
-	_update_health(delta)
-	_update_weapon()
-	_update_hit_marker(delta)
-	_prompt_label.text = _player.interactor.prompt
-	_update_hacking()
+	_update_self()
+	_update_room()
+	_update_team()
+	_update_prompt()
 	if debug_label.visible:
-		_update_debug()
+		debug_label.text = "FPS %d\n상태 %s  동작 %s\n속도 %.1f  SP %.0f  에너지 %.0f\n몸 %s" % [
+			Engine.get_frames_per_second(), Player.State.keys()[_player.state], _player.action_id,
+			_player.horizontal_speed(), _player.sp, _player.energy, _player.body.dominant_animation()]
+	overlay.queue_redraw()
 
 
-func _build_hacking_hud() -> void:
-	_scan = ScanOverlay.new()
-	_scan.name = "ScanOverlay"
-	add_child(_scan)
-	# RAM 막대: 체력 막대 위
-	# 왼쪽 아래 기준 위치(offset)로 둔다. position을 쓰면 화면 크기에 따라 엉뚱한 곳에 뜬다.
-	_ram_label = _hud_label(20, Color(0.3, 0.95, 1))
-	_ram_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_ram_label.offset_left = 24.0
-	_ram_label.offset_right = 260.0
-	_ram_label.offset_top = -122.0
-	_ram_label.offset_bottom = -94.0
-	_ram_bar = ProgressBar.new()
-	_ram_bar.show_percentage = false
-	_ram_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_ram_bar.offset_left = 24.0
-	_ram_bar.offset_right = 224.0
-	_ram_bar.offset_top = -92.0
-	_ram_bar.offset_bottom = -82.0
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = Color(0.2, 0.85, 1)
-	_ram_bar.add_theme_stylebox_override("fill", fill)
-	add_child(_ram_bar)
-	# 업로드 진행: 조준점 아래, 상호작용 안내보다 아래
-	_upload_label = _hud_label(20, Color(0.3, 0.95, 1))
-	_upload_label.set_anchors_preset(Control.PRESET_CENTER)
-	_upload_label.offset_left = -300.0
-	_upload_label.offset_right = 300.0
-	_upload_label.offset_top = 80.0
-	_upload_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# 역해킹 경고: 화면 위쪽 가운데
-	_warning_label = _hud_label(26, Color(1, 0.25, 0.3))
-	_warning_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_warning_label.offset_left = -400.0
-	_warning_label.offset_right = 400.0
-	_warning_label.offset_top = 60.0
-	_warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+## 내 플레이어와 전투 방을 찾고 신호를 잇는다(새 판마다 바뀐다).
+func _bind() -> void:
+	var mine := session.get_local_player() if session != null else null
+	if mine != _player:
+		_player = mine
+		if _player != null:
+			_player.perfect_dodged.connect(func() -> void: show_banner("완벽한 회피!"))
+			_player.got_hit.connect(_on_got_hit)
+			_player.skill_denied.connect(func(reason: String) -> void: show_banner(reason))
+			_player.hit_confirmed.connect(_on_hit_confirmed)
+			var character := Characters.find(_player.character_id)
+			name_label.text = character.display_name if character != null else ""
+	var zone := session.zone() as CombatRoom if session != null else null
+	if zone != _room:
+		_room = zone
+		if _room != null:
+			_room.phase_changed.connect(_on_phase_changed)
 
 
-func _hud_label(font_size: int, color: Color) -> Label:
-	var label := Label.new()
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_outline_color", Color.BLACK)
-	label.add_theme_constant_override("outline_size", 6)
-	add_child(label)
-	return label
-
-
-func _update_hacking() -> void:
-	var deck := _player.cyberdeck
-	_scan.player = _player
-	_ram_bar.max_value = deck.max_ram
-	_ram_bar.value = deck.ram
-	_ram_label.text = "RAM %d / %d" % [floori(deck.ram), int(deck.max_ram)]
-	if deck.upload_progress > 0.0:
-		var filled := int(deck.upload_progress * 20.0)
-		_upload_label.text = "업로드 중: %s  [%s%s]" % [deck.upload_label, "■".repeat(filled), "□".repeat(20 - filled)]
-	else:
-		_upload_label.text = ""
-	if deck.incoming_progress > 0.0:
-		_warning_label.text = "역해킹 감지! %d%%  — 넷러너의 시야에서 벗어나거나 공격하세요" % int(deck.incoming_progress * 100.0)
-	else:
-		_warning_label.text = ""
-
-
-func _attach(player: Player) -> void:
-	if _player != null and is_instance_valid(_player):
-		_player.weapons.hit_confirmed.disconnect(_on_hit_confirmed)
-	_player = player
-	_last_health = -1.0
-	if _player != null:
-		_player.weapons.hit_confirmed.connect(_on_hit_confirmed)
-
-
-func _update_health(delta: float) -> void:
+func _update_self() -> void:
 	var health := _player.health
 	health_bar.max_value = health.max_health
 	health_bar.value = health.current
-	health_label.text = "%d" % ceili(health.current)
-	# 체력은 호스트에서 동기화되므로, 값이 줄어든 것을 보고 피격을 알아챈다.
-	if _last_health >= 0.0 and health.current < _last_health:
-		_damage_flash = clampf((_last_health - health.current) / 30.0, 0.25, 0.6)
-	_last_health = health.current
-	_damage_flash = move_toward(_damage_flash, 0.0, delta * 1.5)
-	damage_flash.color.a = _damage_flash
-
-	var dead := not health.is_alive()
-	death_overlay.visible = dead
-	crosshair.visible = not dead and not _player.free_look
-	if dead:
-		_dead_time += delta
-		var left := maxf(Session.RESPAWN_DELAY - _dead_time, 0.0)
-		death_label.text = "사망했습니다\n%d초 후 시작 지점에서 다시 시작합니다" % ceili(left)
+	_tint(health_bar, HP_LOW_COLOR if health.ratio() < 0.3 else HP_COLOR)
+	health_label.text = "%d / %d" % [ceili(health.current), roundi(health.max_health)]
+	var kit := _player.kit
+	for i in sp_bars.size():
+		sp_bars[i].value = clampf(_player.sp - SP_SEGMENT * i, 0.0, SP_SEGMENT)
+	var skill_cost := kit.battle_skill.sp_cost if kit.battle_skill != null else 0.0
+	var skill_ready := _player.sp >= skill_cost
+	skill_label.text = "[1] %s   SP %d" % [kit.battle_skill.display_name if kit.battle_skill != null else "", roundi(skill_cost)]
+	skill_label.modulate = Color.WHITE if skill_ready else DIM_COLOR
+	ultimate_bar.max_value = kit.max_energy
+	ultimate_bar.value = _player.energy
+	var ready := _player.ultimate_ready()
+	ultimate_label.text = "[Q / 1 길게] %s   %s" % [kit.ultimate.display_name if kit.ultimate != null else "",
+		"준비됨!" if ready else "%d%%" % roundi(100.0 * _player.energy / maxf(kit.max_energy, 1.0))]
+	ultimate_label.modulate = Color(1, 0.9, 0.45) if ready else Color.WHITE
+	if not _player.is_alive():
+		down_label.text = "쓰러졌습니다" + ("\n동료가 일으켜 줄 때까지 기다리세요 (%d%%)" % roundi(_player.health.revive_progress * 100.0) if not _solo() else "")
 	else:
-		_dead_time = 0.0
+		down_label.text = ""
 
 
-func _update_weapon() -> void:
-	var weapons := _player.weapons
-	var weapon := weapons.current_weapon()
-	weapon_label.text = "%d  %s" % [weapons.current_index + 1, weapon.display_name]
-	if weapon.is_unarmed():
-		ammo_label.text = "주먹"
-	elif weapon.is_melee():
-		ammo_label.text = "근접"
-	elif weapons.reloading:
-		ammo_label.text = "재장전 중..."
+func _update_room() -> void:
+	if _room == null:
+		wave_label.text = ""
+		return
+	match _room.phase:
+		CombatRoom.Phase.WAITING:
+			wave_label.text = "전투 준비"
+		CombatRoom.Phase.FIGHTING, CombatRoom.Phase.BETWEEN:
+			wave_label.text = "웨이브 %d / %d   ·   남은 적 %d" % [_room.wave, _room.wave_count(), _room.enemies_left]
+		CombatRoom.Phase.CLEARED:
+			wave_label.text = "방 정리 완료"
+		CombatRoom.Phase.FAILED:
+			wave_label.text = "전멸"
+
+
+func _update_team() -> void:
+	var mates: Array[Player] = []
+	for mate in Roster.players(_player):
+		if mate != _player:
+			mates.append(mate)
+	for mate: Player in _team_rows.keys():
+		if not mates.has(mate) or not is_instance_valid(mate):
+			for control: Control in _team_rows[mate]:
+				control.queue_free()
+			_team_rows.erase(mate)
+	for mate in mates:
+		if not _team_rows.has(mate):
+			var label := _label(16, Color.WHITE)
+			var bar := _bar(Vector2(200, 8), HP_COLOR)
+			team_box.add_child(label)
+			team_box.add_child(bar)
+			_team_rows[mate] = [label, bar]
+		var row: Array = _team_rows[mate]
+		var label := row[0] as Label
+		var bar := row[1] as ProgressBar
+		var character := Characters.find(mate.character_id)
+		var name := character.display_name if character != null else "동료"
+		if mate.is_alive():
+			label.text = name
+			bar.max_value = mate.health.max_health
+			bar.value = mate.health.current
+			_tint(bar, HP_COLOR)
+		else:
+			label.text = "%s — 쓰러짐 (일으키기 %d%%)" % [name, roundi(mate.health.revive_progress * 100.0)]
+			bar.max_value = 1.0
+			bar.value = mate.health.revive_progress
+			_tint(bar, SP_COLOR)
+
+
+func _update_prompt() -> void:
+	var downed := _downed_mate_nearby()
+	if downed != null and _player.is_alive():
+		prompt_label.text = "[F] 누르고 있으면 동료를 일으킵니다 (%d%%)" % roundi(downed.health.revive_progress * 100.0)
 	else:
-		ammo_label.text = "%d / %d" % [weapons.ammo_in_magazine(), weapon.magazine_size]
+		prompt_label.text = ""
 
 
-func _update_hit_marker(delta: float) -> void:
-	_hit_marker_left -= delta
-	hit_marker.visible = _hit_marker_left > 0.0
+func _downed_mate_nearby() -> Player:
+	for mate in Roster.players(_player):
+		if mate != _player and not mate.is_alive() and mate.global_position.distance_to(_player.global_position) <= Player.REVIVE_RANGE:
+			return mate
+	return null
 
 
-func _on_hit_confirmed(_position: Vector3, _amount: float, headshot: bool, killed: bool) -> void:
-	_hit_marker_left = HIT_MARKER_TIME * (2.0 if killed else 1.0)
-	var color := KILL_COLOR if killed else (HEADSHOT_COLOR if headshot else HIT_COLOR)
-	hit_marker.modulate = color
+func _solo() -> bool:
+	return session != null and session.mode == Session.Mode.SINGLE
 
 
-func _update_debug() -> void:
-	debug_label.text = "상태 %s | 속도 %.1f m/s | 웅크림 %s | FPS %d | 인원 %d" % [
-		Player.State.keys()[_player.state],
-		_player.horizontal_speed(),
-		"예" if _player.crouched else "아니오",
-		Engine.get_frames_per_second(),
-		session.players.get_child_count(),
-	]
+func _on_got_hit(heavy: bool) -> void:
+	_flash = 1.0 if heavy else 0.6
+
+
+func _on_hit_confirmed(_position: Vector3, _amount: float, flags: int) -> void:
+	if flags & Player.HIT_SHATTER:
+		show_banner("결정 파쇄!")
+	elif flags & Player.HIT_BREAK:
+		show_banner("경직! 가까이서 공격하면 처형")
+
+
+func _on_phase_changed(phase: CombatRoom.Phase) -> void:
+	match phase:
+		CombatRoom.Phase.FIGHTING:
+			show_banner("웨이브 %d" % _room.wave)
+		CombatRoom.Phase.CLEARED:
+			show_banner("방 정리 완료!")
+		CombatRoom.Phase.FAILED:
+			show_banner("전멸 — 잠시 뒤 처음부터 다시 합니다")
+
+
+static func _label(size: int, color: Color) -> Label:
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	label.add_theme_constant_override("outline_size", 6)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return label
+
+
+static func _bar(size: Vector2, color: Color) -> ProgressBar:
+	var bar := ProgressBar.new()
+	bar.custom_minimum_size = size
+	bar.show_percentage = false
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var back := StyleBoxFlat.new()
+	back.bg_color = Color(0, 0, 0, 0.55)
+	back.set_corner_radius_all(2)
+	bar.add_theme_stylebox_override("background", back)
+	_tint(bar, color)
+	return bar
+
+
+static func _tint(bar: ProgressBar, color: Color) -> void:
+	var fill := bar.get_theme_stylebox("fill") as StyleBoxFlat
+	if fill == null or not bar.has_theme_stylebox_override("fill"):
+		fill = StyleBoxFlat.new()
+		fill.set_corner_radius_all(2)
+		bar.add_theme_stylebox_override("fill", fill)
+	fill.bg_color = color

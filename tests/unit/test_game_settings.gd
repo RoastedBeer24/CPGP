@@ -20,10 +20,10 @@ func test_save_and_load_round_trip() -> void:
 	GameSettings.mouse_sensitivity = 1.7
 	GameSettings.invert_y = true
 	GameSettings.fov = 95.0
-	GameSettings.crouch_toggle = false
 	GameSettings.key_overrides[InputActions.JUMP] = KEY_J
 	GameSettings.auto_update = false
 	GameSettings.visor_on = false
+	GameSettings.character_id = &"endministrator_m"
 	GameSettings.asset_key = "github_pat_test"
 	assert_eq(GameSettings.save(), OK)
 
@@ -35,10 +35,10 @@ func test_save_and_load_round_trip() -> void:
 	assert_almost_eq(GameSettings.mouse_sensitivity, 1.7, 0.001)
 	assert_true(GameSettings.invert_y)
 	assert_almost_eq(GameSettings.fov, 95.0, 0.001)
-	assert_false(GameSettings.crouch_toggle)
 	assert_eq(GameSettings.key_overrides.get(InputActions.JUMP), KEY_J)
 	assert_false(GameSettings.auto_update)
 	assert_false(GameSettings.visor_on, "바이저를 벗은 채로 저장")
+	assert_eq(GameSettings.character_id, &"endministrator_m", "고른 캐릭터")
 	assert_eq(GameSettings.asset_key, "github_pat_test")
 
 
@@ -61,7 +61,7 @@ func test_out_of_range_values_are_clamped() -> void:
 	config.save(GameSettings.path)
 	GameSettings.load_settings()
 	assert_almost_eq(GameSettings.volume(&"Master"), 1.0, 0.001)
-	assert_almost_eq(GameSettings.fov, 110.0, 0.001)
+	assert_almost_eq(GameSettings.fov, 100.0, 0.001)
 	assert_eq(GameSettings.window_mode, GameSettings.WindowMode.FULLSCREEN)
 	assert_almost_eq(GameSettings.render_scale, 0.5, 0.001)
 
@@ -69,8 +69,8 @@ func test_out_of_range_values_are_clamped() -> void:
 func test_missing_file_gives_defaults() -> void:
 	GameSettings.fov = 100.0
 	GameSettings.load_settings()
-	assert_almost_eq(GameSettings.fov, 80.0, 0.001)
-	assert_true(GameSettings.crouch_toggle)
+	assert_almost_eq(GameSettings.fov, 70.0, 0.001)
+	assert_eq(GameSettings.character_id, &"endministrator_f")
 
 
 func test_volume_is_applied_to_audio_buses() -> void:
@@ -96,24 +96,29 @@ func test_look_delta_uses_sensitivity_and_invert() -> void:
 
 
 func test_rebinding_replaces_keys_and_reset_restores() -> void:
-	GameSettings.key_overrides[InputActions.CROUCH] = KEY_Z
+	GameSettings.key_overrides[InputActions.SKILL] = KEY_E
 	GameSettings.apply_keys()
-	assert_true(_action_has_key(InputActions.CROUCH, KEY_Z))
-	assert_false(_action_has_key(InputActions.CROUCH, KEY_CTRL), "원래 키는 빠짐")
+	assert_true(_action_has_key(InputActions.SKILL, KEY_E))
+	assert_false(_action_has_key(InputActions.SKILL, KEY_1), "원래 키는 빠짐")
 	GameSettings.reset_to_defaults()
 	GameSettings.apply_keys()
-	assert_true(_action_has_key(InputActions.CROUCH, KEY_CTRL))
-	assert_true(_action_has_key(InputActions.CROUCH, KEY_C))
-	assert_false(_action_has_key(InputActions.CROUCH, KEY_Z))
+	assert_true(_action_has_key(InputActions.SKILL, KEY_1))
+	assert_false(_action_has_key(InputActions.SKILL, KEY_E))
 
 
 func test_rebinding_keeps_mouse_buttons() -> void:
 	GameSettings.apply_keys()
 	var mouse_events := 0
-	for event in InputMap.action_get_events(InputActions.FIRE):
+	for event in InputMap.action_get_events(InputActions.ATTACK):
 		if event is InputEventMouseButton:
 			mouse_events += 1
-	assert_eq(mouse_events, 1, "발사는 마우스 왼쪽 그대로")
+	assert_eq(mouse_events, 1, "공격은 마우스 왼쪽 그대로")
+	assert_true(_action_has_key(InputActions.DODGE, KEY_SHIFT), "회피는 Shift와")
+	var right_click := false
+	for event in InputMap.action_get_events(InputActions.DODGE):
+		var mouse := event as InputEventMouseButton
+		right_click = right_click or (mouse != null and mouse.button_index == MOUSE_BUTTON_RIGHT)
+	assert_true(right_click, "마우스 오른쪽 (엔드필드 PC판 기본값)")
 
 
 func test_settings_menu_rebinds_and_swaps_conflicting_key() -> void:
@@ -155,7 +160,7 @@ func test_settings_menu_has_all_tabs() -> void:
 	assert_eq(titles, ["소리", "화면", "그래픽", "조작", "게임"] as Array[String])
 
 
-func test_player_uses_fov_and_hold_to_crouch() -> void:
+func test_player_uses_fov() -> void:
 	var floor_body := StaticBody3D.new()
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
@@ -165,7 +170,6 @@ func test_player_uses_fov_and_hold_to_crouch() -> void:
 	floor_body.position.y = -0.5
 	add_child_autofree(floor_body)
 	GameSettings.fov = 100.0
-	GameSettings.crouch_toggle = false
 	var player := PLAYER_SCENE.instantiate() as Player
 	player.use_device_input = false
 	var intent := PlayerIntent.new()
@@ -174,21 +178,12 @@ func test_player_uses_fov_and_hold_to_crouch() -> void:
 	for i in 60:
 		await tree.physics_frame
 	assert_almost_eq(player.camera.fov, 100.0, 0.5, "설정한 시야각")
-	intent.crouch_held = true
-	intent.crouch_pressed = true
-	for i in 20:
-		await tree.physics_frame
-	assert_true(player.crouched, "누르고 있으면 웅크림")
-	intent.crouch_held = false
-	for i in 20:
-		await tree.physics_frame
-	assert_false(player.crouched, "떼면 일어남")
 
 
 
 func test_mouse_buttons_can_be_bound_and_labelled() -> void:
 	GameSettings.key_overrides[InputActions.INTERACT] = -MOUSE_BUTTON_MIDDLE
-	GameSettings.key_overrides[InputActions.FIRE] = KEY_ENTER
+	GameSettings.key_overrides[InputActions.ATTACK] = KEY_ENTER
 	GameSettings.apply_keys()
 	var mouse_bound := false
 	for event in InputMap.action_get_events(InputActions.INTERACT):
@@ -196,11 +191,11 @@ func test_mouse_buttons_can_be_bound_and_labelled() -> void:
 		mouse_bound = mouse_bound or (mouse != null and mouse.button_index == MOUSE_BUTTON_MIDDLE)
 	assert_true(mouse_bound, "상호작용을 마우스 가운데 버튼에")
 	assert_eq(GameSettings.key_label(InputActions.INTERACT), "마우스 가운데")
-	assert_true(_action_has_key(InputActions.FIRE, KEY_ENTER), "공격을 키보드 키에")
-	assert_eq(GameSettings.key_label(InputActions.FIRE), GameSettings.code_label(KEY_ENTER))
+	assert_true(_action_has_key(InputActions.ATTACK, KEY_ENTER), "공격을 키보드 키에")
+	assert_eq(GameSettings.key_label(InputActions.ATTACK), GameSettings.code_label(KEY_ENTER))
 	GameSettings.reset_to_defaults()
 	GameSettings.apply_keys()
-	assert_eq(GameSettings.key_label(InputActions.FIRE), "마우스 왼쪽", "기본값으로 돌아오면 마우스 왼쪽")
+	assert_eq(GameSettings.key_label(InputActions.ATTACK), "마우스 왼쪽", "기본값으로 돌아오면 마우스 왼쪽")
 
 
 func test_settings_menu_binds_mouse_button() -> void:
@@ -208,50 +203,29 @@ func test_settings_menu_binds_mouse_button() -> void:
 	var menu := add_child_autofree(SettingsMenu.new()) as SettingsMenu
 	menu.open()
 	await tree.process_frame
-	menu._start_rebind(InputActions.RELOAD, menu._key_buttons[InputActions.RELOAD])
+	menu._start_rebind(InputActions.ULTIMATE, menu._key_buttons[InputActions.ULTIMATE])
 	var click := InputEventMouseButton.new()
-	click.button_index = MOUSE_BUTTON_MIDDLE
+	click.button_index = MOUSE_BUTTON_XBUTTON1
 	click.pressed = true
 	menu._input(click)
-	assert_eq(GameSettings.key_overrides.get(InputActions.RELOAD), -MOUSE_BUTTON_MIDDLE)
+	assert_eq(GameSettings.key_overrides.get(InputActions.ULTIMATE), -MOUSE_BUTTON_XBUTTON1)
 
 
-func test_hold_and_toggle_modes_are_saved() -> void:
-	GameSettings.sprint_toggle = true
-	GameSettings.aim_toggle = true
-	GameSettings.free_look_toggle = true
-	GameSettings.crouch_toggle = false
-	GameSettings.save()
-	GameSettings.reset_to_defaults()
-	GameSettings.load_settings()
-	assert_true(GameSettings.sprint_toggle and GameSettings.aim_toggle and GameSettings.free_look_toggle)
-	assert_false(GameSettings.crouch_toggle)
+func test_legacy_settings_are_copied_once() -> void:
+	# 이름을 바꾸기 전(CyberUniverse)의 설정 파일은 새 설정이 없을 때 한 번 가져온다(에셋 키를 다시 넣지 않게).
+	var legacy := ProjectSettings.globalize_path("user://test_legacy_settings.cfg")
+	var target := "user://test_copied_settings.cfg"
+	var config := ConfigFile.new()
+	config.set_value("game", "asset_key", "github_pat_legacy")
+	config.save(legacy)
+	assert_true(GameSettings.copy_legacy_settings(legacy, target), "새 설정이 없으면 가져온다")
+	var copied := ConfigFile.new()
+	assert_eq(copied.load(target), OK)
+	assert_eq(copied.get_value("game", "asset_key", ""), "github_pat_legacy")
+	assert_false(GameSettings.copy_legacy_settings(legacy, target), "이미 있으면 덮어쓰지 않는다")
+	DirAccess.remove_absolute(legacy)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(target))
 
-
-func test_sprint_and_aim_toggles() -> void:
-	var player := PLAYER_SCENE.instantiate() as Player
-	player.use_device_input = false
-	add_child_autofree(player)
-	await tree.process_frame
-	GameSettings.sprint_toggle = true
-	GameSettings.aim_toggle = true
-	var intent := PlayerIntent.new()
-	intent.move = Vector2(0, 1)
-	player.apply_toggles(intent, true, false)
-	assert_true(intent.sprint, "한 번 누르면 달리기 켜짐")
-	intent = PlayerIntent.new()
-	intent.move = Vector2(0, 1)
-	player.apply_toggles(intent, false, false)
-	assert_true(intent.sprint, "떼어도 계속 달림")
-	intent = PlayerIntent.new()
-	player.apply_toggles(intent, false, false)
-	assert_false(intent.sprint, "멈추면 달리기가 풀림")
-	intent = PlayerIntent.new()
-	player.apply_toggles(intent, false, true)
-	assert_true(intent.aim_held, "한 번 누르면 조준 유지")
-	intent = PlayerIntent.new()
-	player.apply_toggles(intent, false, true)
-	assert_false(intent.aim_held, "다시 누르면 조준 해제")
 
 func _key_press(keycode: Key) -> InputEventKey:
 	var event := InputEventKey.new()

@@ -5,7 +5,8 @@ extends Node
 ##   godot --path . -- --single
 ##   godot --path . -- --host
 ##   godot --path . -- --join=192.168.0.12
-##   godot --path . -- --single --third-person   # 3인칭으로 시작
+##   godot --path . -- --single --character=endministrator_m   # 캐릭터 고르기
+##   godot --path . -- --single --autoplay        # 내 플레이어가 저절로 싸운다 (화면 확인용, AutoPilot)
 ##   --no-update                                 # 자동 업데이트를 하지 않음
 ##   --update-url=http://127.0.0.1:8000/latest   # 업데이트 확인 주소 바꾸기 (시험용)
 ##
@@ -16,8 +17,10 @@ extends Node
 const SESSION_SCENE := preload("res://src/net/session.tscn")
 
 var session: Session
-## true면 내 플레이어가 생길 때 3인칭으로 바꾼다 (명령줄 --third-person).
-var start_in_third_person := false
+## 명령줄로 고른 캐릭터 (--character=이름). 비어 있으면 설정의 캐릭터.
+var command_line_character := &""
+## true면 내 플레이어를 자동 조종한다 (명령줄 --autoplay).
+var autoplay := false
 ## 자동 업데이트. 업데이트할 수 없는 실행 환경이면 null.
 var updater: Updater
 ## 에셋(캐릭터 모델) 자동 업데이트. 업데이트할 수 없는 실행 환경이면 null.
@@ -38,7 +41,10 @@ func _ready() -> void:
 	menu.quit_requested.connect(quit_game)
 	menu.settings_requested.connect(open_settings)
 	pause_menu.settings_requested.connect(open_settings)
-	# 사용자 설정을 가장 먼저 적용한다 (창 크기, 소리, 키).
+	get_window().title = "크로스필드"
+	# 사용자 설정을 가장 먼저 적용한다 (창 크기, 소리, 키). 이름을 바꾸기 전의 설정이 있으면 한 번 가져온다.
+	if GameSettings.path == GameSettings.DEFAULT_PATH:
+		GameSettings.copy_legacy_settings(GameSettings.legacy_path(), GameSettings.path)
 	GameSettings.load_settings()
 	GameSettings.apply_all(get_tree().root)
 	settings_menu = SettingsMenu.new()
@@ -86,6 +92,7 @@ func start_session(mode: Session.Mode, address: String = "") -> void:
 	session.process_mode = Node.PROCESS_MODE_PAUSABLE
 	session.started.connect(_on_session_started)
 	session.ended.connect(_on_session_ended)
+	session.character_id = command_line_character if command_line_character != &"" else GameSettings.character_id
 	session.player_spawned.connect(_on_player_spawned)
 	add_child(session)
 
@@ -147,8 +154,11 @@ func _on_session_started() -> void:
 
 
 func _on_player_spawned(player: Player) -> void:
-	if (start_in_third_person or GameSettings.start_third_person) and player.is_multiplayer_authority():
-		player.set_third_person(true)
+	if autoplay and player.is_multiplayer_authority():
+		var pilot := AutoPilot.new()
+		pilot.name = "AutoPilot"
+		pilot.player = player
+		player.add_child(pilot)
 
 
 func _on_session_ended(reason: String) -> void:
@@ -217,7 +227,10 @@ func _install_pending_update(relaunch: bool) -> void:
 
 func _apply_command_line() -> void:
 	var args := OS.get_cmdline_user_args()
-	start_in_third_person = args.has("--third-person")
+	autoplay = args.has("--autoplay")
+	for arg in args:
+		if arg.begins_with("--character="):
+			command_line_character = StringName(arg.trim_prefix("--character="))
 	for arg in args:
 		if arg == "--single":
 			start_session(Session.Mode.SINGLE)

@@ -89,7 +89,7 @@ func test_publish_tool_uses_same_names() -> void:
 	assert_true(tool.contains('REPOSITORY = "%s"' % AssetUpdater.REPOSITORY))
 	assert_true(tool.contains('RELEASE_TAG = "%s"' % AssetUpdater.RELEASE_TAG))
 	assert_true(tool.contains('MANIFEST_NAME = "%s"' % AssetUpdater.MANIFEST_NAME))
-	var appearance := load(PlayerBody.DEFAULT_APPEARANCE) as CharacterAppearance
+	var appearance := Characters.find(Characters.DEFAULT_ID).appearance()
 	assert_true(tool.contains('"%s"' % appearance.external_model_file), "게임이 읽는 모델 경로로 올린다")
 
 

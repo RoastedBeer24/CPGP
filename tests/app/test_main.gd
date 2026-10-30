@@ -70,11 +70,21 @@ func test_invalid_join_address_shows_error() -> void:
 	assert_ne(main.menu.status_label.text, "", "오류 메시지가 보여야 함")
 
 
-func test_hud_shows_health_and_weapon() -> void:
+func test_hud_shows_character_health_and_skills() -> void:
 	main.start_session(Session.Mode.SINGLE)
 	await tree.process_frame
 	await tree.process_frame
-	assert_eq(main.hud.health_label.text, "100")
-	assert_eq(main.hud.ammo_label.text, "12 / 12")
-	assert_eq(main.hud.weapon_label.text, "1  권총")
-	assert_false(main.hud.death_overlay.visible)
+	var player := main.session.get_local_player() as Player
+	assert_eq(main.hud.name_label.text, Characters.find(player.character_id).display_name)
+	assert_eq(main.hud.health_label.text, "%d / %d" % [roundi(player.kit.max_health), roundi(player.kit.max_health)])
+	assert_true(main.hud.skill_label.text.contains("SP 100"), "배틀 스킬과 SP: %s" % main.hud.skill_label.text)
+	assert_true(main.hud.ultimate_label.text.contains("0%"), "궁극기 에너지: %s" % main.hud.ultimate_label.text)
+	assert_eq(main.hud.down_label.text, "")
+
+
+func test_character_choice_from_settings_is_used() -> void:
+	GameSettings.character_id = &"endministrator_m"
+	main.start_session(Session.Mode.SINGLE)
+	await tree.process_frame
+	assert_eq((main.session.get_local_player() as Player).character_id, &"endministrator_m")
+	GameSettings.character_id = Characters.DEFAULT_ID

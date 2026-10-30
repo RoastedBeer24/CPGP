@@ -1,6 +1,6 @@
 class_name Health
 extends Node
-## 체력과 장갑. 피해 판정은 호스트에서만 하고, 값은 MultiplayerSynchronizer로 모두에게 퍼진다.
+## 체력. 피해 판정은 호스트에서만 하고, 값은 MultiplayerSynchronizer로 모두에게 퍼진다.
 ## 다른 피어에서 apply_damage를 불러도 무시된다.
 
 signal damaged(info: DamageInfo, amount: float)
@@ -23,6 +23,8 @@ var current := 100.0:
 			died.emit(null)
 		elif not was_alive and current > 0.0:
 			revived.emit()
+## 쓰러진 플레이어를 동료가 일으킨 정도(0~1). 호스트가 정한다.
+var revive_progress := 0.0
 
 
 func _ready() -> void:
@@ -33,7 +35,11 @@ func is_alive() -> bool:
 	return current > 0.0
 
 
-## 장갑을 적용한 실제 피해량. 판정 전에 미리 보여 줄 때도 쓴다.
+func ratio() -> float:
+	return clampf(current / maxf(max_health, 1.0), 0.0, 1.0)
+
+
+## 장갑을 적용한 실제 피해량
 func mitigate(raw_amount: float) -> float:
 	return raw_amount * 100.0 / (100.0 + maxf(armor, 0.0))
 
@@ -56,9 +62,12 @@ func heal(amount: float) -> void:
 	current = minf(current + amount, max_health)
 
 
-## 죽은 상태에서 체력을 가득 채워 되살린다. 호스트에서만 효과가 있다.
-func revive() -> void:
+## 쓰러진 상태에서 최대 체력의 fraction만큼 채워 되살린다. 호스트에서만 효과가 있다.
+func revive(fraction: float = 1.0) -> void:
 	if not multiplayer.is_server():
 		return
-	current = max_health
-	revived.emit()
+	var was_alive := is_alive()
+	current = maxf(max_health * clampf(fraction, 0.01, 1.0), current)
+	revive_progress = 0.0
+	if not was_alive:
+		revived.emit()

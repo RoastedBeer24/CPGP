@@ -6,7 +6,8 @@ const RELEASE_JSON := """{
 	"tag_name": "build-42",
 	"assets": [
 		{"name": "something-else.zip", "browser_download_url": "https://example.com/other.zip"},
-		{"name": "CyberUniverse-windows.zip", "browser_download_url": "https://example.com/game.zip"}
+		{"name": "CyberUniverse-windows.zip", "browser_download_url": "https://example.com/legacy.zip"},
+		{"name": "Crossfield-windows.zip", "browser_download_url": "https://example.com/game.zip"}
 	]
 }"""
 
@@ -23,6 +24,16 @@ func test_parses_build_number_and_zip_url() -> void:
 	assert_eq(release.get("url"), "https://example.com/game.zip")
 
 
+func test_legacy_install_downloads_legacy_zip() -> void:
+	# 이름을 바꾸기 전에 설치한 게임(CyberUniverse.exe)은 같은 이름의 zip을 받아야 그 실행 파일이 바뀐다.
+	assert_eq(Updater.asset_name_for("C:/Games/CU/CyberUniverse.exe"), "CyberUniverse-windows.zip")
+	assert_eq(Updater.asset_name_for("C:/Games/CU/CyberUniverse.console.exe"), "CyberUniverse-windows.zip")
+	assert_eq(Updater.asset_name_for("C:/Games/CF/Crossfield.exe"), "Crossfield-windows.zip")
+	assert_eq(Updater.asset_name_for("D:/godot/Godot_v4.5.1-stable_win64.exe"), "Crossfield-windows.zip")
+	var legacy := Updater.parse_release(RELEASE_JSON, Updater.asset_name_for("C:/Games/CU/CyberUniverse.exe"))
+	assert_eq(legacy.get("url"), "https://example.com/legacy.zip")
+
+
 func test_rejects_unexpected_release_formats() -> void:
 	assert_true(Updater.parse_release("not json").is_empty())
 	assert_true(Updater.parse_release("[]").is_empty())
@@ -37,7 +48,7 @@ func test_development_build_does_not_self_update() -> void:
 
 
 func test_unsafe_zip_paths_are_rejected() -> void:
-	assert_true(Updater.is_safe_entry("CyberUniverse.exe"))
+	assert_true(Updater.is_safe_entry("Crossfield.exe"))
 	assert_true(Updater.is_safe_entry("characters/model.glb"))
 	assert_false(Updater.is_safe_entry("../evil.exe"))
 	assert_false(Updater.is_safe_entry("a/../../evil.exe"))
@@ -47,11 +58,11 @@ func test_unsafe_zip_paths_are_rejected() -> void:
 
 
 func test_extracts_zip_into_folder() -> void:
-	var zip_path := _make_zip({"CyberUniverse.exe": "new exe", "README.txt": "hello"})
+	var zip_path := _make_zip({"Crossfield.exe": "new exe", "README.txt": "hello"})
 	var updater := Updater.new()
 	var destination := ProjectSettings.globalize_path(WORK_DIR.path_join("files"))
 	assert_true(updater._extract(zip_path, destination))
-	assert_eq(FileAccess.get_file_as_string(destination.path_join("CyberUniverse.exe")), "new exe")
+	assert_eq(FileAccess.get_file_as_string(destination.path_join("Crossfield.exe")), "new exe")
 	assert_eq(FileAccess.get_file_as_string(destination.path_join("README.txt")), "hello")
 	updater.free()
 

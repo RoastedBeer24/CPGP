@@ -24,6 +24,7 @@ MANIFEST_NAME = "assets.json"
 # 실행 파일 폴더 기준 경로 -> 저장소(작업 폴더) 안의 원본
 FILES = {
     "characters/endministrator_f.glb": "assets/characters/endministrator_f/endministrator_f.glb",
+    "characters/endministrator_m.glb": "assets/characters/endministrator_m/endministrator_m.glb",
 }
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -67,7 +68,7 @@ def ensure_private_repository(create):
             sys.exit("에셋 저장소 %s가 없습니다. --create를 붙이면 비공개로 만듭니다." % REPOSITORY)
         # 빈 저장소에는 릴리스를 만들 수 없어서 README로 첫 커밋을 만든다.
         gh("repo", "create", REPOSITORY, "--private", "--add-readme",
-           "--description", "CyberUniverse private assets (not redistributable)")
+           "--description", "Crossfield private assets (not redistributable)")
         view = gh("repo", "view", REPOSITORY, "--json", "isPrivate")
     if not json.loads(view.stdout).get("isPrivate", False):
         sys.exit("에셋 저장소 %s가 공개입니다. 재배포할 수 없는 에셋이라 올리지 않습니다." % REPOSITORY)
@@ -94,7 +95,7 @@ def main():
     ensure_private_repository(options.create)
     if gh("release", "view", RELEASE_TAG, "--repo", REPOSITORY, check=False).returncode != 0:
         gh("release", "create", RELEASE_TAG, "--repo", REPOSITORY, "--title", "Assets",
-           "--notes", "CyberUniverse assets downloaded by the game (AssetUpdater). Not redistributable.")
+           "--notes", "Crossfield assets downloaded by the game (AssetUpdater). Not redistributable.")
     # 파일을 먼저, 목록을 마지막에 올린다. 그 사이에 받아 간 게임은 SHA-256이 맞지 않아 다음에 다시 받는다.
     gh("release", "upload", RELEASE_TAG, *sources, "--clobber", "--repo", REPOSITORY)
     gh("release", "upload", RELEASE_TAG, manifest_path, "--clobber", "--repo", REPOSITORY)

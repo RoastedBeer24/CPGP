@@ -196,7 +196,7 @@ func _download(url: String, destination: String) -> bool:
 
 ## GitHub API는 User-Agent가 없는 요청을 거절한다. 에셋 키는 with_key일 때만(GitHub API에만) 붙인다.
 func _headers(extra: Array[String], with_key: bool) -> PackedStringArray:
-	var headers := PackedStringArray(["User-Agent: CyberUniverse-AssetUpdater"])
+	var headers := PackedStringArray(["User-Agent: Crossfield-AssetUpdater"])
 	headers.append_array(PackedStringArray(extra))
 	if with_key and not key.is_empty():
 		headers.append("Authorization: Bearer " + key)

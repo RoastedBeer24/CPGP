@@ -9,11 +9,14 @@
 project.godot
 src/            # 게임 코드와 씬. 기능별 폴더에 스크립트와 씬을 함께 둔다
   boot/         # 부팅 씬
-  core/         # 이벤트 버스, 저장, 구역 전환 (M1~)
-  net/          # 호스트·참여, 동기화 (M1~)
-  player/  combat/  ai/  hacking/  cyberware/  inventory/  narrative/  ui/
-  zones/        # 구역 씬
-data/           # 데이터 파일(.tres): 무기, 임플란트, 아이템, 대화 등
+  core/         # 설정, 입력, 자동 업데이트, 플레이어·적 목록(Roster)
+  net/          # 호스트·참여, 스폰
+  player/       # 플레이어 조작, 몸(모델·동작), 캐릭터 고르기
+  combat/       # 체력, 판정, 공격 데이터(AttackData·HitData·KitData), 효과
+  enemies/      # 적 AI, 몸, 탄
+  zones/        # 구역(전투 방) 씬
+  ui/  dev/     # 화면, 개발용 도구(자동 조종)
+data/           # 데이터 파일(.tres): 캐릭터(모습·전투 구성), 적
 assets/         # 공개 에셋. 출처는 docs/assets.md에 기록
 tests/          # 자동 테스트 (framework/, unit/, ...)
 tools/          # 개발용 셸 스크립트
@@ -27,8 +30,8 @@ docs/           # 기획 문서(design/), 개발 문서(dev/)
 | 파일, 폴더 | snake_case | `player_controller.gd`, `zones/freight_docks/` |
 | `class_name` | PascalCase | `PlayerController` |
 | 함수, 변수 | snake_case | `apply_damage()`, `move_speed` |
-| 상수, enum 값 | UPPER_SNAKE_CASE | `MAX_RAM`, `AlertState.SEARCHING` |
-| 시그널 | 과거형 snake_case | `enemy_killed`, `alert_changed` |
+| 상수, enum 값 | UPPER_SNAKE_CASE | `MAX_SP`, `Enemy.State.WIND_UP` |
+| 시그널 | 과거형 snake_case | `perfect_dodged`, `phase_changed` |
 | 내부용 멤버 | `_` 접두사 | `_velocity` |
 
 ## 코드
@@ -38,17 +41,17 @@ docs/           # 기획 문서(design/), 개발 문서(dev/)
 - **데이터와 로직 분리:** 수치와 정의는 `Resource`(.tres)로 두고 코드에 박아 넣지 않습니다.
 - **느슨한 결합:** 시스템끼리 직접 참조하기보다 시그널로 통신합니다.
 
-## 네트워크 (M1부터)
+## 네트워크
 - 싱글 플레이도 "혼자 호스트하는 코옵"과 같은 경로로 돌아갑니다.
 - 자기 캐릭터의 이동과 시점은 각 플레이어가 계산하고, **피해·AI·상호작용 결과의 판정은 호스트가** 합니다.
 - 판정용 RPC는 `@rpc("any_peer", "call_local")`로 두고 받는 쪽에서 보낸 피어를 확인합니다(`_sender_is_owner()` 참고).
 - RPC 인자에 타입이 붙은 배열(`Array[Vector3]`)을 쓰지 않습니다. `PackedVector3Array` 같은 패킹 배열을 씁니다.
 - 체력처럼 호스트가 정하는 값은 해당 노드의 권한을 호스트(1)로 두고 MultiplayerSynchronizer로 퍼뜨립니다.
-- 시간 판정(연사 제한 등)은 실제 시간 대신 물리 프레임 수로 잽니다.
+- 그룹(`players`, `enemies`)은 장면 트리 전체에 걸린다. 한 프로세스에 여러 피어를 띄우는 코옵 테스트에서 다른 피어의 노드가 섞이지 않게 `Roster.players()`/`Roster.enemies()`로 같은 3D 세계의 것만 고릅니다.
 - 새 기능은 코옵 상황(참여자 2~3명)에서도 동작하는지 테스트합니다.
 
 ## 리소스 불러오기
-- 서로 참조하는 스크립트(예: Player ↔ WeaponHolder) 안에서 `.tres`를 `preload`하지 않습니다. 컴파일 도중 리소스가 깨질 수 있으므로 `_ready()`에서 `load()`합니다.
+- 서로 참조하는 스크립트(예: Player ↔ PlayerBody) 안에서 `.tres`를 `preload`하지 않습니다. 컴파일 도중 리소스가 깨질 수 있으므로 `_ready()`에서 `load()`합니다.
 
 ## 테스트와 커밋
 - 새 시스템은 테스트와 함께 추가합니다. 테스트 작성법은 [testing.md](testing.md)에 있습니다.

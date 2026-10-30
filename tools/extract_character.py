@@ -2,45 +2,56 @@
 
     python3 tools/extract_character.py <원본.glb> <결과.glb>
     python3 tools/extract_character.py "!File/Endministrator_F_Animated.glb" assets/characters/endministrator_f/endministrator_f.glb
+    python3 tools/extract_character.py "!File/endministrator_m/Endministrator_M_Animated.glb" assets/characters/endministrator_m/endministrator_m.glb
 
-원본에는 애니메이션이 651개(약 450MB) 들어 있어서 그대로 쓰기에는 너무 크다.
+원본에는 애니메이션이 500~650개(약 450MB) 들어 있어서 그대로 쓰기에는 너무 크다.
 모델(메시, 뼈대, 재질, 텍스처)은 그대로 두고, 아래 ROLES에 적은 애니메이션만 골라
-게임에서 부르는 짧은 이름(idle, walk 등)으로 바꿔 넣는다.
+게임에서 부르는 짧은 이름(idle, attack_1 등)으로 바꿔 넣는다.
+관리자(여)와 관리자(남)는 동작 이름의 앞부분만 다르다(endminf/girl, endminm/boy). 원본에 든 이름을 보고 고른다.
 결과 파일은 재배포할 수 없는 모델이 들어 있으므로 저장소에 올리지 않는다(docs/assets.md).
 """
 import json
 import struct
 import sys
 
-# 게임에서 부르는 이름 -> 원본 애니메이션 이름. 동작을 더 쓰려면 여기에 추가한다.
-# 원래 속도(동작이 제자리에서 걸을 때 발이 뒤로 가는 속도): walk 약 1.0, run 4.3, sprint 6.2 m/s
+# 캐릭터 전용 동작의 앞부분 → 그 캐릭터의 공통 동작(이동 등) 앞부분
+CHARACTERS = {"endminf": "girl", "endminm": "boy"}
+
+# 게임에서 부르는 이름 -> 원본 애니메이션 이름 후보({char}: endminf/endminm, {body}: girl/boy). 앞의 것부터 찾는다.
+# 동작을 더 쓰려면 여기에 추가한다. 원래 속도(제자리에서 걸을 때 발이 뒤로 가는 속도): walk 약 1.0, run 4.3, sprint 6.2 m/s
 ROLES = {
-    "idle": "A_actor_girl_idle_loop",
-    "walk": "A_actor_girl_walk_loop",
-    "run": "A_actor_girl_run_loop",
-    "sprint": "A_actor_girl_sprint_loop",
-    # 웅크리기: 한쪽 무릎을 꿇은 자세. 슬라이딩도 이 자세 위에 다리를 코드로 얹는다.
-    "crouch": "A_actor_endminf_dialog_state_squat1_loop",
+    "idle": ["A_actor_{body}_idle_loop"],
+    "walk": ["A_actor_{body}_walk_loop"],
+    "run": ["A_actor_{body}_run_loop"],
+    "sprint": ["A_actor_{body}_sprint_loop"],
+    # 전투 대기: 싸우는 중에 서 있을 때
+    "battle_idle": ["A_actor_{char}_battle_loop"],
     # 점프: 도약(제자리, 달리며) -> 낙하 -> 착지(제자리, 달리며)
-    "jump_idle": "A_actor_girl_idle_jump_start_l",
-    "jump_run": "A_actor_girl_run_jump_start_l",
-    "fall": "A_actor_girl_fall_loop_l",
-    "land": "A_actor_girl_idle_jump_land_l",
-    "run_land": "A_actor_girl_run_jump_land_l",
-    "dodge_f": "A_actor_endminf_battle_dodge_f_l",
-    "dodge_b": "A_actor_endminf_battle_dodge_b_l",
-    # 근접 공격 연속 동작(1 -> 2 -> 3). 원본은 휘두른 뒤 긴 마무리가 붙어 있어서 TRIMS로 앞부분만 쓴다.
-    "melee_1": "A_actor_endminf_battle_attack_01",
-    "melee_2": "A_actor_endminf_battle_attack_02",
-    "melee_3": "A_actor_endminf_battle_attack_03",
-    # 맨손 전투 자세: 두 주먹을 가슴 앞에 든다. 맨손일 때 상체에만 입힌다.
-    "guard": "A_actor_endminf_dialog_state_fists_loop",
-    "hit": "A_actor_endminf_battle_hit_heavy",
-    "dead": "A_actor_endminf_battle_dead",
+    "jump_idle": ["A_actor_{body}_idle_jump_start_l", "A_actor_{char}_idle_jump_start_l"],
+    "jump_run": ["A_actor_{body}_run_jump_start_l"],
+    "fall": ["A_actor_{body}_fall_loop_l"],
+    "land": ["A_actor_{body}_idle_jump_land_l"],
+    "run_land": ["A_actor_{body}_run_jump_land_l"],
+    "dodge_f": ["A_actor_{char}_battle_dodge_f_l"],
+    "dodge_b": ["A_actor_{char}_battle_dodge_b_l"],
+    # 기본 공격 5단계, 대시 공격, 처형(강공격), 배틀 스킬, 궁극기. 타격 시각과 내디딤 거리는 data/kits/*.tres에 있다.
+    "attack_1": ["A_actor_{char}_battle_attack_01"],
+    "attack_2": ["A_actor_{char}_battle_attack_02"],
+    "attack_3": ["A_actor_{char}_battle_attack_03"],
+    "attack_4": ["A_actor_{char}_battle_attack_04"],
+    "attack_5": ["A_actor_{char}_battle_attack_05"],
+    "dash_attack": ["A_actor_{char}_battle_dash_attack"],
+    "finisher": ["A_actor_{char}_battle_power_attack"],
+    "skill": ["A_actor_{char}_battle_normal_skill"],
+    "ultimate": ["A_actor_{char}_battle_skill_ult"],
+    # 맞음: 가볍게 움찔(앞), 크게 휘청, 쓰러짐
+    "hit": ["A_actor_{body}_battle_hit_f"],
+    "hit_heavy": ["A_actor_{char}_battle_hit_heavy"],
+    "dead": ["A_actor_{char}_battle_dead"],
 }
 
 # 루프로 재생할 동작 (glTF에는 반복 여부가 없어서 이름 끝에 -loop를 붙이면 Godot가 반복으로 가져온다)
-LOOPING = {"idle", "walk", "run", "sprint", "crouch", "fall", "guard"}
+LOOPING = {"idle", "walk", "run", "sprint", "battle_idle", "fall"}
 
 # 모든 동작에서 움직임을 빼는 뼈(눈동자). 원본의 대화·전투 동작은 오른쪽 눈 뼈만 2~6도씩 움직여서
 # (왼쪽은 그대로) 한쪽 눈만 돌아간다. 원래 게임은 시선을 따로 정하는 것으로 보여, 눈은 처음 자세(정면)로 둔다.
@@ -49,16 +60,33 @@ FROZEN_BONES = {
     "faceLfPupilJoint", "faceRtPupilJoint", "faceLfHighlightJoint", "faceRtHighlightJoint",
 }
 
-# 앞부분만 잘라 쓸 동작: 게임 이름 -> (시작 초, 끝 초)
+# 앞부분만 잘라 쓸 동작: 게임 이름 -> (시작 초, 끝 초). 원본 공격은 휘두른 뒤 긴 마무리가 붙어 있다.
+# 끝은 data/kits의 동작 길이(duration)보다 조금 길게 둔다(동작이 끝난 뒤 섞여 넘어가는 동안 쓴다).
 TRIMS = {
-    "melee_1": (0.0, 0.8),  # 가로 베기
-    "melee_2": (0.0, 0.9),  # 깊이 내디디며 찌르기
-    "melee_3": (0.0, 0.8),  # 뛰어올랐다 내려 베기
+    "attack_1": (0.0, 1.1),
+    "attack_2": (0.0, 1.1),
+    "attack_3": (0.0, 1.2),
+    "attack_4": (0.0, 1.3),
+    "attack_5": (0.0, 1.45),
+    "dash_attack": (0.0, 1.3),
+    "finisher": (0.0, 1.6),
+    "skill": (0.0, 1.3),
+    "ultimate": (0.0, 3.9),
+    "dodge_f": (0.0, 0.6),
+    "dodge_b": (0.0, 0.7),
+    "hit_heavy": (0.0, 1.0),
+}
+# 캐릭터마다 다른 구간
+TRIM_OVERRIDES = {
+    "endminm": {"ultimate": (0.0, 3.3)},
 }
 
-# 제자리 동작으로 바꿀 것. 원본 공격은 내디디며 몸(뿌리 뼈)이 앞으로 1~4m 나가지만,
+# 제자리 동작으로 바꿀 것. 원본 공격·회피는 내디디며 몸(뿌리 뼈)이 앞으로 1~4m 나가지만,
 # 게임에서는 플레이어가 직접 움직이므로 뿌리 뼈의 수평 이동을 없앤다(높이는 둔다).
-ROOT_LOCKED = {"melee_1", "melee_2", "melee_3"}
+ROOT_LOCKED = {
+    "attack_1", "attack_2", "attack_3", "attack_4", "attack_5", "dash_attack", "finisher", "skill", "ultimate",
+    "dodge_f", "dodge_b", "hit_heavy", "dead",
+}
 # 뿌리 뼈. 부모(Root)가 돌아가 있지 않아서 이동 값의 y가 위, x와 z가 수평이다.
 ROOT_BONE = "Bip001"
 
@@ -149,20 +177,39 @@ def freeze(doc, anim):
     anim["channels"] = channels
 
 
+def pick_character(by_name):
+    """원본에 든 동작 이름을 보고 어느 캐릭터인지 정한다."""
+    for char in CHARACTERS:
+        if "A_actor_%s_battle_attack_01" % char in by_name:
+            return char
+    sys.exit("관리자(여·남)의 전투 동작이 없는 원본입니다")
+
+
 def main(source, target):
     doc, data = read_glb(source)
     data = bytearray(data)
     by_name = {a.get("name"): a for a in doc.get("animations", [])}
-    missing = [name for name in ROLES.values() if name not in by_name]
+    char = pick_character(by_name)
+    names = {}
+    missing = []
+    for role, candidates in ROLES.items():
+        found = [c.format(char=char, body=CHARACTERS[char]) for c in candidates]
+        found = [c for c in found if c in by_name]
+        if found:
+            names[role] = found[0]
+        else:
+            missing.append(role)
     if missing:
         sys.exit("원본에 없는 애니메이션: " + ", ".join(missing))
+    trims = dict(TRIMS)
+    trims.update(TRIM_OVERRIDES.get(char, {}))
 
     animations = []
-    for role, name in ROLES.items():
+    for role, name in names.items():
         anim = json.loads(json.dumps(by_name[name]))
         anim["name"] = role + ("-loop" if role in LOOPING else "")
-        if role in TRIMS or role in ROOT_LOCKED:
-            reshape(doc, data, anim, TRIMS.get(role), role in ROOT_LOCKED)
+        if role in trims or role in ROOT_LOCKED:
+            reshape(doc, data, anim, trims.get(role), role in ROOT_LOCKED)
         freeze(doc, anim)
         animations.append(anim)
     doc["animations"] = animations

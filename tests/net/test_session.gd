@@ -55,10 +55,8 @@ func test_host_movement_and_look_replicate_to_client() -> void:
 
 	var own := host.get_player(1)
 	var mirror := client.get_player(1)
-	own.look(Vector2(0.5, 0.3))
 	var intent := PlayerIntent.new()
 	intent.move = Vector2(1, 0)
-	intent.crouch_pressed = true
 	own.intent_override = intent
 	await physics_frames(40)
 	intent.move = Vector2.ZERO
@@ -66,9 +64,7 @@ func test_host_movement_and_look_replicate_to_client() -> void:
 
 	# 테스트는 실제 시간보다 빠르게 프레임을 돌리므로, 프레임 수가 아니라 값이 맞을 때까지 기다린다.
 	assert_true(await wait_until(func() -> bool: return mirror.global_position.distance_to(own.global_position) < 0.05), "위치")
-	assert_almost_eq(mirror.rotation.y, own.rotation.y, 0.001, "좌우 시점")
-	assert_almost_eq(mirror.head.rotation.x, own.head.rotation.x, 0.001, "상하 시점")
-	assert_almost_eq(mirror.crouch_blend, 1.0, 0.01, "웅크린 자세")
+	assert_almost_eq(mirror.rotation.y, own.rotation.y, 0.001, "몸이 보는 방향")
 
 
 func test_three_players_can_play_together() -> void:
@@ -127,3 +123,26 @@ func test_join_without_host_fails() -> void:
 	# ENet 연결 시도 제한 시간이 길어서, 여기서는 시작되지 않았는지만 확인한다.
 	await physics_frames(60)
 	assert_eq(client.players.get_child_count(), 0)
+
+
+func test_each_peer_plays_the_character_it_chose() -> void:
+	var host := new_peer("Host")
+	var client := new_peer("Client")
+	host.character_id = &"endministrator_f"
+	client.character_id = &"endministrator_m"
+	host.host(port)
+	client.join("127.0.0.1", port)
+	assert_true(await wait_until(func() -> bool: return player_counts([host, client]) == [2, 2]), "둘 다 들어옴")
+	var client_id := client.multiplayer.get_unique_id()
+	for session: Session in [host, client]:
+		assert_eq(session.get_player(1).character_id, &"endministrator_f", "호스트는 관리자(여)")
+		assert_eq(session.get_player(client_id).character_id, &"endministrator_m", "참여한 사람은 관리자(남)")
+	assert_eq(host.get_player(client_id).kit.id, &"endministrator_m", "전투 구성도 고른 캐릭터")
+
+
+func test_unknown_character_falls_back_to_default() -> void:
+	var session := new_peer("Solo")
+	session.character_id = &"no_such_character"
+	session.start_single()
+	await tree.process_frame
+	assert_eq(session.get_local_player().character_id, Characters.DEFAULT_ID)

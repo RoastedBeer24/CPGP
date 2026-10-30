@@ -1,0 +1,294 @@
+[gd_resource type="Resource" script_class="KitData" format=3]
+
+[ext_resource type="Script" path="res://src/combat/kit_data.gd" id="1_kit"]
+[ext_resource type="Script" path="res://src/combat/attack_data.gd" id="2_attack"]
+[ext_resource type="Script" path="res://src/combat/hit_data.gd" id="3_hit"]
+
+[sub_resource type="Resource" id="hit_a1"]
+script = ExtResource("3_hit")
+time = 0.17
+damage = 0.8
+stagger = 8.0
+reach = 2.6
+arc = 70.0
+knockback = 0.25
+hit_stop = 0.05
+shake = 0.1
+
+[sub_resource type="Resource" id="attack_1"]
+script = ExtResource("2_attack")
+id = &"attack_1"
+display_name = "기본 공격 1"
+clip = &"attack_1"
+duration = 0.85
+chain_from = 0.3
+move_cancel_from = 0.55
+advance = PackedVector2Array(0, 0, 0.05, 0.17, 0.1, 0.5, 0.15, 0.89, 0.2, 1.23, 0.25, 1.28, 0.3, 1.29)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_a1")])
+
+[sub_resource type="Resource" id="hit_a2"]
+script = ExtResource("3_hit")
+time = 0.19
+damage = 0.9
+stagger = 9.0
+reach = 2.6
+arc = 70.0
+knockback = 0.25
+hit_stop = 0.05
+shake = 0.1
+
+[sub_resource type="Resource" id="attack_2"]
+script = ExtResource("2_attack")
+id = &"attack_2"
+display_name = "기본 공격 2"
+clip = &"attack_2"
+duration = 0.85
+chain_from = 0.32
+move_cancel_from = 0.6
+advance = PackedVector2Array(0, 0, 0.15, 0.02, 0.2, 0.74, 0.25, 0.89)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_a2")])
+
+[sub_resource type="Resource" id="hit_a3a"]
+script = ExtResource("3_hit")
+time = 0.12
+damage = 0.6
+stagger = 7.0
+reach = 2.6
+arc = 75.0
+knockback = 0.15
+hit_stop = 0.04
+shake = 0.08
+
+[sub_resource type="Resource" id="hit_a3b"]
+script = ExtResource("3_hit")
+time = 0.38
+damage = 0.8
+stagger = 10.0
+reach = 2.8
+arc = 75.0
+knockback = 0.3
+hit_stop = 0.06
+shake = 0.15
+
+[sub_resource type="Resource" id="attack_3"]
+script = ExtResource("2_attack")
+id = &"attack_3"
+display_name = "기본 공격 3"
+clip = &"attack_3"
+duration = 0.95
+chain_from = 0.5
+move_cancel_from = 0.75
+advance = PackedVector2Array(0, 0, 0.05, 0.23, 0.1, 0.62, 0.15, 1.18, 0.3, 1.26, 0.35, 1.48, 0.4, 2.24, 0.45, 2.67, 0.5, 2.71)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_a3a"), SubResource("hit_a3b")])
+
+[sub_resource type="Resource" id="hit_a4a"]
+script = ExtResource("3_hit")
+time = 0.3
+damage = 0.6
+stagger = 8.0
+reach = 2.7
+arc = 80.0
+knockback = 0.2
+hit_stop = 0.04
+shake = 0.1
+
+[sub_resource type="Resource" id="hit_a4b"]
+script = ExtResource("3_hit")
+time = 0.63
+damage = 0.9
+stagger = 12.0
+reach = 2.8
+arc = 80.0
+knockback = 0.35
+hit_stop = 0.06
+shake = 0.15
+
+[sub_resource type="Resource" id="attack_4"]
+script = ExtResource("2_attack")
+id = &"attack_4"
+display_name = "기본 공격 4"
+clip = &"attack_4"
+duration = 1.05
+chain_from = 0.72
+move_cancel_from = 0.9
+advance = PackedVector2Array(0, 0, 0.15, 0.04, 0.2, 0.11, 0.25, 0.29, 0.3, 0.75, 0.35, 0.96, 0.4, 1.17, 0.45, 1.43, 0.5, 1.56, 0.6, 1.59)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_a4a"), SubResource("hit_a4b")])
+
+[sub_resource type="Resource" id="hit_a5"]
+script = ExtResource("3_hit")
+time = 0.5
+damage = 2.2
+stagger = 40.0
+reach = 3.0
+arc = 80.0
+knockback = 1.2
+hit_stop = 0.1
+shake = 0.45
+
+[sub_resource type="Resource" id="attack_5"]
+script = ExtResource("2_attack")
+id = &"attack_5"
+display_name = "마무리 일격"
+clip = &"attack_5"
+duration = 1.15
+chain_from = 1.15
+move_cancel_from = 0.9
+advance = PackedVector2Array(0, 0, 0.2, 0.12, 0.3, 0.31, 0.4, 0.46, 0.45, 0.47, 0.5, 0.87, 0.55, 0.9)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_a5")])
+energy_per_hit = 4.0
+sp_per_hit = 10.0
+
+[sub_resource type="Resource" id="hit_dash"]
+script = ExtResource("3_hit")
+time = 0.53
+damage = 1.6
+stagger = 20.0
+reach = 2.8
+arc = 75.0
+knockback = 0.8
+hit_stop = 0.07
+shake = 0.3
+
+[sub_resource type="Resource" id="dash_attack"]
+script = ExtResource("2_attack")
+id = &"dash_attack"
+display_name = "대시 공격"
+clip = &"dash_attack"
+duration = 1.0
+chain_from = 0.75
+move_cancel_from = 0.8
+turn_until = 0.15
+advance = PackedVector2Array(0, 0, 0.05, 0.27, 0.1, 0.7, 0.15, 1.0, 0.2, 1.36, 0.25, 1.75, 0.3, 2.09, 0.35, 2.27, 0.4, 2.44, 0.45, 2.85, 0.5, 3.42, 0.55, 3.84, 0.6, 4.04, 0.65, 4.16)
+stop_short = 1.2
+hits = Array[ExtResource("3_hit")]([SubResource("hit_dash")])
+energy_per_hit = 2.0
+
+[sub_resource type="Resource" id="hit_fin1"]
+script = ExtResource("3_hit")
+time = 0.1
+damage = 0.6
+stagger = 0.0
+reach = 2.8
+arc = 80.0
+knockback = 0.0
+hit_stop = 0.03
+shake = 0.1
+
+[sub_resource type="Resource" id="hit_fin2"]
+script = ExtResource("3_hit")
+time = 0.23
+damage = 0.6
+stagger = 0.0
+reach = 2.8
+arc = 80.0
+knockback = 0.0
+hit_stop = 0.03
+shake = 0.1
+
+[sub_resource type="Resource" id="hit_fin3"]
+script = ExtResource("3_hit")
+time = 0.92
+damage = 5.0
+stagger = 0.0
+reach = 3.2
+arc = 90.0
+knockback = 2.0
+hit_stop = 0.14
+shake = 0.6
+
+[sub_resource type="Resource" id="finisher"]
+script = ExtResource("2_attack")
+id = &"finisher"
+display_name = "처형"
+clip = &"finisher"
+duration = 1.3
+chain_from = 1.3
+move_cancel_from = 1.15
+dodge_cancel_from = 1.0
+turn_until = 0.1
+advance = PackedVector2Array(0, 0, 0.05, 0, 0.1, 1.19, 0.15, 2.26, 0.2, 3.24, 0.25, 3.7, 0.3, 3.78, 0.7, 4.13)
+stop_short = 1.0
+hits = Array[ExtResource("3_hit")]([SubResource("hit_fin1"), SubResource("hit_fin2"), SubResource("hit_fin3")])
+energy_per_hit = 8.0
+invulnerable_until = 1.2
+super_armor = true
+
+[sub_resource type="Resource" id="hit_skill"]
+script = ExtResource("3_hit")
+time = 0.26
+damage = 2.6
+stagger = 30.0
+reach = 4.6
+arc = 65.0
+knockback = 0.8
+effect = 1
+hit_stop = 0.08
+shake = 0.35
+
+[sub_resource type="Resource" id="battle_skill"]
+script = ExtResource("2_attack")
+id = &"battle_skill"
+display_name = "배틀 스킬: 결정 베기"
+clip = &"skill"
+duration = 1.0
+chain_from = 0.75
+move_cancel_from = 0.8
+turn_until = 0.12
+advance = PackedVector2Array(0, 0, 0.05, 0.37, 0.1, 0.73, 0.15, 0.95, 0.2, 1.15, 0.25, 1.35, 0.3, 1.61)
+stop_short = 1.4
+hits = Array[ExtResource("3_hit")]([SubResource("hit_skill")])
+sp_cost = 100.0
+energy_gain = 12.0
+energy_per_hit = 2.0
+super_armor = true
+
+[sub_resource type="Resource" id="hit_ult1"]
+script = ExtResource("3_hit")
+time = 1.47
+damage = 3.0
+stagger = 40.0
+reach = 7.0
+arc = 75.0
+knockback = 1.0
+hit_stop = 0.08
+shake = 0.4
+
+[sub_resource type="Resource" id="hit_ult2"]
+script = ExtResource("3_hit")
+time = 3.02
+damage = 6.0
+stagger = 80.0
+reach = 7.5
+arc = 80.0
+knockback = 2.0
+effect = 2
+hit_stop = 0.15
+shake = 0.8
+
+[sub_resource type="Resource" id="ultimate"]
+script = ExtResource("2_attack")
+id = &"ultimate"
+display_name = "궁극기: 결정 파쇄"
+clip = &"ultimate"
+duration = 3.6
+chain_from = 3.6
+move_cancel_from = 3.3
+dodge_cancel_from = 3.3
+turn_until = 0.3
+hits = Array[ExtResource("3_hit")]([SubResource("hit_ult1"), SubResource("hit_ult2")])
+energy_cost = 80.0
+energy_per_hit = 0.0
+invulnerable_until = 3.6
+super_armor = true
+
+[resource]
+script = ExtResource("1_kit")
+id = &"endministrator_f"
+display_name = "관리자"
+max_health = 1200.0
+attack_power = 100.0
+basic_chain = Array[ExtResource("2_attack")]([SubResource("attack_1"), SubResource("attack_2"), SubResource("attack_3"), SubResource("attack_4"), SubResource("attack_5")])
+dash_attack = SubResource("dash_attack")
+finisher = SubResource("finisher")
+battle_skill = SubResource("battle_skill")
+ultimate = SubResource("ultimate")
