@@ -77,6 +77,7 @@ godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --joi
 - **저장소에 없는 캐릭터 모델:** `assets/characters/endministrator_f/`는 재배포 불가라 gitignore 대상이다(`docs/assets.md`). CI와 다른 PC에는 없으므로, 모델이 필요한 테스트는 `has_model`이 false면 건너뛰고, 모델 없이도 전체 테스트가 통과해야 한다. `data/player/default_appearance.tres`의 경로를 잠시 바꿔서 확인한다.
 - **조준 판정:** 무기는 `player.camera`가 아니라 `aim_origin()`/`aim_direction()`을 쓴다. 3인칭 카메라 위치에서 쏘면 캐릭터 뒤의 물체를 맞힌다.
 - **자동 업데이트:** 빌드 번호는 커밋 수다. `src/core/build_info.gd`의 `NUMBER`는 저장소에서 항상 0이어야 한다(내보낼 때만 바뀜, 테스트가 확인함). 실행 중인 exe는 덮어쓸 수 없어 PowerShell 스크립트가 종료를 기다렸다 바꾼다. `CyberUniverse.console.exe`는 게임이 도는 동안 잠겨 있으므로 내용이 같은 파일은 건너뛴다. 설치 스크립트는 영어로만 쓴다(PowerShell 5.1이 BOM 없는 파일을 시스템 코드 페이지로 읽음).
+- **저장소는 공개여야 한다:** 게임은 로그인 없이 GitHub API로 릴리스를 받는다. 비공개 저장소면 404가 와서 업데이트가 조용히 멈춘다(2026-10-30에 공개로 바꿈). 그래서 재배포할 수 없는 에셋은 절대 커밋하지 않는다.
 - **업데이트 실패는 조용히:** `JSON.parse_string`은 실패하면 엔진 오류를 남기므로 `JSON.new().parse()`를 쓴다. 릴리스가 없을 때의 404는 "받을 것 없음"으로 처리한다.
 - **내보내기와 자체 포함 Godot:** 옆에 `_sc_` 파일이 있는 Godot는 템플릿을 자기 폴더에서만 찾는다. `tools/export_windows.sh`가 알아서 표준 Godot를 받아 쓴다.
 - **캐릭터 모델은 exe에 넣지 않는다:** `export_presets.cfg`에서 `assets/characters/*`를 뺀다. 내보낸 게임은 exe 옆 `characters/`에서 실행 중에 glTF를 읽는다(`CharacterAppearance.load_gltf_file`).
