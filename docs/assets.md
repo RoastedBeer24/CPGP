@@ -26,6 +26,7 @@
 
 ### 모델 자동 업데이트 (비공개 에셋 저장소)
 게임 실행 파일은 공개 릴리스로 받지만, 모델은 공개할 수 없어서 **비공개** 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스 `assets`에 따로 올립니다. 게임은 켤 때 그 릴리스의 목록(`assets.json`, 파일마다 SHA-256)과 자기 `characters/` 파일을 비교해 바뀐 것만 받습니다(`src/core/asset_updater.gd`).
-- **올리기 (모델을 다시 뽑았을 때):** `python3 tools/publish_assets.py` (처음 한 번은 `--create`로 비공개 저장소를 만듭니다). 저장소가 공개면 올리지 않습니다.
-- **받기:** PC마다 게임 설정 → 게임 → "에셋 키"에 그 저장소를 읽을 수 있는 GitHub 토큰(fine-grained, 저장소 하나, Contents 읽기 전용)을 한 번 넣습니다. 키가 없으면 모델을 받지 않고 있던 모델을 그대로 씁니다.
+- **올리기 (모델을 다시 뽑았을 때):** `python3 tools/publish_assets.py`. 저장소는 2026-10-30에 비공개로 만들어 두었습니다(없으면 `--create`가 비공개로 만듭니다). 저장소가 공개면 올리지 않습니다.
+- **받기:** PC마다 게임 설정 → 게임 → "에셋 키"에 그 저장소를 읽을 수 있는 GitHub 토큰을 한 번 넣습니다. 키가 없으면 모델을 받지 않고 있던 모델을 그대로 씁니다.
+  - 토큰 만들기: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Repository access는 "Only select repositories"로 `CPGP-assets` 하나만, Permissions는 Contents: Read-only만 줍니다.
 - 공개 저장소(이 저장소)의 릴리스나 커밋에는 절대 넣지 않습니다.
