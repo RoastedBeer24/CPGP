@@ -129,12 +129,47 @@ static var _runtime_images: Dictionary[String, Dictionary] = {}
 ## 관리자의 무기는 원작의 타르 11(wpn_sword_0003)이다. 손잡이가 원점이고 칼날이 +Y로 뻗는다.
 @export_file("*.glb") var weapon_model_path := "res://assets/weapons/tarr_11.glb"
 @export var weapon_external_file := "weapons/tarr_11.glb"
-## 무기를 붙일 노드(원본의 무기 자리). 관리자는 왼손(wep_L)에 쥔다(원작 무기 연결 정보).
-@export var weapon_mount := &"wep_L"
+## 무기를 붙일 노드(원본 모델의 무기 자리, 원작 무기 연결 정보). 싸울 때는 오른손(wep_R)에 쥐고,
+## 무기를 꺼내는 동작의 처음에는 등 뒤 걸이에, 캐릭터 화면의 무기 보기에서는 왼손(wep_L)에 든다.
+@export var weapon_hand_mount := &"wep_R"
+@export var weapon_back_mount := &"GENERATED_wep_M_拖我改武器挂点_预览武器prefab挂这"
+@export var weapon_menu_mount := &"wep_L"
 @export var weapon_scale := 1.0
+## 동작마다 무기를 어디에 두는지(원작 연결 정보): 동작 이름 → [시각(초), 자리, 시각, 자리, ...].
+## 자리는 PlayerBody.WeaponPlace(0 안 보임, 1 등 뒤, 2 오른손, 3 왼손)다. 목록에 없는 동작(이동, 대기)에서는
+## 무기를 거둔다(원작처럼 싸우는 동작에서만 무기가 나타난다). 원작 자료에는 대시 공격이 빠져 있어 오른손으로 넣었다.
+@export var weapon_timelines: Dictionary[StringName, PackedFloat32Array] = {
+	&"attack_1": PackedFloat32Array([0.0, 2]),
+	&"attack_2": PackedFloat32Array([0.0, 2]),
+	&"attack_3": PackedFloat32Array([0.0, 2]),
+	&"attack_4": PackedFloat32Array([0.0, 2]),
+	&"attack_5": PackedFloat32Array([0.0, 2]),
+	&"dash_attack": PackedFloat32Array([0.0, 2]),
+	&"finisher": PackedFloat32Array([0.0, 2]),
+	&"skill": PackedFloat32Array([0.0, 2]),
+	&"ultimate": PackedFloat32Array([0.0, 0, 2.5667, 2]),
+	&"battle_idle": PackedFloat32Array([0.0, 2]),
+	&"dodge_f": PackedFloat32Array([0.0, 0, 0.5, 2]),
+	&"dodge_b": PackedFloat32Array([0.0, 0, 0.5, 2]),
+	&"draw": PackedFloat32Array([0.0, 1, 0.4013, 2]),
+	&"ui_to_weapon": PackedFloat32Array([0.0, 0, 0.2583, 3]),
+	&"ui_weapon": PackedFloat32Array([0.0, 3]),
+	&"ui_weapon_out": PackedFloat32Array([0.0, 3, 2.151, 0]),
+}
 
 ## 지금 쓰는 모델의 이미지 (실행 중에 읽은 glTF일 때만)
 var _images: Dictionary = {}
+
+
+## 동작(clip)의 time초에 무기를 두는 자리 (PlayerBody.WeaponPlace의 숫자). 목록에 없는 동작이면 0(안 보임).
+func weapon_place(clip: StringName, time: float) -> int:
+	var timeline: PackedFloat32Array = weapon_timelines.get(clip, PackedFloat32Array())
+	var place := 0
+	for i in range(0, timeline.size() - 1, 2):
+		if timeline[i] > time:
+			break
+		place = int(timeline[i + 1])
+	return place
 
 
 ## 모델 장면. 찾지 못하면 null이다.

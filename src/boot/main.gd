@@ -8,6 +8,7 @@ extends Node
 ##   godot --path . -- --single --character=endministrator_m   # 캐릭터 고르기
 ##   godot --path . -- --single --autoplay        # 내 플레이어가 저절로 싸운다 (화면 확인용, AutoPilot)
 ##   godot --path . -- --single --character-screen   # 로비에서 캐릭터 화면을 연 채로 시작 (화면 확인용)
+##   godot --path . -- --single --character-weapon   # 캐릭터 화면에서 무기 보기를 켠 채로 시작 (화면 확인용)
 ##   --no-update                                 # 자동 업데이트를 하지 않음
 ##   --update-url=http://127.0.0.1:8000/latest   # 업데이트 확인 주소 바꾸기 (시험용)
 ##
@@ -72,8 +73,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _notification(what: int) -> void:
 	# 창이 포커스를 잃으면 마우스를 풀어 준다.
-	# 자동 조종(화면 확인용)은 창이 포커스를 잃어도 멈추지 않는다.
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and session != null and not pause_menu.visible and not autoplay:
+	# 자동 조종과 화면 녹화(--write-movie, tools/screenshot.sh)는 화면 확인용이라 창이 포커스를 잃어도 멈추지 않는다.
+	var recording := not Engine.get_write_movie_path().is_empty()
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and session != null and not pause_menu.visible and not autoplay and not recording:
 		open_pause_menu()
 	# 창을 닫을 때 받아 둔 업데이트가 있으면 설치한다.
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
@@ -156,9 +158,12 @@ func _on_session_started() -> void:
 
 
 func _on_player_spawned(player: Player) -> void:
-	if OS.get_cmdline_user_args().has("--character-screen") and player.is_multiplayer_authority():
+	var args := OS.get_cmdline_user_args()
+	if (args.has("--character-screen") or args.has("--character-weapon")) and player.is_multiplayer_authority():
 		hud.character_screen.session = session
 		hud.character_screen.open_screen.call_deferred()
+		if args.has("--character-weapon"):
+			hud.character_screen.toggle_weapon.call_deferred()
 	if autoplay and player.is_multiplayer_authority():
 		var pilot := AutoPilot.new()
 		pilot.name = "AutoPilot"

@@ -4,11 +4,15 @@ extends Node3D
 ##
 ## 모델에 애니메이션이 있으면(tools/extract_character.py로 만든 파일) 애니메이션으로 움직인다.
 ##   - 이동: 속도 구간마다 동작 하나(서기 / 걷기 / 달리기 / 질주)를 골라 부드럽게 바꾸고, 실제 속도에 맞춰 재생 속도를
-##     바꾼다(발이 미끄러지지 않게). 싸우는 중에 서 있으면 전투 대기 동작을 한다.
-##   - 점프: 도약 → (오래 떨어지면) 낙하 → 착지.
-##   - 동작 층: 공격·스킬·회피·크게 맞음·쓰러짐. 동기화된 번호(Player.action_count, dodge_count, hurt_count)가 바뀌면
-##     그 동작을 틀어서 원격 플레이어도 같은 동작을 본다. 연속 공격은 이전 동작에서 섞어 넘어간다.
-##   - 검: 오른손의 무기 자리(wep_R)에 코드로 만든 검을 쥔다. 원본 모델에는 무기 메시가 없다. 싸우는 중에만 보인다.
+##     바꾼다(발이 미끄러지지 않게). 달리다 서면 멈추는 동작을 한다.
+##   - 서 있을 때(원작 대기 동작): 싸우는 중이면 전투 대기, 오래 서 있으면 쉬는 자세와 가끔 특수 대기 동작,
+##     캐릭터 화면이면 화면용 대기. 전투가 시작되면 무기를 꺼내고 끝나면 거둔다.
+##   - 점프: 도약 → (오래 떨어지면) 낙하 → 착지(높은 곳에서 떨어지면 무겁게).
+##   - 동작 층: 공격·스킬·회피·크게 맞음·쓰러짐과 대기 연출. 동기화된 번호(Player.action_count, dodge_count, hurt_count)가
+##     바뀌면 그 동작을 틀어서 원격 플레이어도 같은 동작을 본다. 연속 공격은 이전 동작에서 섞어 넘어간다.
+##   - 가볍게 맞으면 맞은 쪽에 따라 윗몸만 움찔한다(Player.flinch_count).
+##   - 무기: 원작 연결 정보대로 동작마다 자리(오른손, 등 뒤, 왼손)를 바꾸고, 싸우는 동작에서만 나타난다(나타나고
+##     사라질 때 칼날이 차오르고 지워진다). 무기 모델이 없으면 코드로 만든 검을 쥔다.
 ##   애니메이션 위에 코드로 덧입히는 것(BodyPoseModifier): 다리 IK(계단에서 발마다 실제 땅 높이에 맞춘다), 얼굴 빛.
 ##
 ## 뼈마다 축 방향이 제각각이라 각도 대신 "이 뼈가 몸 기준으로 어느 쪽을 가리켜야 하는지"를 정하고, 그 방향으로 돌린다.
@@ -17,8 +21,11 @@ extends Node3D
 ## 어떤 모델을 쓰는지는 플레이어가 고른 캐릭터(Player.character_id → CharacterData)의 CharacterAppearance에 있다.
 
 enum ViewMode { VISIBLE, SHADOW_ONLY, HIDDEN }
+## 무기를 두는 자리 (CharacterAppearance.weapon_timelines의 숫자와 같다)
+enum WeaponPlace { HIDDEN, BACK, HAND, MENU }
 
 const TOON_SHADER := preload("res://src/player/toon.gdshader")
+const WEAPON_SHADER := preload("res://src/player/weapon.gdshader")
 const TOON_ALPHA_SHADER := preload("res://src/player/toon_alpha.gdshader")
 const OUTLINE_SHADER := preload("res://src/player/outline.gdshader")
 const SHADE_SHADER := preload("res://src/player/shade_overlay.gdshader")
@@ -39,6 +46,8 @@ const MAX_TRACKED_SPEED := 15.0
 const REQUIRED_ANIMATIONS: Array[StringName] = [&"idle", &"walk", &"run", &"sprint", &"fall"]
 ## 속도 구간마다 고르는 이동 동작
 const LOCOMOTION_STATES: Array[StringName] = [&"idle", &"walk", &"run", &"sprint"]
+## 서 있을 때 상황에 따라 고르는 반복 동작 (전투 대기, 쉬는 자세, 캐릭터 화면의 대기·무기 보기). 모델에 있는 것만 쓴다.
+const STANDING_STATES: Array[StringName] = [&"battle_idle", &"relax", &"ui_idle", &"ui_weapon"]
 ## 이동 동작의 원래 속도(m/s). 실제 속도/원래 속도로 재생 속도를 맞춘다.
 const NATURAL_SPEEDS := {&"walk": 1.0, &"run": 4.3, &"sprint": 6.2}
 ## 이동 동작을 바꾸는 속도(m/s)와 경계에서 깜빡이지 않게 두는 여유
@@ -49,19 +58,46 @@ const HYSTERESIS := 0.25
 ## 이보다 오래 공중에 있으면 낙하 동작으로 바꾼다(초). 턱을 내려갈 때마다 깜빡이지 않게 한다.
 const AIR_DELAY := 0.12
 
-## 동작 층에서 트는 동작들 (모델에 있는 것만 쓴다)
+## 대기 연출 동작: 쉬는 자세로 바꾸기, 특수 대기, 무기 꺼내기·거두기, 멈추기, 캐릭터 화면의 동작들.
+## 서 있을 때만 보여 주고 움직이거나 다른 동작을 하면 바로 끊는다. 천천히 섞어 들어가고 나온다.
+const IDLE_CLIPS: Array[StringName] = [
+	&"relax_in", &"relax_sp_1", &"relax_sp_2", &"draw", &"sheathe",
+	&"run_stop_l", &"run_stop_r", &"sprint_stop_l", &"sprint_stop_r",
+	&"ui_enter", &"ui_react", &"ui_to_weapon", &"ui_weapon_out",
+]
+## 동작 층에서 트는 동작들 (이것과 IDLE_CLIPS 중 모델에 있는 것만 쓴다)
 const ACTION_CLIPS: Array[StringName] = [
 	&"attack_1", &"attack_2", &"attack_3", &"attack_4", &"attack_5", &"dash_attack", &"finisher", &"skill", &"ultimate",
 	&"dodge_f", &"dodge_b", &"hit_heavy", &"dead",
 ]
 ## 공격이 아닌 동작 (상태가 바뀌어도 끝까지 보여 준다)
 const NON_ATTACK_CLIPS: Array[StringName] = [&"dodge_f", &"dodge_b", &"hit_heavy", &"dead"]
+## 가볍게 맞았을 때 윗몸만 움찔하는 동작 (Player.HitSide 순서: 앞, 뒤, 왼쪽, 오른쪽)
+const FLINCH_CLIPS: Array[StringName] = [&"hit_f", &"hit_b", &"hit_l", &"hit_r"]
 ## 동작이 바뀔 때 섞는 시간, 들어오고 나갈 때 섞는 시간(초)
 const ACTION_CROSSFADE := 0.1
 const ACTION_FADE_IN := 0.06
 const ACTION_FADE_OUT := 0.22
+const IDLE_FADE_IN := 0.25
+const IDLE_FADE_OUT := 0.4
 ## 회피 동작을 보여 주는 시간(초). 회피(0.3초)가 끝나도 질주로 이어지는 앞부분까지 보여 준다.
 const DODGE_SHOW_TIME := 0.42
+## 대기 연출을 끊는 속도(m/s). 멈추기 동작은 몸이 서는 동안에도 보여 준다.
+const IDLE_BREAK_SPEED := 0.6
+## 이만큼(초) 가만히 서 있으면 쉬는 자세로 바꾼다. 쉬는 동안 특수 대기 동작이 끝나고 이만큼 지나면 다음 것을 한다.
+const RELAX_DELAY := 8.0
+const RELAX_SPECIAL_GAP := 12.0
+## 달리기·질주를 그만두고 이 시간(초) 안에 서면 멈추는 동작을 한다.
+const STOP_WINDOW := 0.4
+## 멈추는 동작: 이동 동작 → [왼발이 앞일 때, 오른발이 앞일 때] (원본 동작의 첫 자세를 재서 정했다)
+const STOP_CLIPS := {&"run": [&"run_stop_r", &"run_stop_l"], &"sprint": [&"sprint_stop_l", &"sprint_stop_r"]}
+## 이보다 높이(m) 떨어져 내려서면 무겁게 착지한다(보통 점프는 1.2m쯤 떨어진다).
+const HEAVY_LANDING_DROP := 3.0
+## 무기가 나타나고 사라지는 시간(초). 싸울 때는 빠르게, 캐릭터 화면의 무기 보기는 원작처럼 천천히.
+const WEAPON_APPEAR_TIME := 0.12
+const WEAPON_VANISH_TIME := 0.3
+const MENU_APPEAR_TIME := 0.6
+const MENU_VANISH_TIME := 0.5
 
 ## 옷자락 물리: 망토·후드(사슬이 굵고 무겁다), 장식 끈(가볍다), 머리카락
 const CLOTH_STIFFNESS := 6.0
@@ -103,7 +139,7 @@ var has_model := false
 var animated := false
 ## 발밑 땅이 캡슐이 선 바닥보다 얼마나 높은지(m). x는 왼발, y는 오른발. 계단에서 발 IK가 쓴다.
 var foot_offsets := Vector2.ZERO
-## 지금 쓰는 이동 동작 이름 (idle, walk, run, sprint, battle_idle)
+## 지금 쓰는 이동 동작 이름 (idle, walk, run, sprint와 서 있을 때의 STANDING_STATES)
 var locomotion := &"idle"
 
 var _model: Node3D
@@ -146,6 +182,11 @@ var _cloth: SpringBoneSimulator3D
 var _cloth_ground: SpringBoneCollisionPlane3D
 var _last_position := Vector3.ZERO
 var _sword: Node3D
+## 무기 자리(WeaponPlace → 붙일 노드), 지금 무기가 있는 자리(사라지는 중이면 사라지기 전 자리), 나타난 정도(0~1)
+var _weapon_anchors: Dictionary[int, Node3D] = {}
+var _weapon_place := WeaponPlace.HIDDEN
+var _weapon_reveal := 0.0
+var _weapon_materials: Array[ShaderMaterial] = []
 ## 동작에 맞춰 원작 소리·보이스를 낸다. 꾸러미가 없으면 소리 없이 돈다.
 var fx: CharacterFx
 ## 휘두를 때 칼날이 지나간 자리에 남는 빛의 띠
@@ -161,6 +202,25 @@ var _last_jump_count := 0
 var _last_dodge_count := 0
 var _last_action_count := 0
 var _last_hurt_count := 0
+var _last_flinch_count := 0
+## 이번 낙하에서 가장 높았던 곳(세상 기준 높이). 내려설 때 무겁게 착지할지 정한다.
+var _fall_top := -INF
+
+# 서 있을 때의 연출 (모든 피어가 동기화된 상태를 보고 같은 결정을 한다)
+## 가만히 서 있은 시간(초), 쉬는 자세인지, 다음 특수 대기까지 남은 시간(초)과 마지막으로 한 것
+var _still_time := 0.0
+var _relaxing := false
+var _special_left := 0.0
+var _special_index := 0
+var _was_in_combat := false
+var _was_showcase := false
+var _was_showcase_weapon := false
+var _last_pokes := 0
+## 마지막으로 달리거나 질주한 동작과, 그만둔 뒤 지난 시간(초). 서면 멈추는 동작을 고른다.
+var _fast_move := &""
+var _since_fast := 100.0
+## 동작 이름 → 길이(초)
+var _clip_lengths: Dictionary[StringName, float] = {}
 
 # 동작 층: 동작을 고르는 노드와 섞는 노드, 모델에 있는 동작들
 var _action_choice: AnimationNodeTransition
@@ -170,11 +230,13 @@ var _action_clips: Array[StringName] = []
 var _action_clip := &""
 var _action_end := 0.0
 var _action_elapsed := 100.0
-## 동작이 보이는 정도 (0~1)
+## 동작이 보이는 정도 (0~1)와, 지금 동작을 보여 주는 중인지(끝나서 섞여 나가는 중이면 false)
 var _action_amount := 0.0
+var _action_showing := false
 
-# 이번 프레임의 움직임 (애니메이션 위에 자세를 덧입힐 때 다시 쓴다)
+# 이번 프레임의 움직임 (애니메이션 위에 자세를 덧입힐 때 다시 쓴다). _speed는 부드럽게 따라가는 값이다.
 var _speed := 0.0
+var _raw_speed := 0.0
 var _move_dir := FORWARD
 var _airborne := false
 var _delta := 0.0
@@ -250,15 +312,29 @@ func dominant_animation() -> StringName:
 		return _action_clip
 	for shot: StringName in [&"land", &"jump"]:
 		if _tree_nodes.has(shot) and bool(_tree.get(StringName("parameters/%s/active" % shot))):
+			if shot == &"land" and String(_tree.get(&"parameters/land_kind/current_state")) == "heavy":
+				return &"land_heavy"
 			return shot
 	if _airborne:
 		return &"fall"
 	return locomotion
 
 
-## 검을 들고 있는지 (싸우는 중에만 보인다)
+## 무기가 보이는지 (싸우는 동작에서만 나타난다)
 func sword_shown() -> bool:
 	return _sword != null and _sword.visible
+
+## 무기를 붙인 노드 (테스트와 디버그용). 무기가 없으면 null.
+func weapon_anchor() -> Node3D:
+	return _sword.get_parent() as Node3D if _sword != null else null
+
+## 가볍게 맞아 윗몸이 움찔하는 중인지
+func flinching() -> bool:
+	return _is_playing(&"flinch")
+
+## 무기가 지금 있는 자리 (WeaponPlace). 사라지는 중이면 사라지기 전 자리다.
+func weapon_place() -> int:
+	return _weapon_place if _weapon_reveal > 0.0 else WeaponPlace.HIDDEN
 
 func _process(delta: float) -> void:
 	if player == null or delta <= 0.0:
@@ -273,9 +349,8 @@ func _process(delta: float) -> void:
 	if _cloth != null and global_position.distance_to(_last_position) > TELEPORT_DISTANCE:
 		_cloth.reset()
 	_last_position = global_position
-	if _sword != null:
-		_sword.visible = player.in_combat or _action_amount > 0.01
 	if _skeleton == null or not visible:
+		_update_weapon(delta)
 		return
 	_read_motion(delta, velocity)
 	if animated:
@@ -283,6 +358,7 @@ func _process(delta: float) -> void:
 	else:
 		_update_face_light()
 		_hide_bones()
+	_update_weapon(delta)
 
 ## 지금 속도(세상 기준). 내가 조종하는 플레이어는 물리 엔진의 실제 속도를 쓴다.
 ## 원격 플레이어는 위치가 바뀐 간격으로 잰다. 그리는 프레임마다 위치를 빼면, 물리(60fps)보다
@@ -306,9 +382,12 @@ func _read_motion(delta: float, velocity: Vector3) -> void:
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z)
 	var raw_speed := horizontal.length()
 	_delta = delta
+	_raw_speed = raw_speed
 	_speed = lerpf(_speed, raw_speed, minf(delta * 15.0, 1.0))
 	_air_time = _air_time + delta if player.state == Player.State.AIR else 0.0
 	_airborne = _air_time > AIR_DELAY
+	if player.state == Player.State.AIR:
+		_fall_top = maxf(_fall_top, global_position.y)
 	if raw_speed > 0.3:
 		_move_dir = horizontal / raw_speed
 
@@ -606,15 +685,18 @@ func _setup_animation() -> void:
 	for name in REQUIRED_ANIMATIONS:
 		if not animation_player.has_animation(name):
 			return
+	for name: StringName in animation_player.get_animation_list():
+		_clip_lengths[name] = animation_player.get_animation(name).length
 
-	# 이동: 동작마다 재생 속도 노드를 달고, 속도 구간에 따라 하나를 고른다(교차 0.25초).
+	# 이동: 동작마다 재생 속도 노드를 달고, 속도 구간에 따라 하나를 고른다(교차 0.25초). 서 있을 때의 반복 동작도 여기서 고른다.
 	var root := AnimationNodeBlendTree.new()
 	var moves := AnimationNodeTransition.new()
 	moves.xfade_time = 0.25
 	root.add_node(&"locomotion", moves)
 	_locomotion_states = LOCOMOTION_STATES.duplicate()
-	if animation_player.has_animation(&"battle_idle"):
-		_locomotion_states.append(&"battle_idle")
+	for name in STANDING_STATES:
+		if animation_player.has_animation(name):
+			_locomotion_states.append(name)
 	var index := 0
 	for name: StringName in _locomotion_states:
 		moves.add_input(String(name))
@@ -628,8 +710,17 @@ func _setup_animation() -> void:
 	root.connect_node(&"air", 0, &"locomotion")
 	root.connect_node(&"air", 1, &"fall_clip")
 	var last := &"air"
-	last = _add_one_shot(root, animation_player, last, &"jump", {&"idle": &"jump_idle", &"run": &"jump_run"}, 1.0, 0.05, 0.25)
-	last = _add_one_shot(root, animation_player, last, &"land", {&"idle": &"land", &"run": &"run_land"}, 1.4, 0.05, 0.25)
+	last = _add_one_shot(root, animation_player, last, &"jump",
+			{&"idle": &"jump_idle", &"run": &"jump_run", &"sprint": &"jump_sprint"}, 1.0, 0.05, 0.25)
+	last = _add_one_shot(root, animation_player, last, &"land",
+			{&"idle": &"land", &"run": &"run_land", &"sprint": &"sprint_land", &"heavy": &"land_heavy"}, 1.4, 0.05, 0.25)
+	# 가볍게 맞음: 윗몸만 움찔한다(다리는 하던 동작 그대로). 공격 중에는 동작 층이 덮는다.
+	var flinch_kinds := {}
+	for i in FLINCH_CLIPS.size():
+		flinch_kinds[StringName(str(i))] = FLINCH_CLIPS[i]
+	last = _add_one_shot(root, animation_player, last, &"flinch", flinch_kinds, 1.0, 0.05, 0.2)
+	if _tree_nodes.has(&"flinch"):
+		_filter_upper_body(root.get_node(&"flinch") as AnimationNodeOneShot, animation_player.get_animation(FLINCH_CLIPS[0]))
 	last = _add_actions(root, animation_player, last)
 	root.connect_node(&"output", 0, last)
 
@@ -664,7 +755,7 @@ func _setup_animation() -> void:
 ## 한 번 트는 노드(OneShot)는 재생 중에 다시 틀면 섞지 않고 처음으로 튀므로(연속 공격이 끊겨 보인다),
 ## 섞는 양을 코드가 직접 정한다. 공격은 온몸으로 한다(다리도 동작대로 내디딘다).
 func _add_actions(root: AnimationNodeBlendTree, animation_player: AnimationPlayer, input: StringName) -> StringName:
-	for clip in ACTION_CLIPS:
+	for clip in ACTION_CLIPS + IDLE_CLIPS:
 		if animation_player.has_animation(clip):
 			_action_clips.append(clip)
 	if _action_clips.is_empty():
@@ -723,6 +814,29 @@ func _add_one_shot(root: AnimationNodeBlendTree, animation_player: AnimationPlay
 	_first_kinds[shot] = present[0]
 	return shot
 
+## 한 번 트는 노드가 윗몸(허리 위, 다리 빼고) 뼈만 섞게 한다. 거르개 경로는 동작의 트랙 경로를 그대로 쓴다.
+func _filter_upper_body(node: AnimationNodeOneShot, animation: Animation) -> void:
+	node.filter_enabled = true
+	for track in animation.get_track_count():
+		var path := animation.track_get_path(track)
+		var bone := _skeleton.find_bone(String(path.get_concatenated_subnames()))
+		if bone >= 0 and _is_upper_body(bone):
+			node.set_filter_path(path, true)
+
+
+## 허리(spine) 아래에 매달린 뼈인지. 다리(허벅지 아래)는 뺀다. 이 모델은 허벅지가 골반에 붙어 있지만, 3ds Max Biped에서
+## 바로 내보낸 모델은 허벅지가 허리에 붙어 있다.
+func _is_upper_body(bone: int) -> bool:
+	var legs: Array[int] = [_bone[&"thigh_l"], _bone[&"thigh_r"]]
+	while bone >= 0:
+		if legs.has(bone):
+			return false
+		if bone == _bone[&"spine"]:
+			return true
+		bone = _skeleton.get_bone_parent(bone)
+	return false
+
+
 ## 실행 중에 glTF를 읽으면 "-loop" 꼬리가 이름에 그대로 남고 반복 설정도 빠진다(에디터 가져오기만 처리해 준다).
 ## 이름을 정리하고 반복을 직접 켠다.
 static func _normalize_animation_names(animation_player: AnimationPlayer) -> void:
@@ -742,27 +856,56 @@ static func _clip(name: StringName) -> AnimationNodeAnimation:
 
 # ---- 애니메이션 모드: 매 프레임 ----
 func _drive_animation(delta: float) -> void:
-	_update_locomotion()
+	_update_locomotion(delta)
 	_tree.set(&"parameters/air/blend_amount", move_toward(float(_tree.get(&"parameters/air/blend_amount")), 1.0 if _airborne else 0.0, delta * 8.0))
 	_update_actions(delta)
+	_update_idle(delta)
 	# 점프는 동기화된 횟수가 바뀌었을 때 튼다(원격 플레이어도 같은 동작을 본다).
 	if player.jump_count != _last_jump_count:
 		_last_jump_count = player.jump_count
-		_fire(&"jump", &"run" if _speed > 2.0 else &"idle")
-	# 착지: 공중에 있다가 땅에 닿으면 도약 동작을 끊고 착지 동작을 튼다. 착지 중에 움직이기 시작하면 바로 푼다.
+		_fire(&"jump", _move_kind())
+	# 착지: 공중에 있다가 땅에 닿으면 도약 동작을 끊고 착지 동작을 튼다. 높은 곳에서 떨어졌으면 무릎을 굽히며
+	# 무겁게 내려선다. 제자리 착지 중에 움직이기 시작하면 바로 푼다.
 	if _was_airborne and not _airborne:
 		_stop(&"jump")
-		_fire(&"land", &"run" if _speed > 2.0 else &"idle")
-	elif _speed > 1.5 and _is_playing(&"land") and String(_tree.get(&"parameters/land_kind/current_state")) == "idle":
+		var kind := _move_kind()
+		if _fall_top - global_position.y >= HEAVY_LANDING_DROP and _tree_nodes.has(&"land:heavy"):
+			kind = &"heavy"
+		_fire(&"land", kind)
+	elif _speed > 1.5 and _is_playing(&"land") and String(_tree.get(&"parameters/land_kind/current_state")) in ["idle", "heavy"]:
 		_stop(&"land")
 	_was_airborne = _airborne
+	if not _airborne and player.state != Player.State.AIR:
+		_fall_top = -INF
+	# 가볍게 맞음: 맞은 쪽 동작으로 윗몸만 움찔한다.
+	if player.flinch_count != _last_flinch_count:
+		_last_flinch_count = player.flinch_count
+		_fire(&"flinch", StringName(str(clampi(player.flinch_side, 0, FLINCH_CLIPS.size() - 1))))
 
 
-## 속도 구간에 맞는 이동 동작을 고르고, 실제 속도에 맞춰 재생 속도를 정한다. 싸우는 중에 서 있으면 전투 대기.
-func _update_locomotion() -> void:
+## 점프·착지 동작의 종류: 지금 빠르기에 따라 제자리, 달리며, 질주하며
+func _move_kind() -> StringName:
+	if _speed > 6.0:
+		return &"sprint"
+	return &"run" if _speed > 2.0 else &"idle"
+
+
+## 속도 구간에 맞는 이동 동작을 고르고, 실제 속도에 맞춰 재생 속도를 정한다. 서 있으면 상황에 맞는 대기 동작
+## (_standing_state)을 고른다. 달리거나 질주하다 서면 멈추는 동작을 한다.
+func _update_locomotion(delta: float) -> void:
 	var next := _pick_locomotion(_speed)
-	if next == &"idle" and player.in_combat and _locomotion_states.has(&"battle_idle"):
-		next = &"battle_idle"
+	if next == &"idle":
+		next = _standing_state()
+	if locomotion == &"run" or locomotion == &"sprint":
+		_fast_move = locomotion
+		_since_fast = 0.0
+	else:
+		_since_fast += delta
+	# 실제 속도가 거의 0이 되면 바로 멈추는 동작을 한다(고르는 속도는 부드럽게 줄어서 늦다).
+	if not _fast_move.is_empty() and _raw_speed < 0.3 and _since_fast < STOP_WINDOW:
+		if player.state == Player.State.GROUND and not _airborne and not _action_busy() and not player.showcase:
+			_play_stop()
+		_fast_move = &""
 	if next != locomotion:
 		locomotion = next
 		_tree.set(&"parameters/locomotion/transition_request", String(next))
@@ -770,6 +913,99 @@ func _update_locomotion() -> void:
 		var natural: float = NATURAL_SPEEDS[locomotion]
 		var lowest := 0.5 if locomotion == &"walk" else 0.6
 		_tree.set(StringName("parameters/%s_speed/scale" % locomotion), clampf(_speed / natural, lowest, 2.2))
+
+
+## 서 있을 때 고를 반복 동작: 캐릭터 화면이면 화면용 대기(무기 보기 중이면 무기를 든 대기), 싸우는 중이면 전투 대기,
+## 오래 서 있었으면 쉬는 자세, 아니면 보통 대기.
+func _standing_state() -> StringName:
+	if player.showcase:
+		if player.showcase_weapon and _locomotion_states.has(&"ui_weapon"):
+			return &"ui_weapon"
+		if _locomotion_states.has(&"ui_idle"):
+			return &"ui_idle"
+	if player.in_combat and _locomotion_states.has(&"battle_idle"):
+		return &"battle_idle"
+	if _relaxing and _locomotion_states.has(&"relax"):
+		return &"relax"
+	return &"idle"
+
+
+## 달리다(질주하다) 섰다: 어느 발이 앞에 있는지 보고 그 발로 멈추는 동작을 고른다.
+func _play_stop() -> void:
+	var clips: Array = STOP_CLIPS.get(_fast_move, [])
+	if clips.size() != 2:
+		return
+	var left_ahead := _posed_point(&"foot_l").dot(FORWARD) > _posed_point(&"foot_r").dot(FORWARD)
+	_play_idle(clips[0] if left_ahead else clips[1])
+
+
+## 서 있을 때의 연출. 전투가 시작되면(적이 알아채면) 무기를 꺼내고 끝나면 거둔다. 오래 서 있으면 쉬는 자세로 바꾸고,
+## 쉬는 동안 가끔 특수 대기 동작을 한다. 캐릭터 화면에서는 들어오는 동작, 무기 보기, 누르면 반응하는 동작을 한다.
+## 동기화된 상태(전투 중인지, 상태, 속도)만 보고 정하므로 원격 플레이어의 몸도 같은 동작을 한다(캐릭터 화면은 내 화면에만).
+func _update_idle(delta: float) -> void:
+	var standing := _is_standing()
+	if player.in_combat != _was_in_combat:
+		_was_in_combat = player.in_combat
+		_relaxing = false
+		_still_time = 0.0
+		if standing and not _action_busy() and not player.showcase:
+			_play_idle(&"draw" if player.in_combat else &"sheathe")
+	if player.showcase != _was_showcase:
+		_was_showcase = player.showcase
+		_was_showcase_weapon = false
+		_last_pokes = player.showcase_pokes
+		if player.showcase:
+			_play_idle(&"ui_enter")
+		elif IDLE_CLIPS.has(_action_clip):
+			_action_end = 0.0
+	if player.showcase:
+		if player.showcase_weapon != _was_showcase_weapon:
+			_was_showcase_weapon = player.showcase_weapon
+			_play_idle(&"ui_to_weapon" if player.showcase_weapon else &"ui_weapon_out")
+		if player.showcase_pokes != _last_pokes:
+			_last_pokes = player.showcase_pokes
+			if not player.showcase_weapon:
+				_play_idle(&"ui_react")
+		return
+	if not standing or player.in_combat:
+		_still_time = 0.0
+		_relaxing = false
+		return
+	_still_time += delta
+	if not _relaxing:
+		if _still_time >= RELAX_DELAY and not _action_busy():
+			_relaxing = true
+			_special_left = RELAX_SPECIAL_GAP
+			_play_idle(&"relax_in")
+		return
+	if _idle_showing():
+		return
+	_special_left -= delta
+	if _special_left <= 0.0:
+		_special_index = (_special_index + 1) % 2
+		_play_idle(&"relax_sp_1" if _special_index == 1 else &"relax_sp_2")
+		_special_left = RELAX_SPECIAL_GAP
+
+
+## 땅에 서서 가만히 있는지 (대기 연출을 해도 되는지). 움직이기 시작하면 바로 알도록 실제 속도를 본다.
+func _is_standing() -> bool:
+	return player.state == Player.State.GROUND and not _airborne and _raw_speed < IDLE_BREAK_SPEED and player.is_alive()
+
+
+## 공격·회피·맞음·쓰러짐 동작을 보여 주는 중인지 (대기 연출을 하지 않는다)
+func _action_busy() -> bool:
+	return _action_elapsed < _action_end and not IDLE_CLIPS.has(_action_clip)
+
+
+## 대기 연출 동작을 보여 주는 중인지
+func _idle_showing() -> bool:
+	return _action_elapsed < _action_end and IDLE_CLIPS.has(_action_clip)
+
+
+## 대기 연출 동작을 처음부터 끝까지 튼다. 모델에 없으면 아무것도 하지 않는다.
+func _play_idle(clip: StringName) -> void:
+	if _clip_lengths.has(clip):
+		_play_action(clip, _clip_lengths[clip])
 
 
 ## 동기화된 번호를 보고 동작 층의 동작을 튼다. 공격·스킬은 동작 길이만큼, 회피·맞음은 정해진 시간만큼,
@@ -798,13 +1034,23 @@ func _update_actions(delta: float) -> void:
 		_action_elapsed += delta
 	_tree.set(&"parameters/action_speed/scale", 0.0 if stopped else 1.0)
 	var showing := _action_elapsed < _action_end
-	# 공격을 끊고 움직이면(조종하는 피어의 상태가 바뀌면) 원격 몸도 바로 푼다.
-	if showing and not NON_ATTACK_CLIPS.has(_action_clip) and player.state != Player.State.ACTION:
+	var idle_clip := IDLE_CLIPS.has(_action_clip)
+	if showing and idle_clip and not _is_standing():
+		# 대기 연출 중에 움직이거나 뛰면 바로 끊는다.
 		showing = false
-	_action_amount = move_toward(_action_amount, 1.0 if showing else 0.0, delta / (ACTION_FADE_IN if showing else ACTION_FADE_OUT))
+		_action_end = 0.0
+	elif showing and not idle_clip and not NON_ATTACK_CLIPS.has(_action_clip) and player.state != Player.State.ACTION:
+		# 공격을 끊고 움직이면(조종하는 피어의 상태가 바뀌면) 원격 몸도 바로 푼다.
+		showing = false
+	var fade := ACTION_FADE_IN if showing else ACTION_FADE_OUT
+	if idle_clip:
+		# 대기 연출은 천천히 섞되, 움직여서 끊을 때는 바로 이동 동작으로 넘어간다.
+		fade = IDLE_FADE_IN if showing else (IDLE_FADE_OUT if _is_standing() else ACTION_FADE_OUT)
+	_action_amount = move_toward(_action_amount, 1.0 if showing else 0.0, delta / fade)
+	_action_showing = showing
 	_tree.set(&"parameters/action/blend_amount", _action_amount)
 	if trail != null:
-		trail.active = showing and _action_amount > 0.5 and not NON_ATTACK_CLIPS.has(_action_clip)
+		trail.active = showing and _action_amount > 0.5 and not idle_clip and not NON_ATTACK_CLIPS.has(_action_clip)
 		trail.crystal = _action_clip == &"skill" or _action_clip == &"ultimate"
 
 
@@ -973,21 +1219,23 @@ func _set_global_basis(index: int, global: Basis) -> void:
 	var parent_basis := _skeleton.get_bone_global_pose(parent).basis if parent >= 0 else Basis.IDENTITY
 	_skeleton.set_bone_pose_rotation(index, (parent_basis.inverse() * global).get_rotation_quaternion())
 
-# ---- 검 ----
-## 원작의 무기 자리(관리자는 왼손 wep_L)에 무기를 쥐여 준다. 무기 모델(타르 11)이 없으면 코드로 만든 검을 쥔다.
-## 무기 자리가 없는 모델이면 손 뼈에 붙인다.
+# ---- 무기 ----
+## 원작의 무기 자리(오른손 wep_R, 등 뒤 걸이, 왼손 wep_L)를 찾아 두고, 무기를 오른손에 쥐여 둔다(처음에는 보이지 않는다).
+## 무기 모델(타르 11)이 없으면 코드로 만든 검을 쥔다. 무기 자리가 없는 모델이면 손 뼈에 붙인다.
 func _attach_weapon() -> void:
-	var anchor := _model.find_child(String(appearance.weapon_mount), true, false) as Node3D
-	if anchor == null:
-		var attachment := BoneAttachment3D.new()
-		attachment.name = "WeaponHand"
-		_skeleton.add_child(attachment)
-		var left := String(appearance.weapon_mount).ends_with("_L")
-		attachment.bone_name = _skeleton.get_bone_name(_bone[&"hand_l" if left else &"hand_r"])
-		anchor = Node3D.new()
-		anchor.position = SWORD_HAND_OFFSET
-		anchor.rotation.x = -PI * 0.5 if left else PI * 0.5
-		attachment.add_child(anchor)
+	var mounts := {
+		WeaponPlace.HAND: appearance.weapon_hand_mount,
+		WeaponPlace.BACK: appearance.weapon_back_mount,
+		WeaponPlace.MENU: appearance.weapon_menu_mount,
+	}
+	for place: int in mounts:
+		var anchor := _model.find_child(String(mounts[place]), true, false) as Node3D
+		if anchor == null and place != WeaponPlace.BACK:
+			anchor = _hand_anchor(place == WeaponPlace.MENU)
+		if anchor != null:
+			_weapon_anchors[place] = anchor
+	if not _weapon_anchors.has(WeaponPlace.BACK):
+		_weapon_anchors[WeaponPlace.BACK] = _weapon_anchors[WeaponPlace.HAND]
 	var scene := appearance.load_weapon_scene()
 	if scene != null:
 		_sword = scene.instantiate() as Node3D
@@ -997,12 +1245,96 @@ func _attach_weapon() -> void:
 			(geometry as GeometryInstance3D).layers |= CHARACTER_RENDER_LAYER
 	else:
 		_sword = _build_sword()
-	anchor.add_child(_sword)
+	_weapon_anchors[WeaponPlace.HAND].add_child(_sword)
+	_weapon_place = WeaponPlace.HAND
+	_make_weapon_materials()
 	_sword.visible = false
 	trail = WeaponTrail.new()
 	trail.name = "WeaponTrail"
 	trail.weapon = _sword
 	add_child(trail)
+
+
+## 무기 자리가 없는 모델: 손 뼈에 무기 자리를 만든다.
+func _hand_anchor(left: bool) -> Node3D:
+	var attachment := BoneAttachment3D.new()
+	attachment.name = "WeaponHandL" if left else "WeaponHandR"
+	_skeleton.add_child(attachment)
+	attachment.bone_name = _skeleton.get_bone_name(_bone[&"hand_l" if left else &"hand_r"])
+	var anchor := Node3D.new()
+	anchor.position = SWORD_HAND_OFFSET
+	anchor.rotation.x = -PI * 0.5 if left else PI * 0.5
+	attachment.add_child(anchor)
+	return anchor
+
+
+## 무기 메시마다 나타나고 사라지는 재질(weapon.gdshader)을 입힌다. 원래 재질의 색과 그림을 옮긴다.
+## 무기 축(+Y, 손잡이 → 칼끝)을 메시 기준으로 바꾸고, 메시가 그 축에서 차지하는 범위를 잰다.
+func _make_weapon_materials() -> void:
+	for node: Node in _sword.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		# 메시 → 무기 변환 (무기 아래의 노드 변환을 차례로 곱한다)
+		var to_weapon := Transform3D.IDENTITY
+		var step: Node = mesh_instance
+		while step != _sword and step is Node3D:
+			to_weapon = (step as Node3D).transform * to_weapon
+			step = step.get_parent()
+		var axis := (to_weapon.basis.inverse() * Vector3.UP).normalized()
+		var box := mesh_instance.mesh.get_aabb()
+		var low := INF
+		var high := -INF
+		for i in 8:
+			var along := box.get_endpoint(i).dot(axis)
+			low = minf(low, along)
+			high = maxf(high, along)
+		for i in mesh_instance.mesh.get_surface_count():
+			var source := mesh_instance.get_active_material(i) as BaseMaterial3D
+			var material := ShaderMaterial.new()
+			material.shader = WEAPON_SHADER
+			if source != null:
+				material.set_shader_parameter(&"albedo_texture", source.albedo_texture)
+				material.set_shader_parameter(&"albedo_color", source.albedo_color)
+				material.set_shader_parameter(&"roughness", source.roughness)
+				material.set_shader_parameter(&"metallic", source.metallic)
+				if source.emission_enabled:
+					material.set_shader_parameter(&"emission_color", source.emission)
+					material.set_shader_parameter(&"emission_energy", source.emission_energy_multiplier)
+			material.set_shader_parameter(&"cut_axis", axis)
+			material.set_shader_parameter(&"cut_from", low)
+			material.set_shader_parameter(&"cut_to", high)
+			_set_material(mesh_instance, i, material)
+			_weapon_materials.append(material)
+
+
+## 지금 보이는 동작에 맞춰 무기를 옮기고, 나타나거나 사라지게 한다.
+func _update_weapon(delta: float) -> void:
+	if _sword == null:
+		return
+	var wanted := _wanted_weapon_place()
+	var menu := wanted == WeaponPlace.MENU or (wanted == WeaponPlace.HIDDEN and _weapon_place == WeaponPlace.MENU)
+	if wanted != WeaponPlace.HIDDEN:
+		if wanted != _weapon_place and _weapon_anchors.has(wanted):
+			_sword.reparent(_weapon_anchors[wanted], false)
+			_sword.transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * appearance.weapon_scale), Vector3.ZERO)
+			_weapon_place = wanted as WeaponPlace
+		_weapon_reveal = move_toward(_weapon_reveal, 1.0, delta / (MENU_APPEAR_TIME if menu else WEAPON_APPEAR_TIME))
+	else:
+		_weapon_reveal = move_toward(_weapon_reveal, 0.0, delta / (MENU_VANISH_TIME if menu else WEAPON_VANISH_TIME))
+	_sword.visible = _weapon_reveal > 0.0
+	for material in _weapon_materials:
+		material.set_shader_parameter(&"reveal", _weapon_reveal)
+
+
+## 무기를 둘 자리. 동작 층의 동작을 보여 주는 중이면 그 동작의 무기 연결 정보(CharacterAppearance.weapon_timelines)를 시각에 맞춰 읽고,
+## 아니면 이동·대기 동작의 것을 읽는다. 목록에 없는 동작이면 거둔다. 애니메이션이 없는 모델은 싸울 때 오른손에 든다.
+func _wanted_weapon_place() -> int:
+	if not animated:
+		return WeaponPlace.HAND if player.in_combat or player.state == Player.State.ACTION else WeaponPlace.HIDDEN
+	if _action_showing:
+		return appearance.weapon_place(_action_clip, _action_elapsed)
+	return appearance.weapon_place(locomotion, 0.0)
 
 
 ## 원작 무기 모델을 쥐었는지 (없으면 코드로 만든 검)

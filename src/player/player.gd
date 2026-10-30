@@ -39,6 +39,11 @@ const HIT_KILL := 4
 const HURT_TIME := 0.6
 ## 공격이나 피격 뒤 이 시간(초) 동안 전투 자세(전투 대기 동작)를 유지한다.
 const COMBAT_TIME := 6.0
+## 이 거리(m) 안의 적이 나를 알아채고 다가오면 전투 자세로 무기를 꺼낸다(원작처럼). 적이 잠잠해져도 이 시간(초)은 유지한다.
+const ALERT_RANGE := 16.0
+const ALERT_COMBAT_TIME := 2.0
+## 가볍게 맞은 쪽 (flinch_side): 앞, 뒤, 왼쪽, 오른쪽
+enum HitSide { FRONT, BACK, LEFT, RIGHT }
 ## 미리 누른 공격을 기억하는 시간(초)
 const ATTACK_BUFFER := 0.45
 ## 공격이 끝난 뒤 이 시간(초) 안에 다시 누르면 연속 공격이 이어진다.
@@ -75,6 +80,9 @@ var dodge_count := 0
 ## 마지막 회피가 뒤로 물러나기였는지
 var dodge_back := false
 var hurt_count := 0
+## 가볍게 맞을 때마다 1씩 느는 번호와 맞은 쪽(HitSide). 몸이 윗몸만 움찔한다(움직임은 막지 않는다).
+var flinch_count := 0
+var flinch_side := HitSide.FRONT
 ## 머리 장비(바이저)를 쓰고 있는지. 내 플레이어는 설정에 저장된 값으로 시작한다.
 var visor_on := true
 ## 무적(회피 직후, 궁극기·처형 중). 호스트가 적의 공격을 판정할 때 본다.
@@ -106,6 +114,9 @@ var input_blocked := false
 ## 캐릭터 화면: 카메라가 캐릭터를 앞에서 비춘다. showcase_yaw만큼 둘레를 돈다.
 var showcase := false
 var showcase_yaw := 0.0
+## 캐릭터 화면에서 무기를 보는 중인지(캐릭터가 왼손에 무기를 들고 보여 준다), 캐릭터를 누른 횟수(누를 때마다 반응한다)
+var showcase_weapon := false
+var showcase_pokes := 0
 
 var _action: AttackData
 var _action_time := 0.0
@@ -340,6 +351,8 @@ func _physics_process(delta: float) -> void:
 	if state == State.GROUND or state == State.AIR:
 		state = State.GROUND if is_on_floor() else State.AIR
 	sp = minf(sp + kit.sp_regen * (1.0 + bonus(&"sp_regen")) * delta, kit.max_sp)
+	if _enemy_alerted_nearby():
+		_combat_left = maxf(_combat_left, ALERT_COMBAT_TIME)
 	in_combat = _combat_left > 0.0
 	_update_fov(delta)
 
@@ -718,10 +731,11 @@ func _take_hit(heavy: bool, from: Vector3, energy_gain: float) -> void:
 	_combat_left = COMBAT_TIME
 	add_shake(0.5 if heavy else 0.2)
 	got_hit.emit(heavy)
-	if not heavy or not is_alive() or state == State.DOWN:
+	if not is_alive() or state == State.DOWN:
 		return
 	var action := current_action()
-	if action != null and action.super_armor:
+	if not heavy or (action != null and action.super_armor):
+		_flinch(from)
 		return
 	if state == State.ACTION:
 		_end_action()
@@ -737,6 +751,29 @@ func _take_hit(heavy: bool, from: Vector3, energy_gain: float) -> void:
 		velocity.x = push.x
 		velocity.z = push.z
 		_face(-away)
+
+
+## 가볍게 맞았다: 맞은 쪽을 정하고 번호를 올린다(몸이 윗몸만 움찔한다).
+func _flinch(from: Vector3) -> void:
+	var toward := from - global_position
+	toward.y = 0.0
+	var forward := toward.dot(facing())
+	var right := toward.dot(global_basis.x)
+	if absf(forward) >= absf(right):
+		flinch_side = HitSide.FRONT if forward >= 0.0 else HitSide.BACK
+	else:
+		flinch_side = HitSide.RIGHT if right > 0.0 else HitSide.LEFT
+	flinch_count += 1
+
+
+## 가까운 적이 나를 알아채고 싸우려 드는지 (적 상태는 호스트가 정해 모든 피어에 동기화된다)
+func _enemy_alerted_nearby() -> bool:
+	for enemy in Roster.enemies(self):
+		if not enemy.is_alive() or enemy.state == Enemy.State.IDLE:
+			continue
+		if enemy.global_position.distance_squared_to(global_position) <= ALERT_RANGE * ALERT_RANGE:
+			return true
+	return false
 
 
 ## 호스트가 적의 공격을 무적으로 피한 것을 알린다: 완벽한 회피.

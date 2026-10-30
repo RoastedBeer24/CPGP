@@ -32,6 +32,30 @@ ROLES = {
     "fall": ["A_actor_{body}_fall_loop_l"],
     "land": ["A_actor_{body}_idle_jump_land_l"],
     "run_land": ["A_actor_{body}_run_jump_land_l"],
+    "jump_sprint": ["A_actor_{body}_sprint_jump_start_l"],
+    "sprint_land": ["A_actor_{body}_sprint_jump_land_l"],
+    # 높은 곳에서 떨어져 무릎을 굽히며 착지
+    "land_heavy": ["A_actor_{body}_idle_jump_land_heavy_l"],
+    # 달리다·질주하다 멈추기 (어느 발이 앞일 때 멈추는지에 따라 둘)
+    "run_stop_l": ["A_actor_{body}_run_stop_l"],
+    "run_stop_r": ["A_actor_{body}_run_stop_r"],
+    "sprint_stop_l": ["A_actor_{char}_sprint_stop_l", "A_actor_{body}_sprint_stop_l"],
+    "sprint_stop_r": ["A_actor_{char}_sprint_stop_r", "A_actor_{body}_sprint_stop_r"],
+    # 대기: 오래 서 있으면 쉬는 자세로 바뀌고(relax_in → relax), 가끔 특수 대기 동작을 한다.
+    "relax_in": ["A_actor_{char}_idle_to_relax"],
+    "relax": ["A_actor_{char}_relax_loop"],
+    "relax_sp_1": ["A_actor_{char}_relax_sp_01"],
+    "relax_sp_2": ["A_actor_{char}_relax_sp_02"],
+    # 무기 꺼내기(전투 시작)와 거두기(전투 끝)
+    "draw": ["A_actor_{char}_idle_to_battle"],
+    "sheathe": ["A_actor_{char}_battle_to_idle"],
+    # 캐릭터 화면: 들어오기 → 대기, 쓰다듬기 반응, 무기 보기(왼손에 무기를 든다) ↔ 대기
+    "ui_enter": ["A_actor_{char}_ui_overview_start"],
+    "ui_idle": ["A_actor_{char}_ui_overview_loop"],
+    "ui_react": ["A_actor_{char}_ui_relax_react", "A_actor_{char}_relax_react"],
+    "ui_to_weapon": ["A_actor_{char}_ui_overview_to_weapon"],
+    "ui_weapon": ["A_actor_{char}_ui_overview_weapon_loop"],
+    "ui_weapon_out": ["A_actor_{char}_ui_weapon_to_overview"],
     "dodge_f": ["A_actor_{char}_battle_dodge_f_l"],
     "dodge_b": ["A_actor_{char}_battle_dodge_b_l"],
     # 기본 공격 5단계, 대시 공격, 처형(강공격), 배틀 스킬, 궁극기. 타격 시각과 내디딤 거리는 data/kits/*.tres에 있다.
@@ -44,14 +68,17 @@ ROLES = {
     "finisher": ["A_actor_{char}_battle_power_attack"],
     "skill": ["A_actor_{char}_battle_normal_skill"],
     "ultimate": ["A_actor_{char}_battle_skill_ult"],
-    # 맞음: 가볍게 움찔(앞), 크게 휘청, 쓰러짐
-    "hit": ["A_actor_{body}_battle_hit_f"],
+    # 맞음: 가볍게 움찔(맞은 쪽: 앞·뒤·왼쪽·오른쪽), 크게 휘청, 쓰러짐
+    "hit_f": ["A_actor_{body}_battle_hit_f"],
+    "hit_b": ["A_actor_{body}_battle_hit_b"],
+    "hit_l": ["A_actor_{body}_battle_hit_l"],
+    "hit_r": ["A_actor_{body}_battle_hit_r"],
     "hit_heavy": ["A_actor_{char}_battle_hit_heavy"],
     "dead": ["A_actor_{char}_battle_dead"],
 }
 
 # 루프로 재생할 동작 (glTF에는 반복 여부가 없어서 이름 끝에 -loop를 붙이면 Godot가 반복으로 가져온다)
-LOOPING = {"idle", "walk", "run", "sprint", "battle_idle", "fall"}
+LOOPING = {"idle", "walk", "run", "sprint", "battle_idle", "fall", "relax", "ui_idle", "ui_weapon"}
 
 # 모든 동작에서 움직임을 빼는 뼈(눈동자). 원본의 대화·전투 동작은 오른쪽 눈 뼈만 2~6도씩 움직여서
 # (왼쪽은 그대로) 한쪽 눈만 돌아간다. 원래 게임은 시선을 따로 정하는 것으로 보여, 눈은 처음 자세(정면)로 둔다.
@@ -83,9 +110,11 @@ TRIM_OVERRIDES = {
 
 # 제자리 동작으로 바꿀 것. 원본 공격·회피는 내디디며 몸(뿌리 뼈)이 앞으로 1~4m 나가지만,
 # 게임에서는 플레이어가 직접 움직이므로 뿌리 뼈의 수평 이동을 없앤다(높이는 둔다).
+# 멈추기 동작도 원본은 1m쯤 미끄러지며 서지만, 게임에서는 몸(캡슐)이 스스로 멈춘다.
+# 캐릭터 화면에 들어오는 동작(ui_enter)은 1.6m 앞에서 걸어 들어와 제자리에서 끝나므로 그대로 둔다.
 ROOT_LOCKED = {
     "attack_1", "attack_2", "attack_3", "attack_4", "attack_5", "dash_attack", "finisher", "skill", "ultimate",
-    "dodge_f", "dodge_b", "hit_heavy", "dead",
+    "dodge_f", "dodge_b", "hit_heavy", "dead", "run_stop_l", "run_stop_r", "sprint_stop_l", "sprint_stop_r",
 }
 # 뿌리 뼈. 부모(Root)가 돌아가 있지 않아서 이동 값의 y가 위, x와 z가 수평이다.
 ROOT_BONE = "Bip001"

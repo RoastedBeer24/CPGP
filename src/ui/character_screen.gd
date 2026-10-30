@@ -1,6 +1,8 @@
 class_name CharacterScreen
 extends Control
 ## 로비의 캐릭터 화면(C). 카메라가 내 캐릭터를 앞에서 비추고, 오른쪽에 소개와 기술이 나온다.
+## 캐릭터는 원작의 캐릭터 화면 동작으로 걸어 들어와 선다. 캐릭터를 누르면 반응하고, 무기 보기(W)를 누르면
+## 왼손에 무기를 꺼내 보여 준다.
 ## ◀ ▶(또는 A·D)로 캐릭터를 바꾸면 그 자리에서 새 캐릭터로 다시 나타난다(코옵에서도 모두에게 보인다).
 ## 휠로 가까이·멀리, 마우스 오른쪽 버튼을 끌거나 Q·E로 캐릭터 둘레를 돈다.
 
@@ -16,6 +18,8 @@ var _description: Label
 var _stats: Label
 var _skills: Label
 var _index_label: Label
+var _weapon_button: Button
+var _panel: PanelContainer
 var _dragging := false
 
 
@@ -24,6 +28,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	visible = false
 	var panel := PanelContainer.new()
+	_panel = panel
 	panel.anchor_left = 1.0
 	panel.anchor_right = 1.0
 	panel.anchor_bottom = 1.0
@@ -67,13 +72,17 @@ func _ready() -> void:
 	next.custom_minimum_size = Vector2(64, 40)
 	next.pressed.connect(cycle.bind(1))
 	switcher.add_child(next)
+	_weapon_button = Button.new()
+	_weapon_button.custom_minimum_size = Vector2(0, 40)
+	_weapon_button.pressed.connect(toggle_weapon)
+	rows.add_child(_weapon_button)
 	var close := Button.new()
 	close.text = "닫기 (C / Esc)"
 	close.custom_minimum_size = Vector2(0, 40)
 	close.pressed.connect(close_screen)
 	rows.add_child(close)
 	var hint := _label(self, 15, Color(1, 1, 1, 0.7))
-	hint.text = "휠: 가까이·멀리   마우스 오른쪽 끌기 또는 Q·E: 둘러보기   A·D: 캐릭터 바꾸기"
+	hint.text = "캐릭터 누르기: 반응   W: 무기 보기   휠: 가까이·멀리   마우스 오른쪽 끌기 또는 Q·E: 둘러보기   A·D: 캐릭터 바꾸기"
 	hint.position = Vector2(32, 32)
 
 
@@ -96,8 +105,24 @@ func close_screen() -> void:
 	if player != null:
 		player.input_blocked = false
 		player.showcase = false
+		player.showcase_weapon = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	closed.emit()
+
+
+## 무기 보기를 켜거나 끈다: 캐릭터가 왼손에 무기를 꺼내 보여 주고, 끄면 거둔다.
+func toggle_weapon() -> void:
+	var player := _player()
+	if player != null:
+		player.showcase_weapon = not player.showcase_weapon
+		_refresh()
+
+
+## 캐릭터를 눌렀다: 반응하는 동작을 한다(무기를 보는 중에는 하지 않는다).
+func poke() -> void:
+	var player := _player()
+	if player != null:
+		player.showcase_pokes += 1
 
 
 ## 캐릭터를 앞(+1)이나 뒤(-1)로 바꾼다.
@@ -145,6 +170,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				cycle(-1)
 			KEY_D, KEY_RIGHT:
 				cycle(1)
+			KEY_W:
+				toggle_weapon()
 			KEY_C, KEY_ESCAPE:
 				close_screen()
 		get_viewport().set_input_as_handled()
@@ -154,6 +181,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if button != null and player != null:
 		if button.button_index == MOUSE_BUTTON_RIGHT:
 			_dragging = button.pressed
+		elif button.pressed and button.button_index == MOUSE_BUTTON_LEFT and not _panel.get_global_rect().has_point(button.position):
+			poke()
 		elif button.pressed and button.button_index == MOUSE_BUTTON_WHEEL_UP:
 			player.zoom(-1)
 		elif button.pressed and button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -171,6 +200,7 @@ func _refresh() -> void:
 	var kit := player.kit
 	_title_label.text = character.title
 	_name_label.text = character.display_name
+	_weapon_button.text = "무기 거두기 (W)" if player.showcase_weapon else "무기 보기 (W)"
 	_description.text = character.description
 	_stats.text = "체력 %d   공격력 %d   궁극기 에너지 %d" % [roundi(kit.max_health), roundi(kit.attack_power), roundi(kit.max_energy)]
 	var lines: PackedStringArray = ["[왼쪽 클릭] 기본 공격 5연속"]

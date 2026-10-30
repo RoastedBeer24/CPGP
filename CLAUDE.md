@@ -30,11 +30,13 @@
 | M1 첫 전투 방 | 검수 대기 | 관리자(여·남) 검 5연속·대시 공격·처형·배틀 스킬(원석 결정)·궁극기(결정 파쇄)·회피(완벽한 회피)·경직, 적 3종(임시 도형 몸), 웨이브, HUD, 협동, 캐릭터 고르기 (`docs/dev/review/m1.md`) |
 | M2 적 모델 | 모델 기다림 | 사용자가 적 모델을 추출해 주면 넣는다 |
 | **M3 한 판** | **검수 대기** | 로비(캐릭터 화면 C, 출발 Enter), 방 다섯 개(배치 둘 + 보스 방), 보상 12종, 중간·최종 보스(격노), 원작 무기 타르 11·소리·보이스, 검기, 카메라 확대·축소 (`docs/dev/review/m3.md`) |
-| M4 거점·영구 성장 ~ M6 다듬기 | 예정 | 구상서 §6. 원작 이펙트(전용 셰이더 옮기기)는 M6 |
+| 원작 동작·무기 자리 | 검수 대기 | 전투 무기는 오른손(wep_R)으로 고침, 싸우는 동작에서만 무기가 나타남(칼날이 차오르고 지워짐), 무기 꺼내기·거두기, 쉬는 자세·특수 대기, 멈추기, 무거운 착지, 가벼운 피격(윗몸), 캐릭터 화면 동작·무기 보기 (`docs/dev/review/motions.md`) |
+| **원작 이펙트** | **진행 중** | 사이트 자료(VFXBaseV2 셰이더, 파티클)를 Godot로 옮기기 |
+| M4 거점·영구 성장 ~ M6 다듬기 | 예정 | 구상서 §6 |
 
 ### 지금 구조
 - `src/player/player.gd`: 3인칭 액션 조작. 카메라(CameraRig, 몸과 따로 돈다), 카메라 기준 이동, 공격 연속·스킬·회피·대상 고정·쓰러짐·동료 일으키기. 동작은 `action_id`/`action_count`, 회피는 `dodge_count`로 동기화
-- `src/player/player_body.gd`: 모델·만화풍 재질·옷자락·발 IK, 이동 동작 고르기, 동작 층(공격·스킬·회피·맞음·쓰러짐), 코드로 만든 검(`wep_R`에 붙임)
+- `src/player/player_body.gd`: 모델·만화풍 재질·옷자락·발 IK, 이동 동작 고르기(서 있을 때는 전투 대기·쉬는 자세·캐릭터 화면 대기), 동작 층(공격·스킬·회피·맞음·쓰러짐과 대기 연출), 윗몸만 움찔하는 가벼운 피격, 무기 자리(오른손·등 뒤·왼손)와 나타나고 사라지기(`weapon.gdshader`)
 - `src/combat/`: `KitData`(캐릭터 전투 구성) → `AttackData`(동작 하나: 길이, 이어지는 시각, 내디딤 거리) → `HitData`(타격 하나: 시각, 배율, 경직, 범위, 원석 결정 효과). `Health`, `Hitbox`, `CombatQuery.melee`, `DamageNumber`, `HitSpark`
 - `src/enemies/`: `Enemy`(호스트가 판단: 쫓기 → 예고 → 맞히기 → 쉬기, 움찔·경직·원석 결정), `EnemyBody`(예고 표시, 모델 또는 도형 몸), `EnemyProjectile`, `EnemyData`/`EnemyAttackData`(`data/enemies/*.tres`)
 - `src/zones/combat_room/`: 웨이브, 방 정리, 전멸. 적은 방 안의 `EnemySpawner`가 복제한다. 씬 세 개(방 A·B, 보스 방)는 `tools/gen_combat_room.py`로 만든다
@@ -115,6 +117,11 @@ python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장�
 - **프로젝트 안에 스크립트 사본을 두지 않는다:** `build/`도 프로젝트 안이다. `class_name`이 있는 스크립트를 거기 복사해 두면 전역 클래스가 사본으로 바뀌어 엉뚱하게 돈다. 백업은 프로젝트 밖(임시 폴더)에 둔다.
 - **실행 중에 읽는 소리:** `AudioStreamWAV.load_from_buffer`로 zip 안의 WAV를 읽는다. 이 PC에는 소리 인코더(ffmpeg)가 없어서 WAV 그대로 묶는다. 같은 zip은 플레이어끼리 한 번만 읽는다(`CharacterFx._loaded`).
 - **원작 이펙트:** 받은 이펙트 glb에는 모양·텍스처만 있고 재질 연결이 비어 있다(원작 전용 셰이더 VFXBaseV2). 셰이더를 다시 만들기 전까지는 검기로 대신한다.
+- **사이트 자료:** studio.warfarin.wiki의 데이터 서버(assets.warfarin.wiki)는 Cloudflare가 자동 요청을 막는다(우회하지 않는다). 사용자가 준 추출 꾸러미(`!File/Endministrator_Extras/`)에 같은 자료가 있다: `characters/*/weapon_binding.json`(무기 자리), `animation_events.json`(동작별 소리·이펙트 시각), `effect_catalog.json`, `assets/data/*.json`(파티클). 사이트 스크립트는 글자로만 받아 읽는다(실행하지 않는다).
+- **무기 자리:** 원작 연결 정보(`weapon_binding.json`의 `battle.copies`)상 전투 무기는 오른손 `wep_R`(fight)이고, 무기를 꺼내는 동작의 처음 0.4초는 등 뒤 `GENERATED_wep_M_...`(idle)다. 왼손 `wep_L`은 캐릭터 화면 무기 보기(`mounts`, 메뉴) 자리인데, 이것을 전투에 써서 무기를 왼손에 쥐는 실수를 했다. 동작마다 자리는 `CharacterAppearance.weapon_timelines`(여·남이 시각이 조금 다르다). 이동·대기 동작에는 무기가 없다(원작처럼 싸우는 동작에서만 나타난다).
+- **대기 연출:** 쉬는 자세·무기 꺼내기·멈추기 같은 대기 연출(`PlayerBody.IDLE_CLIPS`)도 동작 층에서 튼다. 움직이면 바로 끊어야 해서 실제 속도(`_raw_speed`)를 본다(이동 동작을 고르는 속도는 부드럽게 따라가서 0.3초쯤 늦다). 섞여 들어오는 동안(0.25초)에도 무기 자리는 그 동작의 것을 따른다(`_action_showing`). 원본 멈추기 동작은 1m쯤 미끄러지므로 제자리로 묶고, 캐릭터 화면에 들어오는 동작(1.6m 앞에서 걸어 들어와 제자리에서 끝남)은 묶지 않는다.
+- **화면 녹화:** `tools/screenshot.sh`(`--write-movie`)로 찍는 동안에는 창이 포커스를 잃어도 일시정지하지 않는다(`Engine.get_write_movie_path()`). 캐릭터 화면의 무기 보기는 `--character-weapon`으로 찍는다.
+- **Python -I:** `-I`는 `PYTHONIOENCODING` 같은 환경 변수를 무시한다. 한자·한글을 콘솔에 찍을 때는 스크립트에서 `sys.stdout.reconfigure(encoding="utf-8")`를 부른다.
 - **도구 쓸 때(Claude 세션):** Bash의 heredoc 안 Python 문자열에 백슬래시(줄바꿈 표시 등)를 쓰면 실행 도구를 거치며 지워진다. 백슬래시가 든 스크립트는 Write로 파일을 만들어 실행하고, 이미 있는 파일은 Edit로 고친다.
 - **에셋 자동 업데이트:** 모델은 비공개 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스 `assets`에만 올린다. 파일 목록은 `tools/publish_assets.py`의 `FILES`. 그 도구는 저장소가 공개면 거부한다. 게임은 설정의 에셋 키(GitHub 토큰)로 받는데, 키는 GitHub API에만 보낸다. 실제 파일은 다른 호스트로 넘겨받으므로 `max_redirects = 0`으로 직접 따라가며 키를 뺀다(`AssetUpdater._download`). 모델의 동작 이름이 바뀌면 옛 게임이 새 모델을 받아 깨질 수 있으니 **게임 푸시와 에셋 올리기를 함께** 한다.
 - **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.
