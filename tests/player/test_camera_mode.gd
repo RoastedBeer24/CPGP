@@ -62,6 +62,43 @@ func test_camera_stops_in_front_of_wall_behind_player() -> void:
 	assert_true(player.camera.global_position.z < 1.0, "벽(앞면 z=1.0)을 뚫지 않음: %s" % player.camera.global_position.z)
 
 
+func test_wall_on_right_keeps_camera_behind_not_beside_head() -> void:
+	# 오른쪽 가까이 벽: 어깨 지점이 벽 속이라 예전에는 팔이 그 자리에서 막혀 카메라가 머리 옆에 붙었고
+	# 캐릭터가 화면에서 사라졌다. 이제는 어깨 쪽으로 덜 나가고 뒤로는 그대로 물러난다.
+	add_child_autofree(_box(Vector3(0.4, 4, 10), Vector3(0.65, 2, 0)))
+	player.set_third_person(true)
+	await _frames(90)
+	var offset := player.camera.global_position - player.head.global_position
+	assert_true(offset.z > player.config.third_person_distance - 0.1, "벽 옆에서도 뒤로 물러난다: %s" % offset)
+	assert_true(offset.x < 0.3, "벽을 뚫고 어깨 너머로 가지 않는다: %s" % offset)
+	assert_eq(player.body.view_mode, PlayerBody.ViewMode.VISIBLE, "캐릭터가 보인다")
+
+
+func test_camera_squeezed_into_corner_hides_body() -> void:
+	# 등 뒤와 오른쪽이 막힌 구석: 카메라가 머리에 붙으면 몸을 숨겨 머리 속이 화면을 가리지 않게 한다.
+	add_child_autofree(_box(Vector3(6, 4, 0.4), Vector3(0, 2, 0.65)))
+	add_child_autofree(_box(Vector3(0.4, 4, 6), Vector3(0.65, 2, 0)))
+	player.set_third_person(true)
+	await _frames(90)
+	assert_eq(player.body.view_mode, PlayerBody.ViewMode.SHADOW_ONLY)
+	assert_true(player.camera.global_position.z < 0.45, "뒤 벽(z=0.45)을 뚫지 않음: %s" % player.camera.global_position.z)
+
+
+func test_camera_eases_back_out_after_wall() -> void:
+	# 벽이 사라지면 한 번에 튀어 나가지 않고 천천히 물러난다.
+	var wall := _box(Vector3(6, 4, 0.4), Vector3(0, 2, 1.2))
+	add_child_autofree(wall)
+	player.set_third_person(true)
+	await _frames(90)
+	wall.free()
+	await _frames(3)
+	var offset := player.camera.global_position - player.head.global_position
+	assert_true(offset.z < player.config.third_person_distance - 0.3, "바로 튀어 나가지 않는다: %s" % offset.z)
+	await _frames(90)
+	offset = player.camera.global_position - player.head.global_position
+	assert_almost_eq(offset.z, player.config.third_person_distance, 0.05, "다시 원래 거리로")
+
+
 func test_third_person_aim_hits_crosshair_point() -> void:
 	add_child_autofree(_box(Vector3(20, 10, 0.4), Vector3(0, 2, -10)))
 	player.set_third_person(true)

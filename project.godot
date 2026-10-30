@@ -42,6 +42,7 @@ theme/custom_font="res://assets/fonts/noto_sans_kr/NotoSansKR-Regular.otf"
 3d_physics/layer_2="character"
 3d_physics/layer_3="hitbox"
 3d_physics/layer_5="foot_ground"
+3d_render/layer_2="character"
 
 [physics]
 

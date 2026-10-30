@@ -12,6 +12,8 @@ extends Resource
 ## 실행 중에 읽은 glTF 장면. 플레이어마다 다시 읽지 않도록 파일(경로와 고친 시각)마다 한 번만 읽는다.
 ## 에셋 자동 업데이트로 파일이 바뀌면 고친 시각이 달라져서 새로 읽는다.
 static var _runtime_scenes: Dictionary[String, PackedScene] = {}
+## 실행 중에 읽은 glTF의 이미지(재질이 쓰지 않는 색 띠·마스크 포함): 파일 키 → {이미지 이름: 텍스처}
+static var _runtime_images: Dictionary[String, Dictionary] = {}
 
 ## 프로젝트 안의 모델 파일(.glb) 경로
 @export_file("*.glb", "*.gltf", "*.tscn") var model_path := ""
@@ -75,7 +77,7 @@ static var _runtime_scenes: Dictionary[String, PackedScene] = {}
 ]
 
 @export_group("재질")
-## 얼굴 재질(얼굴, 눈썹, 눈동자). 얼굴 전체를 얼굴이 보는 방향으로 고르게 비춘다(face.gdshader).
+## 얼굴 재질(얼굴, 눈썹, 눈동자). 얼굴 전체를 얼굴이 보는 방향으로 고르게 비춘다(toon.gdshader의 flatness).
 @export var face_materials: Array[StringName] = [&"M_actor_endminf_face_01", &"M_actor_endminf_brow_01", &"M_actor_endminf_iris_01"]
 ## 아래 색에 곱해 그림자만 지우는 재질 → 세기(0~1). 원본은 마스크의 빨간 채널에 그림자를 넣어 두었다(shade_overlay.gdshader).
 @export var shade_materials: Dictionary[StringName, float] = {
@@ -83,6 +85,34 @@ static var _runtime_scenes: Dictionary[String, PackedScene] = {}
 	&"M_eyeshadow_common_03": 0.55,
 	&"M_hairshadow_common_03": 1.0,
 }
+## 만화풍(셀 셰이딩) 재질 → 색 띠(ramp) 이미지. 원본 게임은 빛을 받는 정도를 이 띠의 색으로 바꿔 칠한다
+## (그늘은 회색, 경계는 살구색, 밝은 곳은 흰색). 반투명 재질은 기본 재질로 둔다(toon.gdshader).
+@export var toon_ramps: Dictionary[StringName, String] = {
+	&"M_actor_endminf_body_01": "T_actor_common_body_01_RD",
+	&"M_actor_endminf_cloth_01": "T_actor_common_cloth_04_RD",
+	&"M_actor_endminf_cloth_03": "T_actor_common_cloth_04_RD",
+	&"M_actor_endminf_cloth_04": "T_actor_common_cloth_04_RD",
+	&"M_actor_endminf_hair_01": "T_actor_common_hair_01_RD",
+	&"M_actor_endminf_face_01": "T_actor_common_face_01_RD",
+	&"M_actor_endminf_brow_01": "T_actor_common_face_01_RD",
+	&"M_actor_endminf_iris_01": "T_actor_common_face_01_RD",
+}
+## 빛나는 부분 마스크 이미지 (팔 장치의 하늘색 불빛 등)
+@export var emission_masks: Dictionary[StringName, String] = {&"M_actor_endminf_cloth_04": "T_actor_endminf_cloth_04_E"}
+## 외곽선 굵기 배율. 없는 재질은 외곽선을 그리지 않는다(눈, 눈썹, 바이저).
+@export var outline_widths: Dictionary[StringName, float] = {
+	&"M_actor_endminf_body_01": 1.0,
+	&"M_actor_endminf_cloth_01": 1.0,
+	&"M_actor_endminf_cloth_04": 1.0,
+	&"M_actor_endminf_hair_01": 1.0,
+	&"M_actor_endminf_face_01": 0.6,
+}
+## 숨기는 뼈: 이 뼈를 따르는 정점을 한 점으로 모아 보이지 않게 한다. 눈 하이라이트(흰 마름모)는 원래 게임이
+## 따로 움직이는데 처음 자세 그대로면 동공 밖 흰자에 떠 있다.
+@export var hidden_bones: Array[StringName] = [&"faceLfHighlightJoint", &"faceRtHighlightJoint"]
+
+## 지금 쓰는 모델의 이미지 (실행 중에 읽은 glTF일 때만)
+var _images: Dictionary = {}
 
 
 ## 모델 장면. 찾지 못하면 null이다.
@@ -92,7 +122,25 @@ func load_model_scene() -> PackedScene:
 	var file := external_model_path()
 	if file.is_empty() or not FileAccess.file_exists(file):
 		return null
-	return load_gltf_file(file)
+	var scene := load_gltf_file(file)
+	_images = _runtime_images.get(_cache_key(file), {})
+	return scene
+
+
+## 모델에 들어 있는 이미지를 이름으로 찾는다(재질이 쓰지 않는 색 띠·마스크 포함). 없으면 null.
+## 실행 중에 읽은 glTF는 읽을 때 모아 둔 것을, 에디터로 가져온 모델은 꺼내 둔 파일
+## ("<모델 파일 이름>_<이미지 이름>.webp")을 쓴다.
+func texture(image_name: String) -> Texture2D:
+	if _images.has(image_name):
+		return _images[image_name]
+	var path := "%s_%s.webp" % [model_path.get_basename(), image_name]
+	if not model_path.is_empty() and ResourceLoader.exists(path):
+		return load(path) as Texture2D
+	return null
+
+
+static func _cache_key(path: String) -> String:
+	return "%s@%d" % [path, FileAccess.get_modified_time(path)]
 
 
 ## 실행 파일 옆 모델의 실제 경로. 지정하지 않았으면 빈 문자열.
@@ -129,7 +177,7 @@ static func _add_mipmaps(root: Node) -> void:
 
 ## glTF 파일을 실행 중에 읽어 장면으로 만든다. 실패하면 null이다.
 static func load_gltf_file(path: String) -> PackedScene:
-	var key := "%s@%d" % [path, FileAccess.get_modified_time(path)]
+	var key := _cache_key(path)
 	if _runtime_scenes.has(key):
 		return _runtime_scenes[key]
 	var document := GLTFDocument.new()
@@ -142,6 +190,12 @@ static func load_gltf_file(path: String) -> PackedScene:
 	if root == null:
 		return null
 	_add_mipmaps(root)
+	var images := {}
+	var image_list: Array = state.json.get("images", [])
+	var textures := state.get_images()
+	for i in mini(image_list.size(), textures.size()):
+		images[str((image_list[i] as Dictionary).get("name", ""))] = textures[i]
+	_runtime_images[key] = images
 	# PackedScene은 owner가 장면 뿌리인 노드만 저장한다.
 	for node: Node in root.find_children("*", "", true, false):
 		node.owner = root

@@ -31,6 +31,12 @@ const COMBAT_READY_FRAMES := 120
 
 ## 자유 시야에서 휠 한 칸에 카메라 거리가 바뀌는 배율과 그 범위(m)
 const ZOOM_FACTOR := 1.2
+## 3인칭 카메라가 벽에 막혔다가 풀릴 때 다시 물러나는 속도(m/s). 막힐 때는 바로 당긴다.
+const CAMERA_RECOVER_SPEED := 3.0
+## 카메라가 머리에 이보다 가까우면 몸을 숨긴다(머리 속이 화면을 가리지 않게, m).
+const CAMERA_INSIDE_DISTANCE := 0.45
+## 카메라가 벽과 띄워 두는 거리(m). 벽에 딱 붙으면 그 자리에서 다음 검사가 바로 막힌다.
+const CAMERA_WALL_MARGIN := 0.05
 const MIN_CAMERA_DISTANCE := 0.6
 const MAX_CAMERA_DISTANCE := 30.0
 ## 자유 시야에서 위아래로 돌릴 수 있는 한계(라디안). 바로 위·아래 직전까지.
@@ -86,6 +92,12 @@ var _free_pitch := 0.0
 var _free_amount := 0.0
 ## 화면에 쓰는 카메라 거리. camera_distance를 부드럽게 따라간다.
 var _shown_distance := 0.0
+# 3인칭 카메라가 벽에 막혀 줄어든 만큼: 어깨 쪽으로 나간 비율(0~1)과 뒤로 물러난 거리(m).
+var _shoulder_reach := 1.0
+var _arm_reach := INF
+## 카메라가 머리에 붙어 몸을 숨기는 중인지
+var _camera_inside := false
+var _camera_probe: SphereShape3D
 # 토글로 설정한 달리기와 조준의 지금 상태
 var _sprint_toggled := false
 var _aim_toggled := false
@@ -116,6 +128,8 @@ func _ready() -> void:
 	camera_distance = config.third_person_distance
 	if local and use_device_input:
 		visor_on = GameSettings.visor_on
+		# 내 화면에서만 캐릭터(나와 동료)를 카메라 쪽에서 약하게 비춘다.
+		camera.add_child(PlayerBody.make_character_light())
 	_shown_distance = camera_distance
 	# 3인칭 카메라가 내 몸에 걸려 당겨지지 않게 한다.
 	camera_arm.add_excluded_object(get_rid())
@@ -280,15 +294,47 @@ func _update_camera_arm(delta: float) -> void:
 	_free_amount = move_toward(_free_amount, 1.0 if free_look else 0.0, config.camera_switch_speed * delta)
 	_shown_distance = lerpf(_shown_distance, camera_distance, minf(delta * 10.0, 1.0))
 	var t := ease(camera_blend, -2.0)
-	# 자유 시야는 어깨가 아니라 머리를 중심으로 돈다.
-	var shoulder := Vector3(config.third_person_shoulder.x, config.third_person_shoulder.y, 0.0) * t * (1.0 - _free_amount)
-	camera_arm.spring_length = _shown_distance * t
-	camera_arm.position = shoulder
 	# 자유 시야의 회전은 머리(조준 높이)와 상관없이 세상 기준으로 정한다. 그래야 위아래 어디로든 돌 수 있다.
 	# 평소에는 머리를 그대로 따라가고, 켜고 끌 때는 두 방향 사이를 부드럽게 오간다.
 	var follow := head.global_basis.get_rotation_quaternion()
 	var orbiting := Basis.from_euler(Vector3(_free_pitch, rotation.y + _free_yaw, 0.0)).get_rotation_quaternion()
 	camera_arm.global_basis = Basis(follow.slerp(orbiting, ease(_free_amount, -2.0)))
+	# 자유 시야는 어깨가 아니라 머리를 중심으로 돈다.
+	var shoulder := Vector3(config.third_person_shoulder.x, config.third_person_shoulder.y, 0.0) * t * (1.0 - _free_amount)
+	var wanted := _shown_distance * t
+	# 벽에 막히면: 먼저 어깨 쪽(오른쪽)으로 덜 나가고, 그다음 뒤로 덜 물러난다. 어깨 지점이 벽 속에 있으면
+	# 팔이 그 자리에서 바로 막혀 카메라가 머리 옆에 붙고 캐릭터가 화면에서 사라졌다.
+	# 막히면 바로 당기고, 풀리면 천천히 되돌려서 벽을 따라 달릴 때 카메라가 튀지 않게 한다.
+	var head_point := head.global_position
+	var shoulder_free := _camera_clearance(head_point, head.global_transform * shoulder) if shoulder.length() > 0.01 else 1.0
+	_shoulder_reach = shoulder_free if shoulder_free < _shoulder_reach else move_toward(_shoulder_reach, shoulder_free, delta * 2.0)
+	camera_arm.position = shoulder * _shoulder_reach
+	var arm_start := head.global_transform * camera_arm.position
+	var arm_free := wanted * _camera_clearance(arm_start, arm_start + camera_arm.global_basis.z * wanted) if wanted > 0.01 else 0.0
+	_arm_reach = arm_free if arm_free < _arm_reach else move_toward(_arm_reach, arm_free, delta * CAMERA_RECOVER_SPEED)
+	camera_arm.spring_length = minf(wanted, _arm_reach)
+	# 카메라가 머리에 붙으면 몸을 숨긴다(1인칭처럼 그림자만). 머리 속이 화면을 가리지 않게 한다.
+	var gap := Vector2((shoulder * _shoulder_reach).length(), camera_arm.spring_length).length()
+	var inside := (third_person or free_look) and gap < CAMERA_INSIDE_DISTANCE
+	if inside != _camera_inside:
+		_camera_inside = inside
+		_apply_view()
+
+
+## from에서 to까지 카메라(공 모양)가 막히지 않고 갈 수 있는 비율 (0~1). 내 몸은 무시하고, 막히면 벽과 조금 띄운다.
+func _camera_clearance(from: Vector3, to: Vector3) -> float:
+	if _camera_probe == null:
+		_camera_probe = (camera_arm.shape as SphereShape3D) if camera_arm.shape is SphereShape3D else SphereShape3D.new()
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = _camera_probe
+	query.transform = Transform3D(Basis.IDENTITY, from)
+	query.motion = to - from
+	query.collision_mask = camera_arm.collision_mask
+	query.exclude = [get_rid()]
+	var safe := get_world_3d().direct_space_state.cast_motion(query)[0]
+	if safe >= 1.0:
+		return 1.0
+	return maxf(safe - CAMERA_WALL_MARGIN / maxf(from.distance_to(to), 0.001), 0.0)
 
 
 ## 시점과 생사에 따라 몸과 1인칭 무기 모델을 보이거나 숨긴다.
@@ -296,8 +342,8 @@ func _apply_view() -> void:
 	var local := is_multiplayer_authority()
 	if not health.is_alive():
 		body.set_view_mode(PlayerBody.ViewMode.HIDDEN)
-	elif local and not third_person and not free_look:
-		# 1인칭에서는 내 몸이 카메라를 가리지 않게 그림자만 남긴다.
+	elif local and ((not third_person and not free_look) or _camera_inside):
+		# 1인칭이거나 3인칭 카메라가 벽에 밀려 머리에 붙으면, 내 몸이 카메라를 가리지 않게 그림자만 남긴다.
 		body.set_view_mode(PlayerBody.ViewMode.SHADOW_ONLY)
 	else:
 		body.set_view_mode(PlayerBody.ViewMode.VISIBLE)

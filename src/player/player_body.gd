@@ -25,8 +25,17 @@ extends Node3D
 enum ViewMode { VISIBLE, SHADOW_ONLY, HIDDEN }
 
 const DEFAULT_APPEARANCE := "res://data/player/default_appearance.tres"
-const FACE_SHADER := preload("res://src/player/face.gdshader")
+const TOON_SHADER := preload("res://src/player/toon.gdshader")
+const OUTLINE_SHADER := preload("res://src/player/outline.gdshader")
 const SHADE_SHADER := preload("res://src/player/shade_overlay.gdshader")
+## 캐릭터 렌더 레이어(2, "character"). 캐릭터 보조 조명(내 카메라에 붙은 약한 빛)은 이 레이어만 비춘다.
+const CHARACTER_RENDER_LAYER := 2
+## 캐릭터 보조 조명의 밝기. 어두운 곳에서도 캐릭터가 또렷하게 보이게 카메라 쪽에서 비춘다(원본 게임처럼).
+const CHARACTER_LIGHT_ENERGY := 0.4
+## 만화풍 재질: 외곽선 굵기(1m 떨어졌을 때, m), 얼굴 굴곡을 지우는 정도, 빛나는 부분의 밝기
+const OUTLINE_WIDTH := 0.0012
+const FACE_FLATNESS := 0.85
+const EMISSION_ENERGY := 2.0
 
 # 몸 기준 방향. 앞은 -Z, 오른쪽은 +X다.
 const FORWARD := Vector3(0, 0, -1)
@@ -165,6 +174,8 @@ var _headgear_on := true
 # 얼굴 메시(얼굴, 눈썹, 눈동자)와, 머리 뼈 공간에서 얼굴 정면 방향
 var _face_meshes: Array[GeometryInstance3D] = []
 var _face_axis := Vector3.ZERO
+## 숨기는 뼈(눈 하이라이트)
+var _hidden_bones: Array[int] = []
 # 옷자락 물리와, 옷자락이 뚫지 않을 땅
 var _cloth: SpringBoneSimulator3D
 var _cloth_ground: SpringBoneCollisionPlane3D
@@ -275,6 +286,18 @@ func chest_facing() -> Vector3:
 	return FORWARD.rotated(Vector3.UP, _model_yaw + _twist)
 
 
+## 캐릭터만 비추는 약한 보조 조명을 만든다. 카메라에 붙이면 카메라 쪽에서 캐릭터 앞면을 비춰, 어두운 곳에서도
+## 얼굴과 옷이 보인다(원본 게임처럼 캐릭터를 배경과 따로 비춘다). 주변(레이어 1)은 비추지 않는다.
+static func make_character_light() -> DirectionalLight3D:
+	var light := DirectionalLight3D.new()
+	light.name = "CharacterLight"
+	light.light_energy = CHARACTER_LIGHT_ENERGY
+	light.light_cull_mask = CHARACTER_RENDER_LAYER
+	light.light_specular = 0.0
+	light.shadow_enabled = false
+	return light
+
+
 ## 머리 장비(바이저) 메시가 있는 모델인지
 func has_headgear() -> bool:
 	return not _headgear.is_empty()
@@ -319,6 +342,7 @@ func _process(delta: float) -> void:
 		_pose_procedural()
 		_update_held_weapon()
 		_update_face_light()
+		_hide_bones()
 
 
 ## 지금 속도(세상 기준). 내가 조종하는 플레이어는 물리 엔진의 실제 속도를 쓴다.
@@ -398,6 +422,8 @@ func _load_model(scene: PackedScene) -> void:
 	has_model = true
 	placeholder.queue_free()
 	placeholder = null
+	for geometry: Node in _model.find_children("*", "GeometryInstance3D", true, false):
+		(geometry as GeometryInstance3D).layers |= CHARACTER_RENDER_LAYER
 	for mesh_name: StringName in appearance.headgear_meshes:
 		var mesh := _model.find_child(String(mesh_name), true, false) as GeometryInstance3D
 		if mesh != null:
@@ -443,15 +469,21 @@ func _load_model(scene: PackedScene) -> void:
 	# 처음 자세에서 몸 앞쪽이 머리 뼈 공간의 어느 방향인지 (얼굴을 비출 방향을 매 프레임 구할 때 쓴다)
 	var head_rest := _skeleton.get_bone_global_rest(_bone[&"head"]).basis.orthonormalized()
 	_face_axis = (head_rest.inverse() * (_to_skeleton * FORWARD)).normalized()
+	for bone_name in appearance.hidden_bones:
+		var index := _skeleton.find_bone(bone_name)
+		if index >= 0:
+			_hidden_bones.append(index)
 	_setup_materials()
 	_setup_animation()
 	_setup_cloth()
 
 
 ## 원본 게임 전용 셰이더로 그리던 재질을 Godot에서 비슷하게 보이게 바꾼다.
-##   - 얼굴(얼굴, 눈썹, 눈동자): 얼굴이 보는 방향으로 고르게 비춘다(face.gdshader). 보통 조명은 얼굴이 반으로 갈라진다.
+##   - 만화풍(셀 셰이딩, toon.gdshader): 빛을 받는 정도를 원본의 색 띠(ramp)로 칠하고, 테두리 빛과 외곽선
+##     (outline.gdshader)을 더한다. 빛나는 부분 마스크가 있으면 빛나게 한다.
+##   - 얼굴(얼굴, 눈썹, 눈동자): 같은 재질이되 얼굴이 보는 방향으로 고르게 비춘다. 보통 조명은 얼굴이 반으로 갈라진다.
 ##   - 그림자 메시(눈 흰자 위, 앞머리): 아래 색에 곱한다(shade_overlay.gdshader). 그냥 칠하면 하늘색 줄이 생긴다.
-##   - 나머지: 비스듬히 봐도 흐려지지 않게 비등방 필터를 켠다.
+##   - 색 띠가 없거나 반투명한 재질: 기본 재질 그대로, 비스듬히 봐도 흐려지지 않게 비등방 필터만 켠다.
 ## 재질은 모델을 쓰는 플레이어끼리 함께 쓰므로, 메시마다 덮어쓰는 재질(surface override)로 바꾼다.
 func _setup_materials() -> void:
 	for node: Node in _model.find_children("*", "MeshInstance3D", true, false):
@@ -461,27 +493,60 @@ func _setup_materials() -> void:
 			if material == null:
 				continue
 			var material_name := StringName(material.resource_name)
+			if appearance.shade_materials.has(material_name):
+				mesh_instance.set_surface_override_material(i, _shade_material(material, appearance.shade_materials[material_name]))
+				continue
+			var ramp_name: String = appearance.toon_ramps.get(material_name, "")
+			var ramp := appearance.texture(ramp_name) if not ramp_name.is_empty() else null
+			var scissor := material.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+			if ramp == null or not (scissor or material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED):
+				material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+				continue
+			var cutoff := material.alpha_scissor_threshold if scissor else 0.0
+			var toon := ShaderMaterial.new()
+			toon.shader = TOON_SHADER
+			toon.set_shader_parameter(&"albedo_texture", material.albedo_texture)
+			toon.set_shader_parameter(&"albedo_color", material.albedo_color)
+			toon.set_shader_parameter(&"ramp", ramp)
+			toon.set_shader_parameter(&"alpha_scissor", cutoff)
 			if appearance.face_materials.has(material_name):
-				var face := ShaderMaterial.new()
-				face.shader = FACE_SHADER
-				face.set_shader_parameter(&"albedo_texture", material.albedo_texture)
-				face.set_shader_parameter(&"albedo_color", material.albedo_color)
-				mesh_instance.set_surface_override_material(i, face)
+				toon.set_shader_parameter(&"flatness", FACE_FLATNESS)
+				toon.set_shader_parameter(&"rim_strength", 0.15)
 				if not _face_meshes.has(mesh_instance):
 					_face_meshes.append(mesh_instance)
-			elif appearance.shade_materials.has(material_name):
-				var shade := ShaderMaterial.new()
-				shade.shader = SHADE_SHADER
-				shade.set_shader_parameter(&"mask", material.albedo_texture)
-				shade.set_shader_parameter(&"use_mask", material.albedo_texture != null)
-				shade.set_shader_parameter(&"shade", material.albedo_color.r)
-				shade.set_shader_parameter(&"strength", appearance.shade_materials[material_name])
-				mesh_instance.set_surface_override_material(i, shade)
-			else:
-				material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+			var mask_name: String = appearance.emission_masks.get(material_name, "")
+			var mask := appearance.texture(mask_name) if not mask_name.is_empty() else null
+			if mask != null:
+				toon.set_shader_parameter(&"emission_mask", mask)
+				toon.set_shader_parameter(&"emission_energy", EMISSION_ENERGY)
+			if appearance.outline_widths.has(material_name):
+				var outline := ShaderMaterial.new()
+				outline.shader = OUTLINE_SHADER
+				outline.set_shader_parameter(&"albedo_texture", material.albedo_texture)
+				outline.set_shader_parameter(&"width", OUTLINE_WIDTH * appearance.outline_widths[material_name])
+				outline.set_shader_parameter(&"alpha_scissor", cutoff)
+				toon.next_pass = outline
+			mesh_instance.set_surface_override_material(i, toon)
 
 
-## 얼굴을 비출 방향을 머리 뼈의 지금 방향으로 맞춘다 (face.gdshader의 face_forward).
+## 아래 색에 곱해 그림자만 지우는 재질 (눈 흰자 위, 앞머리 그림자)
+func _shade_material(material: BaseMaterial3D, strength: float) -> ShaderMaterial:
+	var shade := ShaderMaterial.new()
+	shade.shader = SHADE_SHADER
+	shade.set_shader_parameter(&"mask", material.albedo_texture)
+	shade.set_shader_parameter(&"use_mask", material.albedo_texture != null)
+	shade.set_shader_parameter(&"shade", material.albedo_color.r)
+	shade.set_shader_parameter(&"strength", strength)
+	return shade
+
+
+## 숨기는 뼈(눈 하이라이트)를 한 점으로 줄인다. 그 뼈만 따르는 정점이 모여서 보이지 않는다.
+func _hide_bones() -> void:
+	for index in _hidden_bones:
+		_skeleton.set_bone_pose_scale(index, Vector3.ONE * 0.0001)
+
+
+## 얼굴을 비출 방향을 머리 뼈의 지금 방향으로 맞춘다 (toon.gdshader의 face_forward).
 func _update_face_light() -> void:
 	if _face_meshes.is_empty():
 		return
@@ -953,6 +1018,7 @@ func apply_overlays() -> void:
 	_legs_ik()
 	_update_held_weapon()
 	_update_face_light()
+	_hide_bones()
 	if _cloth_ground != null:
 		# 옷자락이 뚫지 않을 땅: 낮은 쪽 발밑 높이
 		var floor_y := player.global_position.y + minf(foot_offsets.x, foot_offsets.y) + 0.01
@@ -1267,5 +1333,6 @@ func _add_box(parent: Node3D, size: Vector3, offset: Vector3, color: Color, glow
 	var instance := MeshInstance3D.new()
 	instance.mesh = mesh
 	instance.position = offset
+	instance.layers |= CHARACTER_RENDER_LAYER
 	parent.add_child(instance)
 	_apply_shadow_mode(instance)
