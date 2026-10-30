@@ -16,6 +16,10 @@
 |---|---|---|
 | 플레이어 캐릭터 모델 | `assets/characters/endministrator_f/endministrator_f.glb` | `CyberUniverse.exe`가 있는 폴더의 `characters/endministrator_f.glb` |
 
-- 받은 `Endministrator_F.glb`를 위 이름으로 복사합니다. 텍스처는 glb 안에 들어 있어 따로 넣지 않아도 됩니다.
+- **애니메이션이 든 원본(`Endministrator_F_Animated.glb`, 약 450MB)이 있으면** 게임에 쓰는 동작만 골라 가벼운 파일(약 23MB)을 만들어 넣습니다. 고르는 동작 목록은 도구 안의 `ROLES`에 있습니다.
+  ```bash
+  python3 tools/extract_character.py "!File/Endministrator_F_Animated.glb" assets/characters/endministrator_f/endministrator_f.glb
+  ```
+- 애니메이션이 없는 `Endministrator_F.glb`를 그대로 위 이름으로 복사해도 됩니다. 그때는 걷기·달리기 자세를 코드로 만듭니다. 텍스처는 glb 안에 들어 있어 따로 넣지 않아도 됩니다.
 - 개발용 위치에 넣으면 에디터를 열거나 `tools/test.sh`를 돌릴 때 Godot가 자동으로 가져옵니다.
 - 실행 파일은 켤 때 `characters/` 폴더의 모델을 직접 읽습니다. 모델이 있는 PC에서 `tools/export_windows.sh`를 돌리면 모델까지 넣은 `build/CyberUniverse-windows-with-model.zip`이 생기므로, 가족 PC에 처음 설치할 때는 이것을 풀면 됩니다. 이 zip은 어디에도 올리지 않습니다.

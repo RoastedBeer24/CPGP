@@ -93,7 +93,7 @@ func _update_health(delta: float) -> void:
 
 	var dead := not health.is_alive()
 	death_overlay.visible = dead
-	crosshair.visible = not dead
+	crosshair.visible = not dead and not _player.free_look
 	if dead:
 		_dead_time += delta
 		var left := maxf(Session.RESPAWN_DELAY - _dead_time, 0.0)

@@ -181,6 +181,74 @@ func test_player_uses_fov_and_hold_to_crouch() -> void:
 	assert_false(player.crouched, "떼면 일어남")
 
 
+
+func test_mouse_buttons_can_be_bound_and_labelled() -> void:
+	GameSettings.key_overrides[InputActions.INTERACT] = -MOUSE_BUTTON_MIDDLE
+	GameSettings.key_overrides[InputActions.FIRE] = KEY_ENTER
+	GameSettings.apply_keys()
+	var mouse_bound := false
+	for event in InputMap.action_get_events(InputActions.INTERACT):
+		var mouse := event as InputEventMouseButton
+		mouse_bound = mouse_bound or (mouse != null and mouse.button_index == MOUSE_BUTTON_MIDDLE)
+	assert_true(mouse_bound, "상호작용을 마우스 가운데 버튼에")
+	assert_eq(GameSettings.key_label(InputActions.INTERACT), "마우스 가운데")
+	assert_true(_action_has_key(InputActions.FIRE, KEY_ENTER), "공격을 키보드 키에")
+	assert_eq(GameSettings.key_label(InputActions.FIRE), GameSettings.code_label(KEY_ENTER))
+	GameSettings.reset_to_defaults()
+	GameSettings.apply_keys()
+	assert_eq(GameSettings.key_label(InputActions.FIRE), "마우스 왼쪽", "기본값으로 돌아오면 마우스 왼쪽")
+
+
+func test_settings_menu_binds_mouse_button() -> void:
+	GameSettings.apply_keys()
+	var menu := add_child_autofree(SettingsMenu.new()) as SettingsMenu
+	menu.open()
+	await tree.process_frame
+	menu._start_rebind(InputActions.RELOAD, menu._key_buttons[InputActions.RELOAD])
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_MIDDLE
+	click.pressed = true
+	menu._input(click)
+	assert_eq(GameSettings.key_overrides.get(InputActions.RELOAD), -MOUSE_BUTTON_MIDDLE)
+
+
+func test_hold_and_toggle_modes_are_saved() -> void:
+	GameSettings.sprint_toggle = true
+	GameSettings.aim_toggle = true
+	GameSettings.free_look_toggle = true
+	GameSettings.crouch_toggle = false
+	GameSettings.save()
+	GameSettings.reset_to_defaults()
+	GameSettings.load_settings()
+	assert_true(GameSettings.sprint_toggle and GameSettings.aim_toggle and GameSettings.free_look_toggle)
+	assert_false(GameSettings.crouch_toggle)
+
+
+func test_sprint_and_aim_toggles() -> void:
+	var player := PLAYER_SCENE.instantiate() as Player
+	player.use_device_input = false
+	add_child_autofree(player)
+	await tree.process_frame
+	GameSettings.sprint_toggle = true
+	GameSettings.aim_toggle = true
+	var intent := PlayerIntent.new()
+	intent.move = Vector2(0, 1)
+	player.apply_toggles(intent, true, false)
+	assert_true(intent.sprint, "한 번 누르면 달리기 켜짐")
+	intent = PlayerIntent.new()
+	intent.move = Vector2(0, 1)
+	player.apply_toggles(intent, false, false)
+	assert_true(intent.sprint, "떼어도 계속 달림")
+	intent = PlayerIntent.new()
+	player.apply_toggles(intent, false, false)
+	assert_false(intent.sprint, "멈추면 달리기가 풀림")
+	intent = PlayerIntent.new()
+	player.apply_toggles(intent, false, true)
+	assert_true(intent.aim_held, "한 번 누르면 조준 유지")
+	intent = PlayerIntent.new()
+	player.apply_toggles(intent, false, true)
+	assert_false(intent.aim_held, "다시 누르면 조준 해제")
+
 func _key_press(keycode: Key) -> InputEventKey:
 	var event := InputEventKey.new()
 	event.physical_keycode = keycode

@@ -49,6 +49,12 @@ func close() -> void:
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
+	# 입력을 바꾸는 중에는 마우스 버튼도 받는다 (공격, 조준 등을 마우스 버튼에 둘 수 있게).
+	var mouse := event as InputEventMouseButton
+	if mouse != null and mouse.pressed and _rebinding_action != &"":
+		_finish_rebind(GameSettings.code_of(mouse))
+		get_viewport().set_input_as_handled()
+		return
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
 		return
@@ -222,8 +228,20 @@ func _build_controls(rows: VBoxContainer) -> void:
 		func(on: bool) -> void: GameSettings.invert_y = on)
 	_add_slider(rows, "시야각 (FOV)", GameSettings.fov, 60.0, 110.0, 1.0, "%d°",
 		func(value: float) -> void: GameSettings.fov = value)
-	_add_options(rows, "웅크리기 방식", ["누를 때마다 바꾸기", "누르고 있는 동안"], 0 if GameSettings.crouch_toggle else 1,
+
+	var modes := Label.new()
+	modes.text = "누르는 방식"
+	modes.add_theme_color_override("font_color", Color(0.4, 0.85, 1))
+	rows.add_child(modes)
+	var choices: Array[String] = ["누를 때마다 켜고 끄기", "누르고 있는 동안"]
+	_add_options(rows, "웅크리기", choices, 0 if GameSettings.crouch_toggle else 1,
 		func(index: int) -> void: GameSettings.crouch_toggle = index == 0)
+	_add_options(rows, "달리기", choices, 0 if GameSettings.sprint_toggle else 1,
+		func(index: int) -> void: GameSettings.sprint_toggle = index == 0)
+	_add_options(rows, "조준", choices, 0 if GameSettings.aim_toggle else 1,
+		func(index: int) -> void: GameSettings.aim_toggle = index == 0)
+	_add_options(rows, "자유 시야", choices, 0 if GameSettings.free_look_toggle else 1,
+		func(index: int) -> void: GameSettings.free_look_toggle = index == 0)
 
 	var header := Label.new()
 	header.text = "키 설정"
@@ -236,7 +254,7 @@ func _build_controls(rows: VBoxContainer) -> void:
 		button.pressed.connect(_start_rebind.bind(action, button))
 		_key_buttons[action] = button
 		_add_row(rows, str(GameSettings.ACTION_LABELS[action]), button)
-	_add_note(rows, "공격(마우스 왼쪽), 조준(마우스 오른쪽), 무기 바꾸기(휠), 회피(방향키 두 번)는 바꿀 수 없습니다.")
+	_add_note(rows, "버튼을 누른 뒤 키보드 키나 마우스 버튼을 누르면 바뀝니다. 다른 동작이 쓰던 입력이면 서로 맞바꿉니다. 회피(방향키 두 번)는 이동 키를 따릅니다.")
 
 
 func _build_game(rows: VBoxContainer) -> void:
@@ -350,17 +368,17 @@ func _start_rebind(action: StringName, button: Button) -> void:
 	_cancel_rebind()
 	_rebinding_action = action
 	_rebinding_button = button
-	button.text = "새 키를 누르세요 (Esc: 취소)"
+	button.text = "키나 마우스 버튼을 누르세요 (Esc: 취소)"
 
 
-func _finish_rebind(keycode: int) -> void:
+func _finish_rebind(code: int) -> void:
 	var action := _rebinding_action
-	# 다른 동작이 이미 쓰는 키면 그 동작에 원래 키를 넘겨줘 서로 맞바꾼다.
-	var other := GameSettings.action_using_key(keycode, action)
+	# 다른 동작이 이미 쓰는 입력이면 그 동작에 원래 입력을 넘겨줘 서로 맞바꾼다.
+	var other := GameSettings.action_using_key(code, action)
 	var previous := _first_key(action)
-	if other != &"" and previous > 0:
+	if other != &"" and previous != 0:
 		GameSettings.key_overrides[other] = previous
-	GameSettings.key_overrides[action] = keycode
+	GameSettings.key_overrides[action] = code
 	GameSettings.apply_keys()
 	_rebinding_action = &""
 	_rebinding_button = null
@@ -377,9 +395,9 @@ func _cancel_rebind() -> void:
 
 func _first_key(action: StringName) -> int:
 	for event in InputMap.action_get_events(action):
-		var key := event as InputEventKey
-		if key != null:
-			return key.physical_keycode
+		var code := GameSettings.code_of(event)
+		if code != 0:
+			return code
 	return 0
 
 

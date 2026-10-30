@@ -64,7 +64,8 @@ func test_host_movement_and_look_replicate_to_client() -> void:
 	intent.move = Vector2.ZERO
 	await physics_frames(20)
 
-	assert_true(mirror.global_position.distance_to(own.global_position) < 0.05, "위치")
+	# 테스트는 실제 시간보다 빠르게 프레임을 돌리므로, 프레임 수가 아니라 값이 맞을 때까지 기다린다.
+	assert_true(await wait_until(func() -> bool: return mirror.global_position.distance_to(own.global_position) < 0.05), "위치")
 	assert_almost_eq(mirror.rotation.y, own.rotation.y, 0.001, "좌우 시점")
 	assert_almost_eq(mirror.head.rotation.x, own.head.rotation.x, 0.001, "상하 시점")
 	assert_almost_eq(mirror.crouch_blend, 1.0, 0.01, "웅크린 자세")

@@ -3,6 +3,7 @@ extends CharacterBody3D
 ## 플레이어. 걷기, 달리기, 웅크리기, 슬라이딩, 점프, 턱 오르기, 회피를 처리하고,
 ## 무기(WeaponHolder)와 체력(Health)을 가진다. 체력은 호스트가 관리한다.
 ## 기본은 1인칭이고, V로 어깨 너머 3인칭과 바꿀 수 있다. 시점은 각자 화면에만 적용된다.
+## ` 키를 누르고 있으면 자유 시야: 조준과 몸 방향은 그대로 두고 카메라만 캐릭터 주변을 돈다(휠로 확대·축소).
 ##
 ## 네트워크: 이 플레이어를 조종하는 피어(멀티플레이 권한자)만 이동을 계산한다.
 ## 다른 피어에서는 MultiplayerSynchronizer가 위치와 시점을 받아 보여 주기만 한다.
@@ -24,6 +25,14 @@ const MOVE_ACTIONS := {
 	&"move_right": Vector2(1, 0),
 }
 
+## 마지막으로 쏜 뒤 이 프레임 수(물리 60fps 기준 2초) 동안은 전투 자세를 유지한다.
+const COMBAT_READY_FRAMES := 120
+
+## 자유 시야에서 휠 한 칸에 바뀌는 카메라 거리(m)와 그 범위
+const ZOOM_STEP := 0.4
+const MIN_CAMERA_DISTANCE := 1.2
+const MAX_CAMERA_DISTANCE := 6.0
+
 ## 3인칭 조준점을 찾을 때 카메라에서 쏘는 광선의 길이(m)
 const AIM_PROBE_RANGE := 200.0
 
@@ -35,10 +44,16 @@ var state := State.GROUND
 var crouched := false
 ## 0이면 선 자세, 1이면 웅크린 자세. 원격 피어에도 동기화된다.
 var crouch_blend := 0.0
+## 조준 중이거나 방금 쐈으면 true. 3인칭 몸이 조준 방향을 보고 총을 겨눈다. 원격 피어에도 동기화된다.
+var combat_ready := false
 ## true면 어깨 너머 3인칭. 조종하는 피어의 화면에만 영향을 주므로 동기화하지 않는다.
 var third_person := false
 ## 0이면 1인칭, 1이면 3인칭 카메라 위치. 전환할 때 부드럽게 움직인다.
 var camera_blend := 0.0
+## 자유 시야 중인지. 쏠 수 없고, 카메라가 캐릭터를 중심으로 돈다.
+var free_look := false
+## 3인칭과 자유 시야의 카메라 거리. 자유 시야에서 휠로 바꾸면 3인칭에도 그대로 쓴다.
+var camera_distance := 0.0
 ## 테스트에서 입력을 직접 넣을 때 쓴다. 설정되어 있으면 장치 입력 대신 이것을 읽는다.
 var intent_override: PlayerIntent
 
@@ -54,6 +69,15 @@ var _dodge_cooldown := 0.0
 var _last_tap_msec: Dictionary = {}
 var _pending_dodge := Vector2.ZERO
 var _pending_cycle := 0
+var _last_fire_frame := -100000
+# 자유 시야의 카메라 회전 (머리 기준). 목표값과, 부드럽게 따라가는 지금 값.
+var _free_yaw := 0.0
+var _free_pitch := 0.0
+var _orbit := Vector2.ZERO
+var _free_amount := 0.0
+# 토글로 설정한 달리기와 조준의 지금 상태
+var _sprint_toggled := false
+var _aim_toggled := false
 # 발소리 (호스트에서 모든 플레이어의 움직임을 보고 적에게 들려준다)
 var _noise_last_position := Vector3.ZERO
 var _step_left := 0.0
@@ -77,9 +101,11 @@ func _ready() -> void:
 	var local := is_multiplayer_authority()
 	camera.current = local and use_device_input
 	camera.fov = GameSettings.fov
+	camera_distance = config.third_person_distance
 	# 3인칭 카메라가 내 몸에 걸려 당겨지지 않게 한다.
 	camera_arm.add_excluded_object(get_rid())
 	health.died.connect(_on_died)
+	weapons.fired.connect(func(_weapon: WeaponData) -> void: _last_fire_frame = Engine.get_physics_frames())
 	health.revived.connect(_on_revived)
 	_apply_crouch_shape()
 	_apply_view()
@@ -90,10 +116,29 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		return
+	if event.is_action(InputActions.FREE_LOOK) and not event.is_echo():
+		if GameSettings.free_look_toggle:
+			if event.is_pressed():
+				set_free_look(not free_look)
+		else:
+			set_free_look(event.is_pressed())
+		return
 	var motion := event as InputEventMouseMotion
 	if motion != null:
-		look(GameSettings.look_delta(motion.relative))
+		if free_look:
+			orbit(GameSettings.look_delta(motion.relative))
+		else:
+			look(GameSettings.look_delta(motion.relative))
 		return
+	# 자유 시야 중의 휠은 무기를 바꾸지 않고 확대·축소한다.
+	var wheel := event as InputEventMouseButton
+	if free_look and wheel != null and wheel.pressed:
+		if wheel.button_index == MOUSE_BUTTON_WHEEL_UP:
+			zoom(-1)
+			return
+		if wheel.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			zoom(1)
+			return
 	if event.is_action_pressed(InputActions.CAMERA_TOGGLE):
 		set_third_person(not third_person)
 		return
@@ -155,6 +200,28 @@ func set_third_person(enabled: bool) -> void:
 	camera_mode_changed.emit(third_person)
 
 
+## 자유 시야를 켜거나 끈다. 끄면 카메라가 원래 시점으로 부드럽게 돌아온다.
+func set_free_look(enabled: bool) -> void:
+	if free_look == enabled:
+		return
+	free_look = enabled
+	if enabled:
+		_free_yaw = 0.0
+		_free_pitch = 0.0
+	_apply_view()
+
+
+## 자유 시야에서 카메라를 돌린다. x는 좌우, y는 상하(라디안).
+func orbit(delta_radians: Vector2) -> void:
+	_free_yaw -= delta_radians.x
+	_free_pitch = clampf(_free_pitch - delta_radians.y, deg_to_rad(-70.0), deg_to_rad(60.0))
+
+
+## 카메라를 당기거나(-) 민다(+). 휠 한 칸이 1이다.
+func zoom(steps: int) -> void:
+	camera_distance = clampf(camera_distance + steps * ZOOM_STEP, MIN_CAMERA_DISTANCE, MAX_CAMERA_DISTANCE)
+
+
 ## 공격 판정의 시작점. 시점과 관계없이 눈에서 쏜다. 3인칭 카메라 위치에서 쏘면
 ## 캐릭터 뒤의 물체에 맞거나, 캐릭터가 볼 수 없는 곳을 맞히게 되기 때문이다.
 func aim_origin() -> Vector3:
@@ -189,11 +256,18 @@ func _process(delta: float) -> void:
 
 
 func _update_camera_arm(delta: float) -> void:
-	var target := 1.0 if third_person else 0.0
+	var target := 1.0 if third_person or free_look else 0.0
 	camera_blend = move_toward(camera_blend, target, config.camera_switch_speed * delta)
+	_free_amount = move_toward(_free_amount, 1.0 if free_look else 0.0, config.camera_switch_speed * delta)
 	var t := ease(camera_blend, -2.0)
-	camera_arm.spring_length = config.third_person_distance * t
-	camera_arm.position = Vector3(config.third_person_shoulder.x, config.third_person_shoulder.y, 0.0) * t
+	# 자유 시야는 어깨가 아니라 머리를 중심으로 돈다.
+	var shoulder := Vector3(config.third_person_shoulder.x, config.third_person_shoulder.y, 0.0) * t * (1.0 - _free_amount)
+	camera_arm.spring_length = camera_distance * t
+	camera_arm.position = shoulder
+	# 자유 시야를 끄면 카메라 회전이 0으로 돌아온다.
+	var orbit_target := Vector2(_free_yaw, _free_pitch) if free_look else Vector2.ZERO
+	_orbit = _orbit.lerp(orbit_target, minf(delta * 12.0, 1.0))
+	camera_arm.rotation = Vector3(_orbit.y, _orbit.x, 0.0)
 
 
 ## 시점과 생사에 따라 몸과 1인칭 무기 모델을 보이거나 숨긴다.
@@ -201,12 +275,12 @@ func _apply_view() -> void:
 	var local := is_multiplayer_authority()
 	if not health.is_alive():
 		body.set_view_mode(PlayerBody.ViewMode.HIDDEN)
-	elif local and not third_person:
+	elif local and not third_person and not free_look:
 		# 1인칭에서는 내 몸이 카메라를 가리지 않게 그림자만 남긴다.
 		body.set_view_mode(PlayerBody.ViewMode.SHADOW_ONLY)
 	else:
 		body.set_view_mode(PlayerBody.ViewMode.VISIBLE)
-	weapons.viewmodel.visible = local and not third_person
+	weapons.viewmodel.visible = local and not third_person and not free_look
 
 
 func _physics_process(delta: float) -> void:
@@ -246,7 +320,9 @@ func _physics_process(delta: float) -> void:
 
 	var sprinting := intent.sprint and intent.move.y > 0.3 and not crouched
 	# 몸을 들고 있으면 쏠 수 없다.
-	weapons.tick(delta, intent, health.is_alive() and not sprinting and interactor.carrying == null)
+	# 몸을 들고 있거나 자유 시야로 둘러보는 중에는 쏠 수 없다.
+	weapons.tick(delta, intent, health.is_alive() and not sprinting and interactor.carrying == null and not free_look)
+	combat_ready = weapons.aiming or Engine.get_physics_frames() - _last_fire_frame < COMBAT_READY_FRAMES
 	_update_fov(delta, intent)
 
 
@@ -277,11 +353,29 @@ func _read_intent() -> PlayerIntent:
 	if not use_device_input:
 		return PlayerIntent.new()
 	var intent := PlayerIntent.from_device()
+	apply_toggles(intent, Input.is_action_just_pressed(InputActions.SPRINT), Input.is_action_just_pressed(InputActions.AIM))
 	intent.dodge = _pending_dodge
 	intent.weapon_cycle = signi(_pending_cycle)
 	_pending_dodge = Vector2.ZERO
 	_pending_cycle = 0
 	return intent
+
+
+## 달리기·조준을 토글로 설정했으면 누를 때마다 켜고 끈다(웅크리기 토글은 _update_crouch가 맡는다).
+## 달리기 토글은 앞으로 가지 않으면 풀리고, 조준 토글은 달리면 풀린다.
+func apply_toggles(intent: PlayerIntent, sprint_pressed: bool, aim_pressed: bool) -> void:
+	if GameSettings.sprint_toggle:
+		if sprint_pressed:
+			_sprint_toggled = not _sprint_toggled
+		if intent.move.y <= 0.3:
+			_sprint_toggled = false
+		intent.sprint = _sprint_toggled
+	if GameSettings.aim_toggle:
+		if aim_pressed:
+			_aim_toggled = not _aim_toggled
+		if intent.sprint or not health.is_alive():
+			_aim_toggled = false
+		intent.aim_held = _aim_toggled
 
 
 func _update_timers(delta: float, intent: PlayerIntent) -> void:

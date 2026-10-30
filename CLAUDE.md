@@ -28,7 +28,7 @@
 | M0 기반 | 완료 | Godot 프로젝트, 테스트 러너, 도구 스크립트 |
 | M1 이동 + 네트워크 | 완료 | 1인칭 이동, 시험장, 싱글·LAN 코옵(최대 3명), 메뉴 |
 | M2 전투 기초 | 완료 | 무기 3종, 체력·장갑, 허수아비, 단순한 경비병, 전투 HUD, 사망·부활 |
-| 3인칭과 캐릭터 모델 | 완료 | V로 1인칭/3인칭 전환, 캐릭터 모델에 코드로 만든 자세, 든 무기 동기화 (`docs/dev/review/third-person.md`) |
+| 3인칭과 캐릭터 모델 | 완료 | V로 1인칭/3인칭 전환, ` 자유 시야, 원본 애니메이션(서기·걷기·달리기·질주·전투 걸음·낙하·착지) + 코드로 덧입힌 겨누기·웅크리기, 든 무기 동기화 (`docs/dev/review/third-person.md`) |
 | 설정 | 완료 | 소리 5종, 창 모드·크기, 그래픽, 감도·시야각, 키 바꾸기 (`docs/dev/review/settings.md`) |
 | 릴리스와 자동 업데이트 | 완료 | 기본 브랜치 푸시 → GitHub 릴리스 `build-<커밋 수>`, 게임이 켤 때 스스로 업데이트 (`docs/dev/testing.md`) |
 | M3 적 AI와 잠입 | 완료 | 감지·소리·경계 단계, 순찰과 길찾기, 제압·몸 숨기기, 중장갑병, 잠입 구역 (`docs/dev/review/m3.md`) |
@@ -60,6 +60,7 @@ tools/screenshot.sh "" 40 build/screenshots/game.png --single   # 게임 화면 
 tools/export_windows.sh       # build/CyberUniverse-windows.zip 생성
 python3 tools/gen_test_range.py   # 그레이박스 시험장 씬 다시 생성
 godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --join=주소, --third-person)
+python3 tools/extract_character.py <원본.glb> <결과.glb>   # 캐릭터 모델에 쓸 애니메이션만 뽑기
 ```
 - 푸시하면 GitHub Actions(`.github/workflows/build.yml`)가 테스트를 돌리고 Windows 실행 파일을 Artifacts로 올린다.
 
@@ -94,4 +95,7 @@ godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --joi
 - **길찾기 지도 굽기:** CSG 지형은 트리에 들어간 다음 프레임에 모양이 생긴다. 이미 트리에 있는 NavigationRegion3D에 지도를 바꿔 넣으면 `--fixed-fps`에서 길찾기 서버가 받지 못한다. 그래서 `Zone`은 지역을 트리에서 뺐다가 구운 새 지도를 넣고 다시 붙인다. 구운 지도는 씬마다 한 번만 만든다.
 - **길찾기 높이:** 구운 지도 표면이 바닥보다 0.5m 위에 있다. NavigationAgent3D의 `path_desired_distance`가 0.5 이하면 첫 지점에 영영 닿지 못한다(지금 1.0). 거리 비교는 수평(`_flat_distance`)으로 한다.
 - **Windows에서 씬 생성 스크립트:** `open()`에 `encoding="utf-8"`을 주지 않으면 시스템 코드 페이지로 써져 한글이 깨진다.
+- **캐릭터 애니메이션:** 원본(약 450MB, 651개)에서 `tools/extract_character.py`로 쓰는 동작만 뽑아 모델 파일에 넣는다(이름은 idle, walk 등 역할 이름). 동작 추가는 그 도구의 `ROLES`에. 실행 중에 glTF를 읽으면 "-loop" 꼬리가 이름에 남고 반복이 꺼져 있으므로 `PlayerBody._normalize_animation_names`가 고친다.
+- **애니메이션 위에 덧입히기:** 총 겨누기·시선·웅크린 다리는 `BodyPoseModifier`(SkeletonModifier3D)에서 한다. 수정자 결과는 그리는 프레임에만 남아서, 나중에 뼈를 읽으면 원래 애니메이션 자세가 나온다. 테스트는 덧입힌 자세에 맞춘 것(손에 든 총 위치)으로 확인한다.
+- **코옵 테스트의 대기:** `--fixed-fps`라 프레임이 실제 시간보다 빨리 지나간다. 네트워크로 퍼지는 값은 정해진 프레임 수가 아니라 `wait_until`로 값이 맞을 때까지 기다린다.
 - **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped, 뼈대 공간은 Z가 위)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.

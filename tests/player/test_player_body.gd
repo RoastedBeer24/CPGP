@@ -71,13 +71,49 @@ func test_walking_swings_legs() -> void:
 func test_gun_is_held_forward_and_muzzle_follows() -> void:
 	if not await _spawn_with_model():
 		return
+	# 애니메이션 모델은 조준할 때만 겨눈다(코드로 만든 자세는 늘 겨눈다).
+	intent.aim_held = true
 	await _frames(30)
-	var hand := player.body.bone_position(player.body.appearance.right_hand_bone)
+	# 애니메이션 위에 덧입힌 팔 자세는 그리는 프레임에만 남고 뼈를 읽으면 원래 동작이 나온다.
+	# 그래서 그 자세에 맞춰 놓은 총의 위치로 확인한다.
 	var chest := player.body.bone_position(player.body.appearance.chest_bone)
-	assert_true(hand.z < chest.z - 0.25, "권총을 몸 앞으로 겨눔: 손 %s, 가슴 %s" % [hand.z, chest.z])
 	assert_true(player.body.has_muzzle())
 	var muzzle := player.to_local(player.body.muzzle_position())
-	assert_true(muzzle.z < hand.z, "총구가 손보다 앞")
+	assert_true(muzzle.z < chest.z - 0.4, "권총을 몸 앞으로 겨눔: 총구 %s, 가슴 %s" % [muzzle.z, chest.z])
+	assert_true(muzzle.y > 1.0, "가슴 높이로 든다: %s" % muzzle.y)
+
+
+func test_animated_model_blends_motion_by_speed() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	await _frames(20)
+	assert_eq(player.body.dominant_animation(), &"idle", "서 있으면 서기 동작")
+	intent.move = Vector2(0, 1)
+	await _frames(40)
+	assert_eq(player.body.dominant_animation(), &"run", "걷기 속도(4m/s)면 달리기 동작")
+	intent.sprint = true
+	await _frames(40)
+	assert_eq(player.body.dominant_animation(), &"sprint")
+
+
+func test_animated_body_turns_toward_movement_then_aim() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	intent.move = Vector2(1, 0)  # 오른쪽으로 옆걸음
+	await _frames(40)
+	assert_true(player.body.facing().dot(Vector3.RIGHT) > 0.9, "움직이는 방향(오른쪽)을 본다: %s" % player.body.facing())
+	intent.aim_held = true
+	await _frames(40)
+	assert_true(player.body.facing().dot(Vector3.FORWARD) > 0.9, "조준하면 앞을 본다: %s" % player.body.facing())
+	assert_eq(player.body.dominant_animation(), &"strafe")
+
+
+func test_animated_body_falls_in_air() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	intent.jump_pressed = true
+	await _frames(15)
+	assert_eq(player.body.dominant_animation(), &"fall")
 
 
 func test_blade_has_no_muzzle() -> void:
@@ -98,6 +134,7 @@ func test_model_next_to_executable_is_read_at_runtime() -> void:
 	appearance.external_model_file = source
 	await _spawn(appearance)
 	assert_true(player.body.has_model, "실행 중에 glTF를 읽어 몸으로 씀")
+	assert_true(player.body.animated, "실행 중에 읽어도 애니메이션 이름(-loop)을 정리해 쓴다")
 	player.set_third_person(true)
 	intent.crouch_pressed = true
 	await _frames(40)

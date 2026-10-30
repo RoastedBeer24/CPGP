@@ -30,11 +30,14 @@ const MAX_FPS_CHOICES: Array[int] = [0, 30, 60, 120, 144, 165, 240]
 ## 기본 마우스 감도(픽셀당 라디안). 메뉴의 감도 값은 이것에 곱하는 배율이다.
 const BASE_MOUSE_SENSITIVITY := 0.0025
 
-## 키를 바꿀 수 있는 동작과 메뉴에 보일 이름. 마우스 버튼 동작(발사, 조준, 무기 휠)은 그대로 둔다.
+## 입력을 바꿀 수 있는 동작과 메뉴에 보일 이름. 키보드 키와 마우스 버튼 모두 지정할 수 있다.
+## 입력 코드: 양수는 물리 키 코드, 음수는 -(마우스 버튼 번호)다.
 const REBINDABLE_ACTIONS: Array[StringName] = [
 	Actions.MOVE_FORWARD, Actions.MOVE_BACK, Actions.MOVE_LEFT, Actions.MOVE_RIGHT,
-	Actions.JUMP, Actions.SPRINT, Actions.CROUCH, Actions.RELOAD,
-	Actions.WEAPON_1, Actions.WEAPON_2, Actions.WEAPON_3, Actions.CAMERA_TOGGLE, Actions.INTERACT,
+	Actions.JUMP, Actions.SPRINT, Actions.CROUCH,
+	Actions.FIRE, Actions.AIM, Actions.RELOAD,
+	Actions.WEAPON_1, Actions.WEAPON_2, Actions.WEAPON_3, Actions.WEAPON_NEXT, Actions.WEAPON_PREV,
+	Actions.INTERACT, Actions.CAMERA_TOGGLE, Actions.FREE_LOOK,
 ]
 const ACTION_LABELS := {
 	Actions.MOVE_FORWARD: "앞으로",
@@ -50,6 +53,11 @@ const ACTION_LABELS := {
 	Actions.WEAPON_3: "무기 3",
 	Actions.CAMERA_TOGGLE: "1인칭 / 3인칭 전환",
 	Actions.INTERACT: "상호작용 (제압, 몸 들기)",
+	Actions.FIRE: "공격",
+	Actions.AIM: "조준",
+	Actions.WEAPON_NEXT: "다음 무기",
+	Actions.WEAPON_PREV: "이전 무기",
+	Actions.FREE_LOOK: "자유 시야 (휠: 확대·축소)",
 }
 
 ## 저장 위치. 테스트는 사용자의 실제 설정을 건드리지 않도록 다른 파일로 바꾼다.
@@ -77,11 +85,14 @@ static var shadow_quality := ShadowQuality.MEDIUM
 # ---- 조작 ----
 static var mouse_sensitivity := 1.0
 static var invert_y := false
-## true면 웅크리기 키가 토글, false면 누르고 있는 동안만 웅크림
+## true면 키를 누를 때마다 켜고 끄는 토글, false면 누르고 있는 동안만
 static var crouch_toggle := true
+static var sprint_toggle := false
+static var aim_toggle := false
+static var free_look_toggle := false
 ## 기본 시야각(도). 달리기·슬라이딩 때는 여기에 더해지고, 조준하면 무기의 시야각으로 좁아진다.
 static var fov := 80.0
-## 동작별로 바꾼 키(물리 키 코드). 없는 동작은 기본 키를 쓴다.
+## 동작별로 바꾼 입력 코드(양수는 키, 음수는 마우스 버튼). 없는 동작은 기본 입력을 쓴다.
 static var key_overrides: Dictionary[StringName, int] = {}
 
 # ---- 게임 ----
@@ -103,6 +114,9 @@ static func reset_to_defaults() -> void:
 	mouse_sensitivity = 1.0
 	invert_y = false
 	crouch_toggle = true
+	sprint_toggle = false
+	aim_toggle = false
+	free_look_toggle = false
 	fov = 80.0
 	key_overrides = {}
 	start_third_person = false
@@ -146,12 +160,15 @@ static func load_settings() -> void:
 	mouse_sensitivity = clampf(float(config.get_value("controls", "mouse_sensitivity", mouse_sensitivity)), 0.1, 3.0)
 	invert_y = bool(config.get_value("controls", "invert_y", invert_y))
 	crouch_toggle = bool(config.get_value("controls", "crouch_toggle", crouch_toggle))
+	sprint_toggle = bool(config.get_value("controls", "sprint_toggle", sprint_toggle))
+	aim_toggle = bool(config.get_value("controls", "aim_toggle", aim_toggle))
+	free_look_toggle = bool(config.get_value("controls", "free_look_toggle", free_look_toggle))
 	fov = clampf(float(config.get_value("controls", "fov", fov)), 60.0, 110.0)
 	if config.has_section("keys"):
 		for action in REBINDABLE_ACTIONS:
-			var keycode := int(config.get_value("keys", String(action), 0))
-			if keycode > 0:
-				key_overrides[action] = keycode
+			var code := int(config.get_value("keys", String(action), 0))
+			if code != 0:
+				key_overrides[action] = code
 	start_third_person = bool(config.get_value("game", "start_third_person", start_third_person))
 	auto_update = bool(config.get_value("game", "auto_update", auto_update))
 
@@ -177,6 +194,9 @@ static func save() -> Error:
 	config.set_value("controls", "mouse_sensitivity", mouse_sensitivity)
 	config.set_value("controls", "invert_y", invert_y)
 	config.set_value("controls", "crouch_toggle", crouch_toggle)
+	config.set_value("controls", "sprint_toggle", sprint_toggle)
+	config.set_value("controls", "aim_toggle", aim_toggle)
+	config.set_value("controls", "free_look_toggle", free_look_toggle)
 	config.set_value("controls", "fov", fov)
 	for action: StringName in key_overrides:
 		config.set_value("keys", String(action), key_overrides[action])
@@ -256,42 +276,84 @@ static func apply_graphics(root: Window) -> void:
 	RenderingServer.positional_soft_shadow_filter_set_quality(filter)
 
 
-## 키 설정을 InputMap에 적용한다. 바꾼 동작은 그 키 하나만, 나머지는 기본 키를 쓴다.
-## 마우스 버튼 입력은 지우지 않는다.
+## 입력 설정을 InputMap에 적용한다. 바꾼 동작은 그 입력 하나만, 나머지는 기본 입력을 쓴다.
 static func apply_keys() -> void:
 	Actions.register_defaults()
 	for action in REBINDABLE_ACTIONS:
-		for event in InputMap.action_get_events(action):
-			if event is InputEventKey:
-				InputMap.action_erase_event(action, event)
-		var keys: Array = [key_overrides[action]] if key_overrides.has(action) else Actions.DEFAULT_KEYS[action]
-		for keycode: int in keys:
-			var key_event := InputEventKey.new()
-			key_event.physical_keycode = keycode as Key
-			InputMap.action_add_event(action, key_event)
+		InputMap.action_erase_events(action)
+		var codes: Array[int] = []
+		if key_overrides.has(action):
+			codes.append(key_overrides[action])
+		else:
+			for keycode: int in Actions.DEFAULT_KEYS.get(action, []):
+				codes.append(keycode)
+			for button: int in Actions.DEFAULT_MOUSE_BUTTONS.get(action, []):
+				codes.append(-button)
+		for code in codes:
+			InputMap.action_add_event(action, event_from_code(code))
 
 
-## 동작에 지금 묶인 키 이름 (메뉴 표시용)
+## 입력 코드로 입력 이벤트를 만든다 (양수는 키, 음수는 마우스 버튼).
+static func event_from_code(code: int) -> InputEvent:
+	if code < 0:
+		var mouse := InputEventMouseButton.new()
+		mouse.button_index = -code as MouseButton
+		return mouse
+	var key := InputEventKey.new()
+	key.physical_keycode = code as Key
+	return key
+
+
+## 입력 이벤트의 입력 코드. 키도 마우스 버튼도 아니면 0.
+static func code_of(event: InputEvent) -> int:
+	var key := event as InputEventKey
+	if key != null:
+		return key.physical_keycode
+	var mouse := event as InputEventMouseButton
+	if mouse != null:
+		return -mouse.button_index
+	return 0
+
+
+## 입력 코드의 이름 (메뉴 표시용)
+static func code_label(code: int) -> String:
+	if code < 0:
+		match -code:
+			MOUSE_BUTTON_LEFT:
+				return "마우스 왼쪽"
+			MOUSE_BUTTON_RIGHT:
+				return "마우스 오른쪽"
+			MOUSE_BUTTON_MIDDLE:
+				return "마우스 가운데"
+			MOUSE_BUTTON_WHEEL_UP:
+				return "휠 위"
+			MOUSE_BUTTON_WHEEL_DOWN:
+				return "휠 아래"
+			_:
+				return "마우스 %d" % -code
+	var keycode := code
+	# 자판 배열에 맞는 이름을 보여 준다. 화면이 없는 실행(테스트)에서는 변환을 못 하므로 그대로 쓴다.
+	if DisplayServer.get_name() != "headless":
+		keycode = DisplayServer.keyboard_get_keycode_from_physical(code as Key)
+	return OS.get_keycode_string(keycode as Key)
+
+
+## 동작에 지금 묶인 입력 이름 (메뉴 표시용)
 static func key_label(action: StringName) -> String:
 	var names: PackedStringArray = []
 	for event in InputMap.action_get_events(action):
-		var key_event := event as InputEventKey
-		if key_event != null:
-			var keycode := key_event.physical_keycode
-			# 자판 배열에 맞는 이름을 보여 준다. 화면이 없는 실행(테스트)에서는 변환을 못 하므로 그대로 쓴다.
-			if DisplayServer.get_name() != "headless":
-				keycode = DisplayServer.keyboard_get_keycode_from_physical(keycode)
-			names.append(OS.get_keycode_string(keycode))
+		var code := code_of(event)
+		if code != 0:
+			names.append(code_label(code))
 	return " / ".join(names) if not names.is_empty() else "(없음)"
 
 
-## 이 키를 이미 쓰는 다른 동작. 없으면 빈 이름.
-static func action_using_key(keycode: int, except: StringName) -> StringName:
+## 이 입력을 이미 쓰는 다른 동작. 없으면 빈 이름.
+static func action_using_key(code: int, except: StringName) -> StringName:
 	for action in REBINDABLE_ACTIONS:
 		if action == except:
 			continue
 		for event in InputMap.action_get_events(action):
-			var key_event := event as InputEventKey
-			if key_event != null and key_event.physical_keycode == keycode:
+			if code_of(event) == code:
 				return action
 	return &""

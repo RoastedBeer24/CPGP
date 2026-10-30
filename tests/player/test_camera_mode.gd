@@ -98,6 +98,51 @@ func test_third_person_shot_damages_target_on_crosshair() -> void:
 	assert_true(dummy.health.current < 100.0, "조준점의 허수아비가 맞음")
 
 
+func test_free_look_orbits_camera_without_turning_player() -> void:
+	var yaw := player.rotation.y
+	var pitch := player.head.rotation.x
+	player.set_free_look(true)
+	player.orbit(Vector2(PI * 0.5, 0.0))
+	await _frames(90)
+	assert_almost_eq(player.rotation.y, yaw, 0.0001, "몸 방향은 그대로")
+	assert_almost_eq(player.head.rotation.x, pitch, 0.0001, "조준 높이도 그대로")
+	var offset := player.camera.global_position - player.head.global_position
+	assert_true(offset.length() > 1.5, "1인칭에서도 카메라가 몸 밖으로 나간다: %s" % offset)
+	assert_true(absf(offset.x) > absf(offset.z), "옆으로 돌아간다: %s" % offset)
+	assert_eq(player.body.view_mode, PlayerBody.ViewMode.VISIBLE, "둘러보는 동안 내 몸이 보임")
+	assert_false(player.weapons.viewmodel.visible)
+
+
+func test_free_look_release_returns_to_first_person() -> void:
+	player.set_free_look(true)
+	player.orbit(Vector2(1.0, 0.3))
+	await _frames(60)
+	player.set_free_look(false)
+	await _frames(90)
+	assert_almost_eq(player.camera.global_position.distance_to(player.head.global_position), 0.0, 0.02)
+	assert_eq(player.body.view_mode, PlayerBody.ViewMode.SHADOW_ONLY)
+
+
+func test_free_look_zoom_changes_distance_within_limits() -> void:
+	player.set_free_look(true)
+	await _frames(90)
+	var start := player.camera.global_position.distance_to(player.head.global_position)
+	player.zoom(3)
+	await _frames(30)
+	var farther := player.camera.global_position.distance_to(player.head.global_position)
+	assert_true(farther > start + 0.8, "멀어진다: %s → %s" % [start, farther])
+	for i in 40:
+		player.zoom(-1)
+	assert_almost_eq(player.camera_distance, Player.MIN_CAMERA_DISTANCE, 0.001, "가장 가까운 거리에서 멈춘다")
+
+
+func test_cannot_fire_during_free_look() -> void:
+	player.set_free_look(true)
+	var ammo := player.weapons.ammo_in_magazine()
+	intent.fire_pressed = true
+	await _frames(3)
+	assert_eq(player.weapons.ammo_in_magazine(), ammo)
+
 func _box(size: Vector3, center: Vector3) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	var shape := CollisionShape3D.new()
