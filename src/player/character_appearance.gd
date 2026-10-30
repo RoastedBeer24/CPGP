@@ -78,16 +78,24 @@ static var _runtime_images: Dictionary[String, Dictionary] = {}
 ## 숨기는 메시. 눈 흰자 위 그림자 메시는 원본 전용 셰이더 없이는 홍채 위에 곡선 경계의 회색 막처럼 보인다.
 @export var hidden_meshes: Array[StringName] = [&"S_actor_endminf_eyeshadow_01_lod0"]
 ## 만화풍(셀 셰이딩) 재질 → 색 띠(ramp) 이미지. 원본 게임은 빛을 받는 정도를 이 띠의 색으로 바꿔 칠한다
-## (그늘은 회색, 경계는 살구색, 밝은 곳은 흰색). 반투명 재질은 기본 재질로 둔다(toon.gdshader).
+## (그늘은 회색, 경계는 살구색, 밝은 곳은 흰색). 반투명 재질(코트 겉감, 머리카락 끝)은 toon_alpha.gdshader로 그린다.
 @export var toon_ramps: Dictionary[StringName, String] = {
 	&"M_actor_endminf_body_01": "T_actor_common_body_01_RD",
 	&"M_actor_endminf_cloth_01": "T_actor_common_cloth_04_RD",
+	&"M_actor_endminf_cloth_02": "T_actor_common_cloth_04_RD",
+	&"M_actor_endminf_hairt_01": "T_actor_common_hair_01_RD",
 	&"M_actor_endminf_cloth_03": "T_actor_common_cloth_04_RD",
 	&"M_actor_endminf_cloth_04": "T_actor_common_cloth_04_RD",
 	&"M_actor_endminf_hair_01": "T_actor_common_hair_01_RD",
 	&"M_actor_endminf_face_01": "T_actor_common_face_01_RD",
 	&"M_actor_endminf_brow_01": "T_actor_common_face_01_RD",
 	&"M_actor_endminf_iris_01": "T_actor_common_face_01_RD",
+}
+## 주름 법선 지도 이미지. 원본은 두 채널(빨강 X, 초록 Y)만 쓴다. 피부(body_01_N)는 평평해서 넣지 않는다.
+@export var normal_maps: Dictionary[StringName, String] = {
+	&"M_actor_endminf_cloth_01": "T_actor_endminf_cloth_01_N",
+	&"M_actor_endminf_cloth_03": "T_actor_endminf_cloth_03_N",
+	&"M_actor_endminf_cloth_04": "T_actor_endminf_cloth_04_N",
 }
 ## 빛나는 부분 마스크 이미지 (팔 장치의 하늘색 불빛 등)
 @export var emission_masks: Dictionary[StringName, String] = {&"M_actor_endminf_cloth_04": "T_actor_endminf_cloth_04_E"}
@@ -99,6 +107,11 @@ static var _runtime_images: Dictionary[String, Dictionary] = {}
 	&"M_actor_endminf_hair_01": 1.0,
 	&"M_actor_endminf_face_01": 0.6,
 }
+## 머리카락 광택(만화풍 고리 광택)을 넣는 재질 → 세기
+@export var gloss_materials: Dictionary[StringName, float] = {&"M_actor_endminf_hair_01": 0.35}
+## 얼굴 그림자 지도(SDF) 이미지와, 그것으로 그림자를 만드는 재질. 빛 방향에 따라 코·볼에 만화풍 그림자가 진다.
+@export var face_shadow_map := "T_actor_common_female_face_01_SDF"
+@export var face_shadow_materials: Array[StringName] = [&"M_actor_endminf_face_01"]
 ## 카메라 쪽으로 당겨 그리는 재질 → 거리(m). 눈썹과 속눈썹이 앞머리 뒤에 가려 이마에 끊긴 선처럼 보여서,
 ## 원본 게임처럼 앞머리 위에 보이게 한다.
 @export var depth_biases: Dictionary[StringName, float] = {&"M_actor_endminf_brow_01": 0.035}

@@ -353,6 +353,21 @@ func test_eyes_stay_still_and_shadows_are_multiplied() -> void:
 	assert_false(player.body._face_meshes.is_empty(), "얼굴은 고르게 비추는 재질을 쓴다")
 
 
+func test_toon_materials_use_original_maps() -> void:
+	if not await _spawn_with_model():
+		return
+	var face := player.body.find_child("S_actor_endminf_face_01_lod0", true, false) as MeshInstance3D
+	var face_material := face.get_surface_override_material(0) as ShaderMaterial
+	assert_eq(face_material.shader, PlayerBody.TOON_SHADER, "얼굴은 만화풍 재질")
+	assert_true(face_material.get_shader_parameter(&"use_face_shadow"), "얼굴 그늘은 원본 그림자 지도로 만든다")
+	var coat := player.body.find_child("S_actor_endminf_cloth_01_lod0", true, false) as MeshInstance3D
+	var coat_material := coat.get_surface_override_material(0) as ShaderMaterial
+	assert_true(coat_material.get_shader_parameter(&"use_normal_map"), "코트는 주름 법선 지도를 쓴다")
+	assert_not_null(coat_material.next_pass, "코트에 외곽선")
+	var layer := player.body.find_child("S_actor_endminf_cloth_02_lod0", true, false) as MeshInstance3D
+	assert_eq((layer.get_surface_override_material(0) as ShaderMaterial).shader, PlayerBody.TOON_ALPHA_SHADER, "반투명 겉감도 만화풍")
+
+
 func test_fists_hold_nothing_and_raise_guard() -> void:
 	if not await _spawn_with_model() or not player.body.animated:
 		return

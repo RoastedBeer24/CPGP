@@ -26,6 +26,7 @@ enum ViewMode { VISIBLE, SHADOW_ONLY, HIDDEN }
 
 const DEFAULT_APPEARANCE := "res://data/player/default_appearance.tres"
 const TOON_SHADER := preload("res://src/player/toon.gdshader")
+const TOON_ALPHA_SHADER := preload("res://src/player/toon_alpha.gdshader")
 const OUTLINE_SHADER := preload("res://src/player/outline.gdshader")
 const SHADE_SHADER := preload("res://src/player/shade_overlay.gdshader")
 ## 캐릭터 렌더 레이어(2, "character"). 캐릭터 보조 조명(내 카메라에 붙은 약한 빛)은 이 레이어만 비춘다.
@@ -171,9 +172,10 @@ var _low_blend := 0.0
 # 벗을 수 있는 머리 장비(바이저) 메시와, 지금 보이는지
 var _headgear: Array[GeometryInstance3D] = []
 var _headgear_on := true
-# 얼굴 메시(얼굴, 눈썹, 눈동자)와, 머리 뼈 공간에서 얼굴 정면 방향
+# 얼굴 메시(얼굴, 눈썹, 눈동자)와, 머리 뼈 공간에서 얼굴 정면·오른쪽 방향
 var _face_meshes: Array[GeometryInstance3D] = []
 var _face_axis := Vector3.ZERO
+var _face_right_axis := Vector3.ZERO
 ## 숨기는 뼈(눈 하이라이트)
 var _hidden_bones: Array[int] = []
 # 옷자락 물리와, 옷자락이 뚫지 않을 땅
@@ -473,6 +475,7 @@ func _load_model(scene: PackedScene) -> void:
 	# 처음 자세에서 몸 앞쪽이 머리 뼈 공간의 어느 방향인지 (얼굴을 비출 방향을 매 프레임 구할 때 쓴다)
 	var head_rest := _skeleton.get_bone_global_rest(_bone[&"head"]).basis.orthonormalized()
 	_face_axis = (head_rest.inverse() * (_to_skeleton * FORWARD)).normalized()
+	_face_right_axis = (head_rest.inverse() * (_to_skeleton * RIGHT)).normalized()
 	for bone_name in appearance.hidden_bones:
 		var index := _skeleton.find_bone(bone_name)
 		if index >= 0:
@@ -487,7 +490,8 @@ func _load_model(scene: PackedScene) -> void:
 ##     (outline.gdshader)을 더한다. 빛나는 부분 마스크가 있으면 빛나게 한다.
 ##   - 얼굴(얼굴, 눈썹, 눈동자): 같은 재질이되 얼굴이 보는 방향으로 고르게 비춘다. 보통 조명은 얼굴이 반으로 갈라진다.
 ##   - 그림자 메시(눈 흰자 위, 앞머리): 아래 색에 곱한다(shade_overlay.gdshader). 그냥 칠하면 하늘색 줄이 생긴다.
-##   - 색 띠가 없거나 반투명한 재질: 기본 재질 그대로, 비스듬히 봐도 흐려지지 않게 비등방 필터만 켠다.
+##     반투명 재질(코트 겉감, 머리카락 끝)은 같은 그림을 반투명으로 그리고(toon_alpha.gdshader) 외곽선은 넣지 않는다.
+##   - 색 띠가 없는 재질: 기본 재질 그대로, 비스듬히 봐도 흐려지지 않게 비등방 필터만 켠다.
 ## 재질은 모델을 쓰는 플레이어끼리 함께 쓰므로, 메시마다 덮어쓰는 재질(surface override)로 바꾼다.
 func _setup_materials() -> void:
 	for node: Node in _model.find_children("*", "MeshInstance3D", true, false):
@@ -502,29 +506,41 @@ func _setup_materials() -> void:
 				continue
 			var ramp_name: String = appearance.toon_ramps.get(material_name, "")
 			var ramp := appearance.texture(ramp_name) if not ramp_name.is_empty() else null
-			var scissor := material.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-			if ramp == null or not (scissor or material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED):
+			if ramp == null:
 				material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 				continue
+			var scissor := material.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+			var see_through := not scissor and material.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
 			var cutoff := material.alpha_scissor_threshold if scissor else 0.0
 			var toon := ShaderMaterial.new()
-			toon.shader = TOON_SHADER
+			toon.shader = TOON_ALPHA_SHADER if see_through else TOON_SHADER
 			toon.set_shader_parameter(&"albedo_texture", material.albedo_texture)
 			toon.set_shader_parameter(&"albedo_color", material.albedo_color)
 			toon.set_shader_parameter(&"ramp", ramp)
 			toon.set_shader_parameter(&"alpha_scissor", cutoff)
+			if appearance.face_shadow_materials.has(material_name):
+				var shadow_map := appearance.texture(appearance.face_shadow_map)
+				if shadow_map != null:
+					toon.set_shader_parameter(&"face_shadow_map", shadow_map)
+					toon.set_shader_parameter(&"use_face_shadow", true)
 			if appearance.face_materials.has(material_name):
 				toon.set_shader_parameter(&"flatness", FACE_FLATNESS)
 				toon.set_shader_parameter(&"rim_strength", 0.15)
 				if not _face_meshes.has(mesh_instance):
 					_face_meshes.append(mesh_instance)
 			toon.set_shader_parameter(&"depth_bias", appearance.depth_biases.get(material_name, 0.0))
+			toon.set_shader_parameter(&"gloss_strength", appearance.gloss_materials.get(material_name, 0.0))
+			var normal_name: String = appearance.normal_maps.get(material_name, "")
+			var normal_map := appearance.texture(normal_name) if not normal_name.is_empty() else null
+			if normal_map != null:
+				toon.set_shader_parameter(&"normal_texture", normal_map)
+				toon.set_shader_parameter(&"use_normal_map", true)
 			var mask_name: String = appearance.emission_masks.get(material_name, "")
 			var mask := appearance.texture(mask_name) if not mask_name.is_empty() else null
 			if mask != null:
 				toon.set_shader_parameter(&"emission_mask", mask)
 				toon.set_shader_parameter(&"emission_energy", EMISSION_ENERGY)
-			if appearance.outline_widths.has(material_name):
+			if appearance.outline_widths.has(material_name) and not see_through:
 				var outline := ShaderMaterial.new()
 				outline.shader = OUTLINE_SHADER
 				outline.set_shader_parameter(&"albedo_texture", material.albedo_texture)
@@ -556,9 +572,12 @@ func _update_face_light() -> void:
 	if _face_meshes.is_empty():
 		return
 	var head := _skeleton.get_bone_global_pose(_bone[&"head"]).basis.orthonormalized()
-	var forward := (_skeleton.global_basis.orthonormalized() * (head * _face_axis)).normalized()
+	var to_world := _skeleton.global_basis.orthonormalized()
+	var forward := (to_world * (head * _face_axis)).normalized()
+	var right := (to_world * (head * _face_right_axis)).normalized()
 	for mesh in _face_meshes:
 		mesh.set_instance_shader_parameter(&"face_forward", forward)
+		mesh.set_instance_shader_parameter(&"face_right", right)
 
 
 ## 옷자락(망토)을 물리로 흔든다(SpringBoneSimulator3D). 동작 자세를 따라가되 조금 늦게 따라오고,
