@@ -346,10 +346,10 @@ func test_eyes_stay_still_and_shadows_are_multiplied() -> void:
 		for track in animation.get_track_count():
 			var bone := animation.track_get_path(track).get_concatenated_subnames()
 			assert_false(bone in ["eyeLfJoint", "eyeRtJoint"], "%s 동작이 눈 뼈(%s)를 움직이지 않는다" % [clip, bone])
-	# 눈 흰자 위 그림자는 아래 색에 곱해서 그린다(그냥 칠하면 하늘색 줄).
+	# 눈 흰자 위 그림자 메시는 숨긴다(그냥 칠하면 하늘색 줄, 곱해도 홍채 위에 회색 막).
 	var shadow := player.body.find_child("S_actor_endminf_eyeshadow_01_lod0", true, false) as MeshInstance3D
 	assert_not_null(shadow)
-	assert_eq((shadow.get_surface_override_material(0) as ShaderMaterial).shader, PlayerBody.SHADE_SHADER)
+	assert_false(shadow.visible)
 	assert_false(player.body._face_meshes.is_empty(), "얼굴은 고르게 비추는 재질을 쓴다")
 
 

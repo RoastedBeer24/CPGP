@@ -64,27 +64,19 @@ static var _runtime_images: Dictionary[String, Dictionary] = {}
 	"piaodai_back_R_0_skin_jnt:piaodai_back_R_4_skin_jnt",
 	"piaodai_c_1_ctrl_jnt:piaodai_c_2_ctrl_jnt",
 ]
-## 머리카락 뼈 사슬. 모양이 무너지지 않게 단단하게 흔든다.
-@export var hair_chains: PackedStringArray = [
-	"hair_L_d_01_jnt:hair_L_d_04_jnt",
-	"hair_L_e_01_jnt:hair_L_e_04_jnt",
-	"hair_L_f_01_jnt:hair_L_f_03_jnt",
-	"hair_L_g_01_jnt:hair_L_g_03_jnt",
-	"hair_L_h_01_jnt:hair_L_h_02_jnt",
-	"hair_L_i_01_jnt:hair_L_i_02_jnt",
-	"hair_L_j_01_jnt:hair_L_j_03_jnt",
-	"hair_L_k_01_jnt:hair_L_k_02_jnt",
-]
+## 머리카락 뼈 사슬(예: "hair_L_d_01_jnt:hair_L_d_04_jnt"). 이 모델은 비워 둔다. 원본 동작에 머리카락 흔들림이
+## 이미 들어 있고, 물리를 더하면 몸을 돌 때마다 머리카락이 어색하게 휘날렸다.
+@export var hair_chains: PackedStringArray = []
 
 @export_group("재질")
 ## 얼굴 재질(얼굴, 눈썹, 눈동자). 얼굴 전체를 얼굴이 보는 방향으로 고르게 비춘다(toon.gdshader의 flatness).
 @export var face_materials: Array[StringName] = [&"M_actor_endminf_face_01", &"M_actor_endminf_brow_01", &"M_actor_endminf_iris_01"]
 ## 아래 색에 곱해 그림자만 지우는 재질 → 세기(0~1). 원본은 마스크의 빨간 채널에 그림자를 넣어 두었다(shade_overlay.gdshader).
 @export var shade_materials: Dictionary[StringName, float] = {
-	&"M_eyewhiteshadow_common_01": 0.55,
-	&"M_eyeshadow_common_03": 0.55,
 	&"M_hairshadow_common_03": 1.0,
 }
+## 숨기는 메시. 눈 흰자 위 그림자 메시는 원본 전용 셰이더 없이는 홍채 위에 곡선 경계의 회색 막처럼 보인다.
+@export var hidden_meshes: Array[StringName] = [&"S_actor_endminf_eyeshadow_01_lod0"]
 ## 만화풍(셀 셰이딩) 재질 → 색 띠(ramp) 이미지. 원본 게임은 빛을 받는 정도를 이 띠의 색으로 바꿔 칠한다
 ## (그늘은 회색, 경계는 살구색, 밝은 곳은 흰색). 반투명 재질은 기본 재질로 둔다(toon.gdshader).
 @export var toon_ramps: Dictionary[StringName, String] = {
@@ -107,6 +99,9 @@ static var _runtime_images: Dictionary[String, Dictionary] = {}
 	&"M_actor_endminf_hair_01": 1.0,
 	&"M_actor_endminf_face_01": 0.6,
 }
+## 카메라 쪽으로 당겨 그리는 재질 → 거리(m). 눈썹과 속눈썹이 앞머리 뒤에 가려 이마에 끊긴 선처럼 보여서,
+## 원본 게임처럼 앞머리 위에 보이게 한다.
+@export var depth_biases: Dictionary[StringName, float] = {&"M_actor_endminf_brow_01": 0.035}
 ## 숨기는 뼈: 이 뼈를 따르는 정점을 한 점으로 모아 보이지 않게 한다. 눈 하이라이트(흰 마름모)는 원래 게임이
 ## 따로 움직이는데 처음 자세 그대로면 동공 밖 흰자에 떠 있다.
 @export var hidden_bones: Array[StringName] = [&"faceLfHighlightJoint", &"faceRtHighlightJoint"]

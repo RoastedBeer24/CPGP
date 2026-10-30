@@ -18,6 +18,17 @@ uniform float rim_width = 0.28;
 uniform float flatness = 0.0;
 // 얼굴이 보는 방향(세상 기준). PlayerBody가 매 프레임 머리 방향으로 넣는다.
 instance uniform vec3 face_forward = vec3(0.0, 0.0, -1.0);
+// 카메라 쪽으로 당겨 그리는 거리(m). 눈썹을 앞머리 위에 보이게 한다(원본 게임처럼). 뒤통수처럼 이보다 멀리
+// 떨어진 것은 뚫고 보이지 않는다.
+uniform float depth_bias = 0.0;
+
+void vertex() {
+	// POSITION을 쓰면 엔진이 모든 재질의 기본 변환을 건너뛰므로, 정점 자체를 카메라 쪽으로 옮긴다.
+	if (depth_bias > 0.0) {
+		vec3 camera_local = (inverse(MODEL_MATRIX) * vec4(CAMERA_POSITION_WORLD, 1.0)).xyz;
+		VERTEX += normalize(camera_local - VERTEX) * depth_bias;
+	}
+}
 
 void fragment() {
 	vec4 color = texture(albedo_texture, UV) * albedo_color;

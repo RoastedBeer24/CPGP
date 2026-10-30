@@ -86,8 +86,8 @@ const FIST_COMBO: Array[StringName] = [&"melee_2", &"melee_1"]
 ## 웅크리거나 슬라이딩할 때 총을 앞으로 낮춰 드는 각도(약 40도 아래)
 const LOW_READY_PITCH := 0.7
 ## 옷자락(망토) 물리: 동작 자세로 돌아가려는 힘, 흔들림이 줄어드는 정도(0~1), 아래로 처지는 힘,
-## 옷자락 두께(m), 끝 뼈 뒤에 덧붙이는 길이(m). 원본 동작에 펄럭임이 이미 있어서 동작을 강하게 따라가게 한다.
-const CLOTH_STIFFNESS := 8.0
+## 옷자락 두께(m), 끝 뼈 뒤에 덧붙이는 길이(m). 원본 동작에 펄럭임이 이미 있어서 동작을 따라가게 한다.
+const CLOTH_STIFFNESS := 6.0
 const CLOTH_DRAG := 0.6
 const CLOTH_GRAVITY := 2.0
 const CLOTH_RADIUS := 0.03
@@ -98,9 +98,9 @@ const CALF_RADIUS := 0.06
 const HIPS_RADIUS := 0.13
 ## 한 프레임에 이보다 멀리 움직이면 순간 이동(부활 등)으로 보고 옷자락 물리를 처음부터 다시 한다(m).
 const TELEPORT_DISTANCE := 2.0
-## 장식 끈: 망토보다 가볍게 날린다
-const RIBBON_STIFFNESS := 4.0
-const RIBBON_DRAG := 0.4
+## 장식 끈: 망토보다 조금 가볍게 날린다
+const RIBBON_STIFFNESS := 5.0
+const RIBBON_DRAG := 0.55
 const RIBBON_GRAVITY := 1.5
 ## 머리카락: 모양이 무너지지 않게 단단하게, 조금만 처지게 한다
 const HAIR_STIFFNESS := 10.0
@@ -424,6 +424,10 @@ func _load_model(scene: PackedScene) -> void:
 	placeholder = null
 	for geometry: Node in _model.find_children("*", "GeometryInstance3D", true, false):
 		(geometry as GeometryInstance3D).layers |= CHARACTER_RENDER_LAYER
+	for mesh_name: StringName in appearance.hidden_meshes:
+		var hidden := _model.find_child(String(mesh_name), true, false) as GeometryInstance3D
+		if hidden != null:
+			hidden.visible = false
 	for mesh_name: StringName in appearance.headgear_meshes:
 		var mesh := _model.find_child(String(mesh_name), true, false) as GeometryInstance3D
 		if mesh != null:
@@ -514,6 +518,7 @@ func _setup_materials() -> void:
 				toon.set_shader_parameter(&"rim_strength", 0.15)
 				if not _face_meshes.has(mesh_instance):
 					_face_meshes.append(mesh_instance)
+			toon.set_shader_parameter(&"depth_bias", appearance.depth_biases.get(material_name, 0.0))
 			var mask_name: String = appearance.emission_masks.get(material_name, "")
 			var mask := appearance.texture(mask_name) if not mask_name.is_empty() else null
 			if mask != null:
@@ -556,11 +561,13 @@ func _update_face_light() -> void:
 		mesh.set_instance_shader_parameter(&"face_forward", forward)
 
 
-## 옷자락(망토)을 물리로 흔든다(SpringBoneSimulator3D). 동작 자세를 따라가되 몸보다 조금 늦게 따라오고,
+## 옷자락(망토)을 물리로 흔든다(SpringBoneSimulator3D). 동작 자세를 따라가되 조금 늦게 따라오고,
 ## 아래로 처지며, 다리·골반·땅을 뚫지 않는다. 덧입힌 자세(BodyPoseModifier) 다음에 계산해야 IK로 옮긴 다리와
 ## 부딪히므로 그 뒤에 붙인다.
-## 계산은 세상 기준(CENTER_FROM_WORLD_ORIGIN)으로 한다. Godot 4.5는 몸이나 뼈 기준(NODE, BONE)으로 계산하면
-## 충돌 모양의 위치를 잘못 옮겨서(get_transform_from_skeleton의 곱 순서) 망토가 엉뚱한 곳에 걸려 뒤집힌다.
+## 계산은 뼈대(Skeleton3D) 기준으로 한다. 세상 기준이면 플레이어가 달리거나 몸을 돌 때마다 옷자락이 크게 휘날려
+## 어색했다(뛸 때 펄럭임은 원본 동작에 이미 있다). Godot 4.5는 다른 노드나 뼈를 기준으로 하면 충돌 모양의
+## 위치를 잘못 옮기는데(get_transform_from_skeleton의 곱 순서), 뼈대 자신을 기준으로 하면 그 변환이 단위 행렬이라
+## 틀리지 않는다. 대신 중력 방향을 뼈대 기준으로 바꿔 매 프레임 넣는다(_update_cloth_gravity).
 func _setup_cloth() -> void:
 	# 무리마다 (사슬들, 돌아가는 힘, 흔들림 줄임, 처짐, 두께, 다리·땅과 부딪히는지). 망토와 후드에 매달린 끈이 있어서
 	# 망토 → 끈 순서로 계산한다. 머리카락은 다리나 땅에 닿을 일이 없다.
@@ -597,12 +604,22 @@ func _setup_cloth() -> void:
 		_cloth.set_end_bone_name(i, setting[1])
 		_cloth.set_extend_end_bone(i, true)
 		_cloth.set_end_bone_length(i, CLOTH_TAIL)
-		_cloth.set_center_from(i, SpringBoneSimulator3D.CENTER_FROM_WORLD_ORIGIN)
+		_cloth.set_center_from(i, SpringBoneSimulator3D.CENTER_FROM_NODE)
+		_cloth.set_center_node(i, _cloth.get_path_to(_skeleton))
 		_cloth.set_stiffness(i, setting[2])
 		_cloth.set_drag(i, setting[3])
 		_cloth.set_gravity(i, setting[4])
 		_cloth.set_radius(i, setting[5])
 		_cloth.set_enable_all_child_collisions(i, setting[6])
+
+
+## 옷자락 물리는 뼈대 기준으로 계산하므로, 세상의 아래 방향을 뼈대 기준으로 바꿔 넣는다.
+func _update_cloth_gravity() -> void:
+	if _cloth == null:
+		return
+	var down := (_skeleton.global_basis.orthonormalized().inverse() * Vector3.DOWN).normalized()
+	for i in _cloth.setting_count:
+		_cloth.set_gravity_direction(i, down)
 
 
 ## 팔다리 한 마디(role에서 child_role까지)를 감싸는 원기둥. 옷자락이 이것을 뚫지 않는다.
@@ -1019,6 +1036,7 @@ func apply_overlays() -> void:
 	_update_held_weapon()
 	_update_face_light()
 	_hide_bones()
+	_update_cloth_gravity()
 	if _cloth_ground != null:
 		# 옷자락이 뚫지 않을 땅: 낮은 쪽 발밑 높이
 		var floor_y := player.global_position.y + minf(foot_offsets.x, foot_offsets.y) + 0.01
