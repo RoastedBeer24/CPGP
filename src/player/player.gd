@@ -45,9 +45,10 @@ const AIM_PROBE_RANGE := 200.0
 
 ## 이동 상태. 원격 피어에도 동기화되어 몸 애니메이션(점프, 슬라이딩 등)에 쓰인다.
 var state := State.GROUND
-## 점프·회피를 할 때마다 1씩 는다. 원격 피어의 몸이 이 값의 변화를 보고 점프·회피 동작을 튼다.
+## 점프·회피·근접 공격을 할 때마다 1씩 는다. 원격 피어의 몸이 이 값의 변화를 보고 그 동작을 튼다.
 var jump_count := 0
 var dodge_count := 0
+var melee_count := 0
 var crouched := false
 ## 0이면 선 자세, 1이면 웅크린 자세. 원격 피어에도 동기화된다.
 var crouch_blend := 0.0
@@ -115,7 +116,7 @@ func _ready() -> void:
 	# 3인칭 카메라가 내 몸에 걸려 당겨지지 않게 한다.
 	camera_arm.add_excluded_object(get_rid())
 	health.died.connect(_on_died)
-	weapons.fired.connect(func(_weapon: WeaponData) -> void: _last_fire_frame = Engine.get_physics_frames())
+	weapons.fired.connect(_on_fired)
 	health.revived.connect(_on_revived)
 	_apply_crouch_shape()
 	_apply_view()
@@ -572,6 +573,12 @@ func respawn_at(spawn_position: Vector3) -> void:
 	velocity = Vector3.ZERO
 	state = State.GROUND
 	crouched = false
+
+
+func _on_fired(weapon: WeaponData) -> void:
+	_last_fire_frame = Engine.get_physics_frames()
+	if weapon.is_melee():
+		melee_count += 1
 
 
 func _on_died(_info: DamageInfo) -> void:

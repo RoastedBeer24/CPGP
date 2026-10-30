@@ -134,6 +134,89 @@ func test_animated_body_falls_when_dropped() -> void:
 	assert_eq(player.body.dominant_animation(), &"fall")
 
 
+func test_animated_crouch_kneels_then_steps() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	intent.crouch_pressed = true
+	await _frames(30)
+	assert_eq(player.body.dominant_animation(), &"crouch", "멈춰서 웅크리면 무릎을 꿇는다")
+	assert_true(_head_height() < 1.0, "꿇으면 머리가 낮다: %s" % _head_height())
+	assert_almost_eq(player.body.pelvis_drop(), 0.0, 0.02, "꿇는 동작 자체가 낮아서 골반을 더 내리지 않는다")
+	intent.move = Vector2(0, 1)
+	await _frames(30)
+	assert_eq(player.body.dominant_animation(), &"crouch_walk", "웅크려 움직이면 걸음을 코드로 만든다")
+	assert_almost_eq(player.body.pelvis_drop(), PlayerBody.CROUCH_WALK_DROP, 0.03, "걸을 때는 골반을 내린다")
+
+
+func test_crouch_gait_keeps_planted_foot_still() -> void:
+	# 웅크려 걷는 발은 딛는 동안 몸이 나아가는 만큼 뒤로 밀려서 땅에서 미끄러지지 않는다. 모델이 없어도 확인한다.
+	var speed := 2.4
+	var step := 0.6
+	var dt := 1.0 / 60.0
+	var du := speed * dt / (2.0 * step)
+	var u := 0.02
+	while u + du < PlayerBody.CROUCH_STANCE:
+		var now := PlayerBody._gait_offset(u, step)
+		var moved := PlayerBody._gait_offset(u + du, step).x - now.x
+		assert_almost_eq(moved / dt, -speed, 0.01, "딛은 발은 몸 속도만큼 뒤로")
+		assert_eq(now.y, 0.0, "딛는 동안은 땅에 붙어 있음")
+		u += du * 4.0
+	assert_true(PlayerBody._gait_offset(0.8, step).y > 0.05, "옮기는 동안은 발을 든다")
+	assert_almost_eq(PlayerBody._gait_offset(0.9999, step).x, PlayerBody._gait_offset(0.0, step).x, 0.01, "옮긴 발은 다시 디딜 자리에 내려온다")
+
+
+func test_animated_slide_stretches_leg() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	intent.move = Vector2(0, 1)
+	intent.sprint = true
+	await _frames(45)
+	intent.sprint = false
+	intent.crouch_pressed = true
+	await _frames(15)
+	assert_eq(player.state, Player.State.SLIDE)
+	assert_eq(player.body.dominant_animation(), &"slide")
+	assert_almost_eq(player.body._slide_weight, 1.0, 0.01, "다리를 뻗은 자세가 다 입혀진다")
+	assert_true(_head_height() < 1.0, "몸을 낮춘다: %s" % _head_height())
+
+
+func test_melee_attacks_chain_into_combo() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	intent.weapon_slot = 3
+	await _frames(20)  # 무기를 바꾼 뒤 0.25초는 공격하지 못한다
+	intent.fire_pressed = true
+	await _frames(6)
+	assert_eq(player.melee_count, 1)
+	assert_eq(player.body.dominant_animation(), &"melee", "휘두르는 동작")
+	assert_false(player.body._melee_blend.filter_enabled, "서서 휘두르면 온몸으로")
+	var first := player.body._combo
+	await _frames(24)
+	intent.fire_pressed = true
+	await _frames(4)
+	assert_eq(player.melee_count, 2)
+	assert_eq(player.body._combo, (first + 1) % 3, "이어서 치면 다음 동작")
+	await _frames(120)
+	assert_ne(player.body.dominant_animation(), &"melee", "끝나면 원래 동작으로")
+	intent.fire_pressed = true
+	await _frames(4)
+	assert_eq(player.body._combo, 0, "한참 뒤에 치면 첫 동작부터")
+
+
+func test_melee_while_moving_swings_upper_body_only() -> void:
+	if not await _spawn_with_model() or not player.body.animated:
+		return
+	intent.weapon_slot = 3
+	intent.move = Vector2(0, 1)
+	await _frames(30)
+	intent.fire_pressed = true
+	await _frames(6)
+	assert_eq(player.body.dominant_animation(), &"melee")
+	assert_true(player.body._melee_blend.filter_enabled, "움직이며 휘두르면 상체만")
+	assert_eq(player.body.locomotion, &"run", "다리는 계속 달린다")
+	assert_true(player.body.chest_facing().dot(Vector3.FORWARD) > 0.9, "휘두르는 쪽(앞)을 본다")
+
+
 
 func test_motion_is_steady_when_screen_draws_faster_than_physics() -> void:
 	if not await _spawn_with_model() or not player.body.animated:
@@ -210,6 +293,8 @@ func test_model_next_to_executable_is_read_at_runtime() -> void:
 	await _spawn(appearance)
 	assert_true(player.body.has_model, "실행 중에 glTF를 읽어 몸으로 씀")
 	assert_true(player.body.animated, "실행 중에 읽어도 애니메이션 이름(-loop)을 정리해 쓴다")
+	assert_true(player.body._has_kneel, "무릎 꿇기 동작도 읽는다")
+	assert_eq(player.body._melee_kinds.size(), 3, "근접 공격 동작 셋을 읽는다")
 	player.set_third_person(true)
 	intent.crouch_pressed = true
 	await _frames(40)

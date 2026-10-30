@@ -5,11 +5,15 @@ extends Node3D
 ## 모델에 애니메이션이 있으면(tools/extract_character.py로 만든 파일) 애니메이션으로 움직인다.
 ##   - 이동: 속도 구간마다 동작 하나(서기 / 걷기 / 달리기 / 전력 질주)를 골라 부드럽게 바꾸고,
 ##     실제 속도에 맞춰 재생 속도를 바꾼다(발이 미끄러지지 않게). 원래 속도는 걷기 1.0, 달리기 4.3, 질주 6.2 m/s.
-##   - 몸 방향: 평소엔 움직이는 방향을 본다. 전투 자세(조준 중이거나 방금 쏨)면 다리는 움직이는 방향으로
-##     가고 상체만 조준 방향으로 비튼다. 뒤로 가면 몸은 조준 쪽을 보고 동작을 거꾸로 튼다(뒷걸음).
-##   - 점프: 도약 → (오래 떨어지면) 낙하 → 착지. 회피는 회피 동작. 점프·회피는 횟수가 동기화되어 남도 본다.
+##   - 몸 방향: 평소엔 움직이는 방향을 본다. 전투 자세(조준 중이거나 방금 쏘거나 휘두름)면 다리는 움직이는
+##     방향으로 가고 상체만 조준 방향으로 비튼다. 뒤로 가면 몸은 조준 쪽을 보고 동작을 거꾸로 튼다(뒷걸음).
+##   - 웅크리기: 멈춰 있으면 한쪽 무릎을 꿇는다. 움직이면 서기 동작 위에 걸음을 코드로 만든다(원본에 웅크려
+##     걷는 동작이 없다). 슬라이딩은 꿇은 자세에서 오른 다리를 앞으로 뻗고 상체를 뒤로 젖힌다.
+##   - 점프: 도약 → (오래 떨어지면) 낙하 → 착지. 회피는 회피 동작.
+##   - 근접 공격: 세 동작을 이어서 휘두른다. 서 있으면 온몸으로, 움직이면 상체만 휘두르고 다리는 계속 걷는다.
+##   점프·회피·근접 공격은 횟수가 동기화되어 남도 본다.
 ##   애니메이션 위에 코드로 덧입히는 것(BodyPoseModifier): 상체 비틀기, 위아래 시선, 총을 겨눈 팔,
-##   다리 IK(웅크리기·슬라이딩은 골반을 내리고 다리를 접는다, 계단에서는 발마다 실제 땅 높이에 맞춘다).
+##   다리 IK(웅크려 걷기의 걸음, 슬라이딩의 뻗은 다리, 계단에서는 발마다 실제 땅 높이에 맞춘다).
 ## 애니메이션이 없는 모델이면 걷기·웅크리기·점프·겨누기 자세를 전부 코드로 만든다.
 ##
 ## 뼈마다 축 방향이 제각각이라 각도 대신 "이 뼈가 몸 기준으로 어느 쪽을 가리켜야 하는지"를 정하고,
@@ -31,6 +35,9 @@ const MAX_TRACKED_SPEED := 15.0
 
 ## 애니메이션 모드에 꼭 있어야 하는 동작. 하나라도 없으면 코드로 만든 자세를 쓴다.
 const REQUIRED_ANIMATIONS: Array[StringName] = [&"idle", &"walk", &"run", &"sprint", &"fall"]
+## 이동 고르기의 상태. crouch는 꿇어앉기 동작, crouch_walk는 서기 동작을 바탕으로 다리를 코드로 움직인다.
+## 꿇어앉기 동작이 없는 모델이면 웅크릴 때 늘 crouch_walk를 쓴다.
+const LOCOMOTION_STATES: Array[StringName] = [&"idle", &"walk", &"run", &"sprint", &"crouch", &"crouch_walk"]
 ## 이동 동작이 원래 속도로 재생될 때 나아가는 속도(m/s). 재생 속도를 실제 속도에 맞추는 기준이다.
 const NATURAL_SPEEDS := {&"walk": 1.0, &"run": 4.3, &"sprint": 6.2}
 ## 이동 동작을 고르는 속도 경계(m/s). 경계 근처에서 깜빡이지 않도록 바꿀 때만 HYSTERESIS만큼 여유를 둔다.
@@ -47,9 +54,23 @@ const MAX_TWIST := 1.31
 ## 전투 자세에서 이보다 뒤쪽으로 가면 뒷걸음(동작 거꾸로)으로 바꾼다. 들어갈 때와 나올 때 경계가 다르다.
 const BACKPEDAL_ENTER := 1.92
 const BACKPEDAL_EXIT := 1.7
-## 웅크리기와 슬라이딩에서 골반을 내리는 높이(m)
-const CROUCH_DROP := 0.5
-const SLIDE_DROP := 0.55
+## 웅크려 걷기: 골반을 내리는 높이(m), 앞으로 숙이는 각도(약 26도), 한 걸음 주기 중 발이 땅을 딛는 비율,
+## 발을 드는 높이(m), 팔을 흔드는 각도
+const CROUCH_WALK_DROP := 0.34
+const CROUCH_WALK_LEAN := 0.45
+const CROUCH_STANCE := 0.6
+const CROUCH_LIFT := 0.12
+const ARM_SWING := 0.35
+## 슬라이딩: 꿇은 자세에서 골반을 조금 더 내리는 높이(m)와 상체를 뒤로 젖히는 각도(약 29도)
+const SLIDE_DROP := 0.06
+const SLIDE_RECLINE := 0.5
+## 근접 공격: 재생 속도, 들어갈 때·나올 때 섞는 시간(초), 연속 동작끼리 바꿀 때 섞는 시간(초),
+## 마지막 공격 뒤 이 시간(초) 안에 다시 치면 다음 연속 동작으로 잇는다.
+const MELEE_SPEED := 1.4
+const MELEE_FADE_IN := 0.08
+const MELEE_FADE_OUT := 0.2
+const MELEE_CROSSFADE := 0.12
+const COMBO_WINDOW := 1.0
 ## 발 IK가 땅을 찾을 때 보는 물리 레이어: 1 world, 5 foot_ground(계단 디딤판처럼 발만 딛는 모양)
 const FOOT_GROUND_LAYER := 16
 const FOOT_RAY_MASK := 1 | FOOT_GROUND_LAYER
@@ -73,12 +94,15 @@ var _model: Node3D
 var _skeleton: Skeleton3D
 var _tree: AnimationTree
 var _tree_nodes: Dictionary[StringName, bool] = {}
-## 한 번 트는 동작의 재생 속도 (나무를 만든 뒤 넣는다)
+## 한 번 트는 동작의 재생 속도와 처음 고를 종류 (나무를 만든 뒤 넣는다)
 var _one_shot_speeds: Dictionary[StringName, float] = {}
+var _first_kinds: Dictionary[StringName, StringName] = {}
+## 꿇어앉기 동작이 있는지
+var _has_kneel := false
 var _bone: Dictionary[StringName, int] = {}
-## 뼈대 공간 → 모델 공간 변환. 모델 안의 배치는 바뀌지 않으므로 한 번만 구한다.
+## 뼈대 공간 → 모델 공간 변환. 뼈대의 부모 노드가 동작에 따라 움직이므로 _update_space()에서 매번 구한다.
 var _model_from_skeleton := Transform3D.IDENTITY
-## 뼈대 공간 → 몸 공간 변환 (모델을 들어 올리거나 내리기 전 기준). 모델이 돌면 다시 구한다.
+## 뼈대 공간 → 몸 공간 변환 (모델을 들어 올리거나 내리기 전 기준)
 var _body_from_skeleton := Transform3D.IDENTITY
 var _to_skeleton := Basis.IDENTITY
 var _rest_foot_height := 0.0
@@ -93,10 +117,17 @@ var _model_yaw := 0.0
 ## 상체를 비트는 각도 (전투 자세에서 조준 방향을 보게)
 var _twist := 0.0
 var _backpedal := false
+## 0이면 평소 자세, 1이면 전투 자세(조준 방향을 본다). 총이면 팔도 겨눈다(ready_blend).
+var _stance := 0.0
 ## 모델을 내린 높이 (몸 기준, 내리면 음수)
 var _ground_offset := 0.0
 var _pelvis_drop := 0.0
 var _phase := 0.0
+## 웅크려 걷기의 걸음 주기 (0~1, 왼발 기준)
+var _step_phase := 0.0
+## 코드로 만든 다리(웅크려 걷기, 슬라이딩)를 얼마나 입힐지. 동작이 바뀔 때 부드럽게 넘어가게 한다.
+var _walk_weight := 0.0
+var _slide_weight := 0.0
 var _held: Node3D
 var _held_index := -1
 var _muzzle: Node3D
@@ -109,6 +140,18 @@ var _air_time := 0.0
 var _was_airborne := false
 var _last_jump_count := 0
 var _last_dodge_count := 0
+var _last_melee_count := 0
+
+# 근접 공격: 연속 동작을 고르는 노드와 섞는 노드, 동작 이름과 길이(초, 재생 속도 반영)
+var _melee_blend: AnimationNodeBlend2
+var _melee_choice: AnimationNodeTransition
+var _melee_kinds: Array[StringName] = []
+var _melee_lengths: Array[float] = []
+## 공격 동작이 보이는 정도 (0~1)
+var _melee_amount := 0.0
+## 지금 연속 동작 번호 (0부터)
+var _combo := 0
+var _since_attack := 100.0
 
 # 이번 프레임의 움직임 (애니메이션 위에 자세를 덧입힐 때 다시 쓴다)
 var _speed := 0.0
@@ -158,6 +201,7 @@ func bone_position(bone_name: StringName) -> Vector3:
 	var index := _skeleton.find_bone(bone_name)
 	if index < 0:
 		return Vector3.ZERO
+	_update_space()
 	return _body_from_skeleton * _skeleton.get_bone_global_pose(index).origin + Vector3.UP * _ground_offset
 
 
@@ -165,11 +209,15 @@ func bone_position(bone_name: StringName) -> Vector3:
 func dominant_animation() -> StringName:
 	if not animated:
 		return &""
+	if _melee_amount > 0.5:
+		return &"melee"
 	for shot: StringName in [&"dodge", &"land", &"jump"]:
 		if _tree_nodes.has(shot) and bool(_tree.get(StringName("parameters/%s/active" % shot))):
 			return shot
 	if _airborne:
 		return &"fall"
+	if _sliding:
+		return &"slide"
 	return locomotion
 
 
@@ -183,7 +231,8 @@ func chest_facing() -> Vector3:
 	return FORWARD.rotated(Vector3.UP, _model_yaw + _twist)
 
 
-## 모델을 내린 높이(m, 양수). 웅크리기·슬라이딩·계단에서 골반을 내린 만큼이다.
+## 모델을 내린 높이(m, 양수). 웅크려 걷기·슬라이딩·계단에서 골반을 내린 만큼이다.
+## 꿇어앉기는 동작 자체가 낮아서 내리지 않는다.
 func pelvis_drop() -> float:
 	return _pelvis_drop
 
@@ -251,13 +300,17 @@ func _read_motion(delta: float, velocity: Vector3) -> void:
 		_phase = fmod(_phase + _speed * delta / lerpf(2.4, 3.0, _sprint) * TAU, TAU)
 
 	var weapon := player.weapons.current_weapon()
+	var wants_stance: bool
 	var wants_ready: bool
 	if animated:
-		# 애니메이션 모드는 조준하거나 쏠 때만 겨눈다. 평소에는 이동 동작을 그대로 보여 준다.
-		wants_ready = player.health.is_alive() and not weapon.is_melee() and player.combat_ready and _sprint < 0.5 and not _sliding
+		# 애니메이션 모드는 조준하거나 쏘거나 휘두를 때만 전투 자세다. 평소에는 이동 동작을 그대로 보여 준다.
+		wants_stance = player.health.is_alive() and player.combat_ready and _sprint < 0.5 and not _sliding
+		wants_ready = wants_stance and not weapon.is_melee()
 	else:
 		wants_ready = player.health.is_alive() and not weapon.is_melee() and _sprint < 0.5
+		wants_stance = wants_ready
 	ready_blend = move_toward(ready_blend, 1.0 if wants_ready else 0.0, delta * 6.0)
+	_stance = move_toward(_stance, 1.0 if wants_stance else 0.0, delta * 6.0)
 
 
 # ---- 모델 불러오기 ----
@@ -305,7 +358,6 @@ func _load_model(scene: PackedScene) -> void:
 		_bone[role] = index
 	_skeleton = skeleton
 
-	_model_from_skeleton = _model.global_transform.affine_inverse() * _skeleton.global_transform
 	_update_space()
 	_skeleton.reset_bone_poses()
 	_rest_foot_height = minf(_posed_point(&"foot_l").y, _posed_point(&"foot_r").y)
@@ -316,8 +368,10 @@ func _load_model(scene: PackedScene) -> void:
 	_setup_animation()
 
 
-## 모델이 돌면 뼈대 공간과 몸 공간의 관계가 바뀐다. 모델을 내리기 전 기준으로 다시 구한다.
+## 뼈대 공간과 몸 공간의 관계를 다시 구한다(모델을 내리기 전 기준). 모델이 돌 때만이 아니라, 뼈대의 부모
+## 노드(Bip001)도 동작에 따라 움직이므로(꿇어앉으면 0.57m 내려간다) 동작이 적용될 때마다 구해야 한다.
 func _update_space() -> void:
+	_model_from_skeleton = _model.global_transform.affine_inverse() * _skeleton.global_transform
 	var model := Transform3D(_model.transform.basis, _model_base_position)
 	_body_from_skeleton = model * _model_from_skeleton
 	_to_skeleton = _body_from_skeleton.basis.orthonormalized().inverse()
@@ -342,15 +396,19 @@ func _setup_animation() -> void:
 		if not animation_player.has_animation(name):
 			return
 
-	# 이동: 동작마다 재생 속도 노드를 달고, 속도 구간에 따라 하나를 고른다(교차 0.25초).
+	# 이동: 동작마다 재생 속도 노드를 달고, 속도 구간과 웅크림에 따라 하나를 고른다(교차 0.25초).
+	_has_kneel = animation_player.has_animation(&"crouch")
 	var root := AnimationNodeBlendTree.new()
 	var moves := AnimationNodeTransition.new()
 	moves.xfade_time = 0.25
 	root.add_node(&"locomotion", moves)
 	var index := 0
-	for name: StringName in [&"idle", &"walk", &"run", &"sprint"]:
+	for name: StringName in LOCOMOTION_STATES:
+		var clip := name
+		if name == &"crouch_walk" or (name == &"crouch" and not _has_kneel):
+			clip = &"idle"
 		moves.add_input(String(name))
-		root.add_node(StringName(name + "_clip"), _clip(name))
+		root.add_node(StringName(name + "_clip"), _clip(clip))
 		root.add_node(StringName(name + "_speed"), AnimationNodeTimeScale.new())
 		root.connect_node(StringName(name + "_speed"), 0, StringName(name + "_clip"))
 		root.connect_node(&"locomotion", index, StringName(name + "_speed"))
@@ -366,6 +424,7 @@ func _setup_animation() -> void:
 	last = _add_one_shot(root, animation_player, last, &"jump", {&"idle": &"jump_idle", &"run": &"jump_run"}, 1.0, 0.05, 0.25)
 	last = _add_one_shot(root, animation_player, last, &"land", {&"idle": &"land", &"run": &"run_land"}, 1.4, 0.05, 0.25)
 	last = _add_one_shot(root, animation_player, last, &"dodge", {&"f": &"dodge_f", &"b": &"dodge_b"}, 1.8, 0.05, 0.2)
+	last = _add_melee(root, animation_player, last)
 	root.connect_node(&"output", 0, last)
 
 	_tree = AnimationTree.new()
@@ -375,7 +434,7 @@ func _setup_animation() -> void:
 	_tree.anim_player = _tree.get_path_to(animation_player)
 	_tree.root_node = _tree.get_path_to(animation_player.get_node(animation_player.root_node))
 	_tree.active = true
-	for name: StringName in [&"idle", &"walk", &"run", &"sprint"]:
+	for name: StringName in LOCOMOTION_STATES:
 		_tree.set(StringName("parameters/%s_speed/scale" % name), 1.0)
 	_tree.set(&"parameters/direction/scale", 1.0)
 	for speed_node: StringName in _one_shot_speeds:
@@ -383,11 +442,12 @@ func _setup_animation() -> void:
 	# 고르기(Transition) 노드는 한 번도 요청을 받지 않으면 아무것도 내보내지 않는다. 그러면 뼈대 뿌리의
 	# 회전이 초기값으로 돌아가 몸이 바닥에 눕는다. 처음 상태를 직접 정해 둔다.
 	_tree.set(&"parameters/locomotion/transition_request", String(locomotion))
-	for shot: StringName in [&"jump", &"land", &"dodge"]:
-		for kind: StringName in [&"idle", &"run", &"f", &"b"]:
-			if _tree_nodes.has(StringName("%s:%s" % [shot, kind])):
-				_tree.set(StringName("parameters/%s_kind/transition_request" % shot), String(kind))
-				break
+	for shot: StringName in _first_kinds:
+		_tree.set(StringName("parameters/%s_kind/transition_request" % shot), String(_first_kinds[shot]))
+	if _melee_blend != null:
+		_tree.set(&"parameters/melee_kind/transition_request", String(_melee_kinds[0]))
+		_tree.set(&"parameters/melee_speed/scale", MELEE_SPEED)
+		_tree.set(&"parameters/melee/blend_amount", 0.0)
 
 	var modifier := BodyPoseModifier.new()
 	modifier.body = self
@@ -427,7 +487,54 @@ func _add_one_shot(root: AnimationNodeBlendTree, animation_player: AnimationPlay
 	for kind in present:
 		_tree_nodes[StringName("%s:%s" % [shot, kind])] = true
 	_one_shot_speeds[speed_node] = speed
+	_first_kinds[shot] = present[0]
 	return shot
+
+
+## 근접 공격: 연속 동작(melee_1~3)을 고르는 Transition → 재생 속도 → 처음으로 되감기(TimeSeek) → Blend2.
+## 한 번 트는 노드(OneShot)는 공격 중에 다시 틀면 섞지 않고 처음으로 튀므로, 섞는 양을 코드가 직접 정한다.
+## 움직이는 중에는 상체 뼈만 섞도록 거르개(filter)를 켠다.
+func _add_melee(root: AnimationNodeBlendTree, animation_player: AnimationPlayer, input: StringName) -> StringName:
+	for i in 3:
+		var clip := StringName("melee_%d" % (i + 1))
+		if animation_player.has_animation(clip):
+			_melee_kinds.append(clip)
+			_melee_lengths.append(animation_player.get_animation(clip).length / MELEE_SPEED)
+	if _melee_kinds.is_empty():
+		return input
+	_melee_choice = AnimationNodeTransition.new()
+	_melee_choice.xfade_time = MELEE_CROSSFADE
+	root.add_node(&"melee_kind", _melee_choice)
+	_melee_blend = AnimationNodeBlend2.new()
+	for i in _melee_kinds.size():
+		var clip := _melee_kinds[i]
+		_melee_choice.add_input(String(clip))
+		root.add_node(clip, _clip(clip))
+		root.connect_node(&"melee_kind", i, clip)
+		var animation := animation_player.get_animation(clip)
+		for track in animation.get_track_count():
+			var path := animation.track_get_path(track)
+			if _is_upper_body(_skeleton.find_bone(path.get_concatenated_subnames())):
+				_melee_blend.set_filter_path(path, true)
+	root.add_node(&"melee_speed", AnimationNodeTimeScale.new())
+	root.connect_node(&"melee_speed", 0, &"melee_kind")
+	root.add_node(&"melee_seek", AnimationNodeTimeSeek.new())
+	root.connect_node(&"melee_seek", 0, &"melee_speed")
+	root.add_node(&"melee", _melee_blend)
+	root.connect_node(&"melee", 0, input)
+	root.connect_node(&"melee", 1, &"melee_seek")
+	return &"melee"
+
+
+## 상체 뼈인지: 허리(spine) 아래에 매달린 뼈. 이 모델(3ds Max Biped)은 허벅지도 허리 뼈에 붙어 있어서 다리는 뺀다.
+func _is_upper_body(bone: int) -> bool:
+	while bone >= 0:
+		if bone == _bone[&"thigh_l"] or bone == _bone[&"thigh_r"]:
+			return false
+		if bone == _bone[&"spine"]:
+			return true
+		bone = _skeleton.get_bone_parent(bone)
+	return false
 
 
 ## 실행 중에 glTF를 읽으면 "-loop" 꼬리가 이름에 그대로 남고 반복 설정도 빠진다(에디터 가져오기만 처리해 준다).
@@ -455,6 +562,12 @@ func _drive_animation(delta: float) -> void:
 	_update_facing(delta)
 	_update_locomotion()
 	_tree.set(&"parameters/air/blend_amount", move_toward(float(_tree.get(&"parameters/air/blend_amount")), 1.0 if _airborne else 0.0, delta * 8.0))
+	# 코드로 만드는 다리: 웅크려 걷기는 걸음 주기를 속도만큼 돌린다(한 주기에 두 걸음).
+	var crouch_walking := locomotion == &"crouch_walk" and not _sliding
+	_walk_weight = move_toward(_walk_weight, 1.0 if crouch_walking else 0.0, delta * 5.0)
+	_slide_weight = move_toward(_slide_weight, 1.0 if _sliding else 0.0, delta * (8.0 if _sliding else 4.0))
+	_step_phase = fmod(_step_phase + _speed * delta / (2.0 * _step_length()), 1.0)
+	_update_melee(delta)
 
 	# 점프·회피는 동기화된 횟수가 바뀌었을 때 튼다(원격 플레이어도 같은 동작을 본다).
 	if player.jump_count != _last_jump_count:
@@ -477,7 +590,7 @@ func _update_facing(delta: float) -> void:
 	var moving := _speed > 0.6 and not _airborne
 	var move_yaw := atan2(-_move_dir.x, -_move_dir.z)
 	var target_yaw := _model_yaw
-	if ready_blend > 0.5:
+	if _stance > 0.5:
 		if moving:
 			# 다리는 움직이는 쪽으로 가고, 상체는 조준(앞)을 본다. 뒤쪽으로 가면 뒷걸음으로 바꾼다.
 			var limit := BACKPEDAL_EXIT if _backpedal else BACKPEDAL_ENTER
@@ -493,16 +606,18 @@ func _update_facing(delta: float) -> void:
 			target_yaw = move_yaw
 	_model_yaw = rotate_toward(_model_yaw, target_yaw, TURN_SPEED * delta)
 	_model.rotation.y = _model_base_yaw + _model_yaw
-	_twist = -_model_yaw * ready_blend
+	_twist = -_model_yaw * _stance
 
 
 ## 속도 구간에 맞는 이동 동작을 고르고, 실제 속도에 맞춰 재생 속도를 정한다.
 func _update_locomotion() -> void:
 	var next := locomotion
 	var speed := _speed
-	if _sliding:
-		# 슬라이딩은 다리를 IK로 따로 만든다. 상체는 서 있는 동작을 쓴다.
-		next = &"idle"
+	if _sliding or (_crouch > 0.5 and not _airborne):
+		# 웅크리면 멈춰서는 무릎을 꿇고, 움직이면 걸음을 코드로 만든다.
+		# 슬라이딩은 꿇은 자세 위에 다리를 뻗는다(_legs_ik).
+		var from := WALK_FROM - HYSTERESIS if locomotion == &"crouch_walk" else WALK_FROM
+		next = &"crouch_walk" if (speed >= from and not _sliding) or not _has_kneel else &"crouch"
 	else:
 		next = _pick_locomotion(speed)
 	if next != locomotion:
@@ -512,7 +627,7 @@ func _update_locomotion() -> void:
 		var natural: float = NATURAL_SPEEDS[locomotion]
 		var lowest := 0.5 if locomotion == &"walk" else 0.6
 		_tree.set(StringName("parameters/%s_speed/scale" % locomotion), clampf(speed / natural, lowest, 2.2))
-	_tree.set(&"parameters/direction/scale", -1.0 if _backpedal else 1.0)
+	_tree.set(&"parameters/direction/scale", -1.0 if _backpedal and NATURAL_SPEEDS.has(locomotion) else 1.0)
 
 
 func _pick_locomotion(speed: float) -> StringName:
@@ -547,6 +662,36 @@ func _is_playing(shot: StringName) -> bool:
 	return _tree_nodes.has(shot) and bool(_tree.get(StringName("parameters/%s/active" % shot)))
 
 
+## 근접 공격: 횟수가 바뀌면 휘두르고, 동작이 끝나 갈 때 섞는 양을 내린다.
+func _update_melee(delta: float) -> void:
+	if _melee_blend == null:
+		return
+	_since_attack += delta
+	if player.melee_count != _last_melee_count:
+		_last_melee_count = player.melee_count
+		_attack()
+	var showing := _since_attack < _melee_lengths[_combo] - MELEE_FADE_OUT
+	_melee_amount = move_toward(_melee_amount, 1.0 if showing else 0.0, delta / (MELEE_FADE_IN if showing else MELEE_FADE_OUT))
+	_tree.set(&"parameters/melee/blend_amount", _melee_amount)
+
+
+## 마지막 공격 뒤 COMBO_WINDOW 안에 다시 치면 다음 연속 동작으로, 아니면 첫 동작으로 휘두른다.
+func _attack() -> void:
+	var next := (_combo + 1) % _melee_kinds.size() if _since_attack < COMBO_WINDOW else 0
+	var clip := _melee_kinds[next]
+	# 서 있으면 온몸으로 휘두르고, 움직이거나 웅크리거나 공중이면 상체만 휘두른다(다리는 하던 동작을 이어 간다).
+	_melee_blend.filter_enabled = _speed > 0.6 or _airborne or _crouch > 0.5 or _sliding
+	if String(_tree.get(&"parameters/melee_kind/current_state")) == String(clip):
+		# 같은 동작을 다시 고르면 Transition이 아무것도 하지 않으므로 처음으로 되감는다.
+		_tree.set(&"parameters/melee_seek/seek_request", 0.0)
+	else:
+		# 휘두르는 중이면 다음 동작으로 섞어 넘어가고, 아니면 바로 바꾼다(지난 동작의 끝 자세가 섞이지 않게).
+		_melee_choice.xfade_time = MELEE_CROSSFADE if _melee_amount > 0.05 else 0.0
+		_tree.set(&"parameters/melee_kind/transition_request", String(clip))
+	_combo = next
+	_since_attack = 0.0
+
+
 # ---- 애니메이션 위에 덧입히기 (BodyPoseModifier가 부른다) ----
 
 ## 애니메이션이 뼈에 적용된 뒤 부른다. 상체 비틀기, 시선, 총 겨누기, 다리 IK를 덧입힌다.
@@ -560,15 +705,14 @@ func apply_overlays() -> void:
 		_rotate_bone(&"spine", Vector3.UP, _twist * 0.45)
 		_rotate_bone(&"chest", Vector3.UP, _twist * 0.55)
 	var chest_right := RIGHT.rotated(Vector3.UP, _model_yaw + _twist)
-	# 웅크리면 앞으로 조금 숙이고, 슬라이딩하면 뒤로 젖힌다.
-	var lean := deg_to_rad(18.0) * _crouch
-	if _sliding:
-		lean = -deg_to_rad(15.0)
+	# 웅크려 걸으면 앞으로 숙이고, 슬라이딩하면 뒤로 젖힌다. 꿇어앉은 자세는 동작 그대로 둔다.
+	var lean := CROUCH_WALK_LEAN * _walk_weight - SLIDE_RECLINE * _slide_weight
 	if absf(lean) > 0.001:
 		_rotate_bone(&"spine", chest_right, -lean)
 	# 고개를 드는 만큼 가슴과 머리를 나눠 든다. 겨눌 때는 더 많이 따라간다.
 	_rotate_bone(&"chest", chest_right, pitch * lerpf(0.15, 0.35, ready_blend))
 	_rotate_bone(&"head", chest_right, pitch * 0.4 + lean * 0.6)
+	_swing_arms(chest_right)
 	if ready_blend > 0.0:
 		for side: float in [-1.0, 1.0]:
 			var roles := _arm_roles(side)
@@ -579,48 +723,100 @@ func apply_overlays() -> void:
 	_update_held_weapon()
 
 
-## 골반을 내리고(웅크리기·슬라이딩·한 발이 낮은 계단) 발이 실제 땅에 닿도록 다리를 접는다.
+## 다리 IK. 골반을 내리고(웅크려 걷기·슬라이딩·한 발이 낮은 계단) 발이 실제 땅에 닿도록 다리를 접는다.
+## 웅크려 걸을 때는 걸음을, 슬라이딩할 때는 앞으로 뻗은 다리를 코드로 만든다.
 func _legs_ik() -> void:
 	var grounded := not _airborne
 	if grounded:
 		_sample_ground()
 	else:
 		foot_offsets = foot_offsets.lerp(Vector2.ZERO, minf(_delta * 10.0, 1.0))
-	var drop := CROUCH_DROP * _crouch
-	if _sliding:
-		drop = SLIDE_DROP
+	var drop := CROUCH_WALK_DROP * _walk_weight + SLIDE_DROP * _slide_weight
 	if grounded:
 		# 낮은 쪽 발에 맞춰 골반을 내리고, 두 발이 다 높으면(디딤판 위) 조금 올린다.
 		drop -= clampf(minf(foot_offsets.x, foot_offsets.y), -0.5, 0.25)
 	_pelvis_drop = move_toward(_pelvis_drop, drop, _delta * 3.0)
 	_ground_offset = -_pelvis_drop
 	_model.position = _model_base_position + Vector3.UP * _ground_offset
-	if absf(_pelvis_drop) < 0.003 and absf(foot_offsets.x) < 0.003 and absf(foot_offsets.y) < 0.003 and not _sliding:
+	var level := absf(_pelvis_drop) < 0.003 and absf(foot_offsets.x) < 0.003 and absf(foot_offsets.y) < 0.003
+	if level and _walk_weight <= 0.0 and _slide_weight <= 0.0:
 		return
 	var forward := facing()
 	var right := RIGHT.rotated(Vector3.UP, _model_yaw)
+	# 땅을 디딘 발목 높이 (모델을 내리기 전 기준이라 내린 만큼 위에 있다)
+	var ground := _pelvis_drop + _rest_foot_height
 	for side: float in [-1.0, 1.0]:
 		var roles := _leg_roles(side)
 		var hip := _posed_point(roles[0])
 		var foot_index := _bone[roles[2]]
 		var foot_basis := _skeleton.get_bone_global_pose(foot_index).basis
 		var offset := foot_offsets.x if side < 0.0 else foot_offsets.y
-		# 모델을 drop만큼 내렸으니, 발이 원래 높이(+땅 높이)에 남으려면 그만큼 들어 올린 곳이 목표다.
+		# 동작의 발 위치에서, 모델을 내린 만큼(+땅 높이) 들어 올린 곳을 딛는다. 무릎은 동작이 굽힌 쪽으로 굽힌다.
 		var target := _posed_point(roles[2]) + Vector3.UP * (_pelvis_drop + offset)
-		var pole := (forward + right * side * 0.25 + Vector3.UP * 0.1).normalized()
-		if _sliding:
-			# 슬라이딩: 왼발은 앞으로 뻗고, 오른발은 엉덩이 밑으로 접는다.
-			var ground := _pelvis_drop + _rest_foot_height
-			if side < 0.0:
-				target = Vector3(hip.x, ground, hip.z) + forward * 0.75
-			else:
-				target = Vector3(hip.x, ground + 0.05, hip.z) - forward * 0.15
-				pole = (forward + Vector3.UP * 0.6 + right * 0.3).normalized()
-		var solved := _two_bone(hip, target, _thigh_length, _calf_length, pole)
-		_point_bone(roles[0], roles[1], solved[0])
-		_point_bone(roles[1], roles[2], solved[1])
-		# 발목 각도는 애니메이션 그대로 둔다.
+		var pole := (_posed_point(roles[1]) - hip).normalized() + forward * 0.1
+		var dirs := _two_bone(hip, target, _thigh_length, _calf_length, pole)
+		var under_hip := Vector3(hip.x, ground + offset, hip.z)
+		if _walk_weight > 0.0:
+			# 웅크려 걷기: 엉덩이 밑을 중심으로, 움직이는 방향을 따라 발을 옮긴다. 무릎은 앞으로 조금 벌려 굽힌다.
+			var gait := _gait_offset(_leg_phase(side), _step_length())
+			var step := under_hip + right * side * 0.05 + _move_dir * gait.x + Vector3.UP * gait.y
+			var stepped := _two_bone(hip, step, _thigh_length, _calf_length, forward + right * side * 0.3)
+			dirs = _mix_legs(dirs, stepped, _walk_weight)
+		var stretch := _slide_weight if side > 0.0 else 0.0
+		if stretch > 0.0:
+			# 슬라이딩: 꿇었던 오른 다리를 앞으로 거의 곧게 뻗는다. 왼 다리는 꿇은 자세 그대로 무릎을 세운다.
+			var height := hip.y - (ground + offset)
+			var length := (_thigh_length + _calf_length) * 0.97
+			var reach := sqrt(maxf(length * length - height * height, 0.04))
+			var stretched := _two_bone(hip, under_hip + forward * reach, _thigh_length, _calf_length, Vector3.UP + forward * 0.2)
+			dirs = _mix_legs(dirs, stretched, stretch)
+		_point_bone(roles[0], roles[1], dirs[0])
+		_point_bone(roles[1], roles[2], dirs[1])
+		# 발목 각도는 동작 그대로 둔다. 뻗은 다리는 처음 자세(정강이와 직각)로 돌려 발끝이 위를 보게 한다.
 		_set_global_basis(foot_index, foot_basis)
+		if stretch > 0.0:
+			var rest := _skeleton.get_bone_rest(foot_index).basis.get_rotation_quaternion()
+			_skeleton.set_bone_pose_rotation(foot_index, _skeleton.get_bone_pose_rotation(foot_index).slerp(rest, stretch))
+
+
+## 웅크려 걸을 때 팔을 다리와 반대로 흔든다. 바탕이 서기 동작이라 팔이 가만히 있기 때문이다.
+func _swing_arms(chest_right: Vector3) -> void:
+	var amount := _walk_weight * (1.0 - _melee_amount) * clampf(_speed / 1.5, 0.0, 1.0)
+	if amount <= 0.001:
+		return
+	var step := _step_length()
+	var reach := CROUCH_STANCE * step
+	for side: float in [-1.0, 1.0]:
+		var gait := _gait_offset(_leg_phase(side), step)
+		# 같은 쪽 발이 앞에 있으면 팔은 뒤로 간다.
+		var ahead := (_move_dir * gait.x).dot(facing()) / reach
+		_rotate_bone(_arm_roles(side)[0], chest_right, -ahead * ARM_SWING * amount)
+
+
+## 웅크려 걸을 때 한 걸음 길이(m). 빠를수록 넓게 딛는다.
+func _step_length() -> float:
+	return clampf(0.28 + 0.14 * _speed, 0.28, 0.62)
+
+
+## 다리의 걸음 주기 (0~1). 오른발은 왼발과 반 주기 어긋난다.
+func _leg_phase(side: float) -> float:
+	return fmod(_step_phase + (0.0 if side < 0.0 else 0.5), 1.0)
+
+
+## 웅크려 걷는 발의 위치. u는 걸음 주기(0~1), step은 한 걸음 길이(m)다.
+## 앞쪽 CROUCH_STANCE 동안은 땅을 딛고 몸이 나아가는 만큼 뒤로 밀리고(미끄러지지 않게),
+## 나머지 동안은 들어 올려 앞으로 옮긴다. x: 움직이는 방향으로 엉덩이보다 앞선 거리(m), y: 든 높이(m).
+static func _gait_offset(u: float, step: float) -> Vector2:
+	var reach := CROUCH_STANCE * step
+	if u < CROUCH_STANCE:
+		return Vector2(reach * (1.0 - 2.0 * u / CROUCH_STANCE), 0.0)
+	var swing := (u - CROUCH_STANCE) / (1.0 - CROUCH_STANCE)
+	return Vector2(reach * (2.0 * smoothstep(0.0, 1.0, swing) - 1.0), CROUCH_LIFT * sin(PI * swing))
+
+
+## 다리 방향(허벅지, 정강이) 둘을 섞는다.
+static func _mix_legs(from: PackedVector3Array, to: PackedVector3Array, weight: float) -> PackedVector3Array:
+	return PackedVector3Array([from[0].slerp(to[0], weight), from[1].slerp(to[1], weight)])
 
 
 ## 발마다 아래로 광선을 쏴서 캡슐이 선 바닥보다 땅이 얼마나 높은지 잰다.

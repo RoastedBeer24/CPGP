@@ -28,3 +28,20 @@ func test_weapon_switch_is_visible_to_others() -> void:
 	client.get_local_player().intent_override = intent
 	var on_host := host.get_player(client_id)
 	assert_true(await wait_until(func() -> bool: return on_host.weapons.current_index == 1), "호스트에서도 산탄총을 든 것으로 보임")
+
+
+func test_melee_swing_is_visible_to_others() -> void:
+	var sessions := await connect_peers(1)
+	var host := sessions[0]
+	var client := sessions[1]
+	var client_id := client.multiplayer.get_unique_id()
+	var intent := PlayerIntent.new()
+	intent.weapon_slot = 3
+	client.get_local_player().intent_override = intent
+	var on_host := host.get_player(client_id)
+	assert_true(await wait_until(func() -> bool: return on_host.weapons.current_index == 2), "칼을 든 것으로 보임")
+	await physics_frames(20)  # 무기를 바꾼 뒤 0.25초는 공격하지 못한다
+	intent.fire_pressed = true
+	assert_true(await wait_until(func() -> bool: return on_host.melee_count == 1), "휘두른 횟수가 호스트에도 전해진다")
+	if on_host.body.animated:
+		assert_true(await wait_until(func() -> bool: return on_host.body.dominant_animation() == &"melee"), "호스트 화면에서도 휘두른다")

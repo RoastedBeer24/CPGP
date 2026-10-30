@@ -16,7 +16,7 @@
 |---|---|---|
 | 플레이어 캐릭터 모델 | `assets/characters/endministrator_f/endministrator_f.glb` | `CyberUniverse.exe`가 있는 폴더의 `characters/endministrator_f.glb` |
 
-- **애니메이션이 든 원본(`Endministrator_F_Animated.glb`, 약 450MB)이 있으면** 게임에 쓰는 동작만 골라 가벼운 파일(약 23MB)을 만들어 넣습니다. 고르는 동작 목록은 도구 안의 `ROLES`에 있습니다.
+- **애니메이션이 든 원본(`Endministrator_F_Animated.glb`, 약 450MB)이 있으면** 게임에 쓰는 동작만 골라 가벼운 파일(약 25MB)을 만들어 넣습니다. 고르는 동작 목록은 도구 안의 `ROLES`에 있습니다.
   ```bash
   python3 tools/extract_character.py "!File/Endministrator_F_Animated.glb" assets/characters/endministrator_f/endministrator_f.glb
   ```

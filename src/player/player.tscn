@@ -60,6 +60,9 @@ properties/7/replication_mode = 2
 properties/8/path = NodePath(".:dodge_count")
 properties/8/spawn = true
 properties/8/replication_mode = 2
+properties/9/path = NodePath(".:melee_count")
+properties/9/spawn = true
+properties/9/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_health"]
 properties/0/path = NodePath("Health:current")
