@@ -204,12 +204,12 @@ func load_model_scene() -> PackedScene:
 
 ## 소리 꾸러미의 실제 경로. 없으면 빈 문자열.
 func fx_file() -> String:
-	return _existing_file(fx_path, fx_external_file)
+	return existing_file(fx_path, fx_external_file)
 
 
 ## 캐릭터 고르기 아이콘. 없으면 null.
 func icon() -> Texture2D:
-	var file := _existing_file(icon_path, icon_external_file)
+	var file := existing_file(icon_path, icon_external_file)
 	if file.is_empty():
 		return null
 	var key := _cache_key(file)
@@ -220,7 +220,7 @@ func icon() -> Texture2D:
 
 
 ## 프로젝트 안 파일이 있으면 그 실제 경로, 없으면 실행 파일 옆 파일의 경로. 둘 다 없으면 빈 문자열.
-static func _existing_file(project_path: String, external_file: String) -> String:
+static func existing_file(project_path: String, external_file: String) -> String:
 	var project := ProjectSettings.globalize_path(project_path) if not project_path.is_empty() else ""
 	if not project.is_empty() and FileAccess.file_exists(project):
 		return project

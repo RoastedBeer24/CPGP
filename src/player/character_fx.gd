@@ -10,6 +10,8 @@ extends Node3D
 ## 동작이 끊기고 다음 동작이 시작되면 아직 나지 않은 것은 버린다(연속 공격에서 앞 동작의 끝소리가 겹치지 않게).
 ## 이미 나온 이펙트는 제 끝 시각까지 보인다.
 ## zip은 원작 자산이라 저장소에 없다. 없으면 소리와 이펙트 없이 돈다.
+## 적(EnemyBody)도 쓴다: 공격 동작의 재생 위치를 따라가며 fire_between으로 소리를 내고, 싸움을 걸 때·격노할 때의 소리는
+## cue_engage, cue_enrage 역할로 play한다(tools/extract_enemy.py가 만든다).
 
 ## 원본 볼륨은 원작 믹서 기준이라 그대로 내면 작다. 전체를 이만큼 키운다(dB).
 const GAIN_DB := 6.0
@@ -38,6 +40,7 @@ var _voice_priority := -1
 var _voice_ready_at := 0.0
 ## 미리 읽어 둘 이펙트 [glb 파일, 파티클 파일]. 처음 틀 때 멈칫하지 않게 한 프레임에 하나씩 읽는다.
 var _preload: Array[Array] = []
+var _sounds_started := 0
 
 
 ## 꾸러미를 읽는다. 없거나 읽지 못하면 false (소리 없이 돈다).
@@ -114,6 +117,27 @@ func stop() -> void:
 	_pending.clear()
 
 
+## 동작의 from초 뒤부터 to초까지에 든 소리·보이스를 바로 낸다. 동작의 재생 위치를 직접 따라갈 때 쓴다(적의 공격처럼
+## 예고 시간에 맞춰 빠르기가 바뀌는 동작은 시간으로 예약하면 어긋난다).
+func fire_between(role: StringName, from: float, to: float) -> void:
+	var info: Dictionary = _roles.get(String(role), {})
+	if info.is_empty():
+		return
+	for sound: Dictionary in info.get("sounds", []):
+		var time := float(sound["time"])
+		if time > from and time <= to:
+			_play_sound(sound)
+	for voice: Dictionary in info.get("voices", []):
+		var time := float(voice["time"])
+		if time > from and time <= to:
+			_play_voice(voice)
+
+
+## 지금까지 낸 효과음 수 (테스트용)
+func sounds_started() -> int:
+	return _sounds_started
+
+
 func _process(delta: float) -> void:
 	_clock += delta
 	while not _pending.is_empty() and float(_pending[0][0]) <= _clock:
@@ -161,6 +185,7 @@ func _play_sound(sound: Dictionary) -> void:
 	player.stream = stream
 	player.volume_db = linear_to_db(maxf(volume, 0.0001)) + GAIN_DB
 	player.play()
+	_sounds_started += 1
 
 
 func _play_voice(voice: Dictionary) -> void:

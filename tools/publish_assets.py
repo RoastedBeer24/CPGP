@@ -46,10 +46,14 @@ FILES = {
     "enemies/lbtough.glb": "assets/enemies/lbtough.glb",
     "enemies/lbtough_elite.glb": "assets/enemies/lbtough_elite.glb",
     "enemies/rodin.glb": "assets/enemies/rodin.glb",
+    "enemies/rodin_fx.zip": "assets/enemies/rodin_fx.zip",
     # 캐릭터 고르기 아이콘(tools/make_icons.py로 공식 초상화에서 잘라 낸 그림)
     "characters/endministrator_f_icon.png": "assets/characters/endministrator_f/endministrator_f_icon.png",
     "characters/endministrator_m_icon.png": "assets/characters/endministrator_m/endministrator_m_icon.png",
     "characters/akekuri_icon.png": "assets/characters/akekuri/akekuri_icon.png",
+    "characters/chen_qianyu_icon.png": "assets/characters/chen_qianyu/chen_qianyu_icon.png",
+    "characters/arclight_icon.png": "assets/characters/arclight/arclight_icon.png",
+    "characters/pogranichnik_icon.png": "assets/characters/pogranichnik/pogranichnik_icon.png",
 }
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

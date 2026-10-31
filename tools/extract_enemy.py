@@ -5,11 +5,13 @@
 동작 이름은 게임이 부르는 역할 이름(idle, move, hit, stun_start, stun, dead, attack_1 ...)으로 바꾼다(EnemyData.clips가 이
 이름을 쓴다). 원본 동작은 몸(뿌리 뼈 Bip001)이 앞으로 나가므로 모두 제자리로 묶는다. 적은 게임이 직접 움직인다
 (이동 속도, 공격의 lunge). 원래 이동 동작의 빠르기(m/s)를 찍으므로 EnemyData.move_clip_speed에 넣는다.
+원작 소리가 있는 적(로댄)은 소리 꾸러미(<결과>_fx.zip)도 만든다(SOUNDS).
 결과 파일은 재배포할 수 없는 모델이라 저장소에 올리지 않는다(docs/assets.md).
 """
 import json
 import os
 import sys
+import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from extract_character import read_glb, read_floats, reshape, save_compact, strip_extra_meshes, ROOT_BONE  # noqa: E402
@@ -34,6 +36,27 @@ ENEMIES = {
 }
 LOOPING = {"idle", "move", "stun"}
 
+# 원작 소리가 있는 적(꾸러미의 metadata/sounds.json): 소리 꾸러미(<결과>_fx.zip)도 만든다. 원작 소리는 일부 동작에만
+# 있어서, 소리가 없는 동작은 비슷한 동작의 소리를 빌려 타격 시각에 맞춘다: 역할 → [(원본 동작, 구간 시작, 구간 끝,
+# 옮길 시간(초))]. cue는 동작과 상관없이 내는 소리다(engage: 싸움을 걸 때, enrage: 격노할 때).
+LANGUAGES = ["KR", "JP", "EN", "CN"]
+SOUNDS = {
+    "rodin_01": {
+        "borrow": {
+            # 내려찍기(skill_04, 2.33초에 내리꽂음): 시작할 때 외침, 내리꽂을 때 충격파 동작의 외침·충격
+            "attack_1": [("A_monster_rodin_01_skill03_start", 0.0, 0.2, 0.7),
+                         ("A_monster_rodin_01_skill03_end", 1.9, 2.5, -0.04)],
+            # 휘두르기(skill01_01_attack, 0.47초): 두 번째 기술의 휘두르는 소리
+            "attack_2": [("A_monster_rodin_01_skill_02_end1", 0.4, 0.5, 0.0)],
+            # 충격파(skill03_end): 준비 동작의 외침을 예고가 시작할 때(clip_from 1.0초)
+            "attack_3": [("A_monster_rodin_01_skill03_start", 0.0, 0.2, 1.0)],
+            # 돌진(skill06_01, 2.32초): 휘두르는 소리
+            "attack_4": [("A_monster_rodin_01_skill_02_end1", 1.3, 1.5, 0.92)],
+        },
+        "cues": {"engage": ("A_monster_rodin_01_taunt", 0.0, 1.0), "enrage": ("A_monster_rodin_02_taunt", 0.0, 1.5)},
+    },
+}
+
 
 def pick_enemy(by_name):
     for prefix in ENEMIES:
@@ -53,6 +76,74 @@ def root_travel(doc, data, anim):
             dx, dz = values[-1][0] - values[0][0], values[-1][2] - values[0][2]
             return (dx * dx + dz * dz) ** 0.5, times[-1][0]
     return 0.0, 0.0
+
+
+def build_sounds(source, prefix, target):
+    """원작 소리 연결 정보로 소리 꾸러미를 만든다(fx.json + audio/*.wav, src/player/character_fx.gd가 읽는 형식).
+    역할마다 그 동작 시각 기준의 소리·보이스를 담는다. 게임은 공격 동작을 예고 시간에 맞춘 빠르기로 틀므로 동작의
+    재생 위치를 따라가며 소리를 낸다(EnemyBody)."""
+    config = SOUNDS.get(prefix)
+    folder = os.path.dirname(os.path.abspath(source))
+    sounds_path = os.path.join(folder, "metadata", "sounds.json")
+    if config is None or not os.path.isfile(sounds_path):
+        return
+    audio_dir = os.path.join(folder, "..", "..", "audio", "wav")
+    file_of = {c["name"]: c["file"] for c in json.load(open(os.path.join(folder, "metadata", "clips.json"), encoding="utf-8"))}
+    events_of = json.load(open(sounds_path, encoding="utf-8"))["clips"]
+    audio_files = set()
+
+    def keep(names):
+        found = []
+        for m4a in names:
+            wav = os.path.splitext(m4a)[0] + ".wav"
+            if os.path.isfile(os.path.join(audio_dir, wav)):
+                found.append(wav)
+                audio_files.add(wav)
+        return found
+
+    def collect(clip_name, start, end, shift, into):
+        for event in events_of.get(file_of.get(clip_name, ""), []):
+            time = event["time"] + event.get("delay", 0.0)
+            if not start - 1e-4 <= time <= end + 1e-4:
+                continue
+            voice = event.get("voice")
+            if voice:
+                languages = {}
+                for language in LANGUAGES:
+                    choices = [{"weight": c.get("weight", 1), "files": keep(c.get("sounds", []))}
+                               for c in voice.get("languages", {}).get(language, [])]
+                    choices = [c for c in choices if c["files"]]
+                    if choices:
+                        languages[language] = choices
+                if languages:
+                    into["voices"].append({"time": round(time + shift, 4), "chance": voice.get("chance", 1.0),
+                                           "cooldown": voice.get("cooldown", 0.0), "priority": voice.get("priority", 0),
+                                           "languages": languages})
+                continue
+            files = keep(event.get("sounds", []))
+            if files:
+                into["sounds"].append({"time": round(time + shift, 4), "files": files, "mode": event.get("mode", "random"),
+                                       "volume": event.get("volume", 1.0)})
+
+    roles = {}
+    for role, rest in ENEMIES[prefix].items():
+        entry = {"length": 0.0, "loop": role in LOOPING, "sounds": [], "voices": [], "effects": []}
+        collect("A_monster_%s_%s" % (prefix, rest), 0.0, 1e9, 0.0, entry)
+        for clip_name, start, end, shift in config["borrow"].get(role, []):
+            collect(clip_name, start, end, shift, entry)
+        if entry["sounds"] or entry["voices"]:
+            roles[role] = entry
+    for cue, (clip_name, start, end) in config["cues"].items():
+        entry = {"length": 0.0, "loop": False, "sounds": [], "voices": [], "effects": []}
+        collect(clip_name, start, end, -start, entry)
+        if entry["sounds"] or entry["voices"]:
+            roles["cue_" + cue] = entry
+    manifest = {"enemy": prefix, "languages": LANGUAGES, "roles": roles}
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("fx.json", json.dumps(manifest, ensure_ascii=False, separators=(",", ":")))
+        for wav in sorted(audio_files):
+            archive.write(os.path.join(audio_dir, wav), "audio/" + wav)
+    print("%s: 소리 %d개, 소리 있는 역할 %s" % (target, len(audio_files), ", ".join(sorted(roles))))
 
 
 def main(source, target):
@@ -75,6 +166,7 @@ def main(source, target):
     doc["animations"] = animations
     strip_extra_meshes(doc)
     save_compact(doc, data, target)
+    build_sounds(source, prefix, os.path.splitext(target)[0] + "_fx.zip")
 
 
 if __name__ == "__main__":

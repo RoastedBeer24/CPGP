@@ -19,6 +19,9 @@ PORTRAITS = {
     "endministrator_f": ("endministrator_f.webp", (280, 10, 590, 320)),
     "endministrator_m": ("endministrator_m.png", (295, 0, 615, 320)),
     "akekuri": ("akekuri.png", (290, 0, 630, 340)),
+    "chen_qianyu": ("chen_qianyu.png", (285, 10, 615, 340)),
+    "arclight": ("arclight.png", (290, 0, 610, 320)),
+    "pogranichnik": ("pogranichnik.png", (265, 20, 585, 340)),
 }
 
 

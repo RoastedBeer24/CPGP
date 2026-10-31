@@ -38,6 +38,13 @@ var _animation: AnimationPlayer
 var _model_meshes: Array[MeshInstance3D] = []
 var _overlay: StandardMaterial3D
 var _overlay_on := false
+## 원작 소리(EnemyData.fx_file). 없으면 소리 없이 돈다.
+var fx: CharacterFx
+## 소리를 낸 동작과 그 동작에서 소리를 낸 위치(초), 싸움을 걸었는지, 격노했는지
+var _sound_clip := &""
+var _sound_position := 0.0
+var _engaged := false
+var _was_enraged := false
 var _last_attack_count := 0
 var _last_hurt_count := 0
 var _flash := 0.0
@@ -55,6 +62,15 @@ func setup(owner_enemy: Enemy) -> void:
 	add_child(_rig)
 	if not _load_model():
 		_build_placeholder()
+	var fx_path := CharacterAppearance.existing_file("res://assets/" + enemy.data.fx_file, enemy.data.fx_file) \
+			if not enemy.data.fx_file.is_empty() else ""
+	if has_model and not fx_path.is_empty():
+		fx = CharacterFx.new()
+		fx.name = "Fx"
+		add_child(fx)
+		if not fx.setup(fx_path):
+			fx.queue_free()
+			fx = null
 	_build_crystals()
 	_build_stagger_ring()
 	_last_attack_count = enemy.attack_count
@@ -97,6 +113,7 @@ func _process(delta: float) -> void:
 		_stagger_ring.rotate_y(delta * 4.0)
 	if has_model:
 		_animate_model(delta)
+		_update_sounds()
 	else:
 		_animate_placeholder(delta)
 
@@ -294,6 +311,29 @@ func _animate_model(delta: float) -> void:
 			_dead_time += delta
 			_rig.position.y = -clampf((_dead_time - SINK_FROM) / SINK_TIME, 0.0, 1.0) * enemy.data.height
 	_update_overlay()
+
+
+## 지금 동작의 재생 위치를 따라가며 원작 소리를 낸다. 공격 동작은 예고 시간에 맞춘 빠르기로 틀어서 시간으로 예약하면
+## 어긋난다. 동작이 바뀌면 그 자리부터(앞부분을 건너뛰고 튼 공격은 건너뛴 곳의 소리를 내지 않는다), 반복해서 처음으로
+## 돌아가면 처음부터 센다. 싸움을 걸 때와 격노할 때는 따로 정한 소리(보이스)를 낸다.
+func _update_sounds() -> void:
+	if fx == null or _animation == null:
+		return
+	if not _engaged and enemy.state != Enemy.State.IDLE and enemy.is_alive():
+		_engaged = true
+		fx.play(&"cue_engage", true)
+	if enemy.enraged and not _was_enraged:
+		fx.play(&"cue_enrage", true)
+	_was_enraged = enemy.enraged
+	var clip := StringName(_animation.current_animation)
+	var at := _animation.current_animation_position
+	if clip != _sound_clip:
+		_sound_clip = clip
+		_sound_position = at - 0.001
+	elif at < _sound_position:
+		_sound_position = -0.001
+	fx.fire_between(clip, _sound_position, at)
+	_sound_position = at
 
 
 ## 맞으면 하얗게 번쩍이고, 격노한 보스는 붉은빛이 돈다(모델 위에 더하는 재질).

@@ -138,6 +138,21 @@ func test_enemy_models_have_every_clip() -> void:
 			assert_true(attack.clip_hit >= attack.clip_from, "%s: %s 타격 시각이 시작 시각 뒤" % [data.id, attack.id])
 
 
+func test_boss_plays_original_sounds() -> void:
+	# 로댄은 원작 소리 꾸러미가 있으면(이 PC) 싸움을 걸 때 도발하고, 공격 동작의 재생 위치에 맞춰 소리를 낸다.
+	var enemy := _enemy("raider_chief", Vector3(0, 0, -4))
+	await _frames(2)
+	if enemy.body.fx == null:
+		return
+	for role: StringName in [&"attack_1", &"attack_2", &"attack_3", &"attack_4", &"cue_engage", &"cue_enrage"]:
+		assert_true(enemy.body.fx.has_role(role), "로댄 소리: %s" % role)
+	for i in 600:
+		await _frames(1)
+		if enemy.body.fx.sounds_started() > 1:
+			break
+	assert_true(enemy.body.fx.sounds_started() > 1, "도발과 공격 소리가 난다: %d" % enemy.body.fx.sounds_started())
+
+
 func test_defeated_enemy_disappears() -> void:
 	var enemy := _enemy("grunt", Vector3(0, 0, -6))
 	enemy.ai_enabled = false

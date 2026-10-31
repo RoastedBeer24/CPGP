@@ -87,3 +87,4 @@ color = Color(0.55, 0.22, 0.2, 1)
 bulk = 1.8
 model_file = "enemies/rodin.glb"
 move_clip_speed = 1.6
+fx_file = "enemies/rodin_fx.zip"

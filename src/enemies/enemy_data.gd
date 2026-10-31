@@ -46,3 +46,5 @@ extends Resource
 @export var clips: Dictionary[StringName, String] = {}
 ## 이동 동작(move)이 원래 나아가는 빠르기(m/s). 실제 빠르기에 맞춰 재생 속도를 바꿔 발이 덜 미끄러지게 한다.
 @export var move_clip_speed := 4.0
+## 원작 소리 꾸러미(에셋 폴더 기준 상대 경로, 예: enemies/rodin_fx.zip, tools/extract_enemy.py가 만든다). 없으면 소리 없이 돈다.
+@export var fx_file := ""
