@@ -10,6 +10,7 @@ extends Node
 ##   godot --path . -- --single --autoplay=combo  # 로비에서 제자리 공격·배틀 스킬만 되풀이 (이펙트 확인용)
 ##   godot --path . -- --single --autoplay=run    # 로비에서 원을 그리며 달리기·질주, 옆에서 비춤 (옷자락 확인용)
 ##   godot --path . -- --single --autoplay=plunge # 로비에서 점프 → 낙하 공격만 되풀이 (낙하 공격 확인용)
+##   godot --path . -- --single --autoplay=finisher # 로비에서 앞의 적을 경직시켜 처형만 되풀이 (처형 확인용)
 ##   godot --path . -- --single --character-screen   # 로비에서 캐릭터 화면을 연 채로 시작 (화면 확인용)
 ##   godot --path . -- --single --character-weapon   # 캐릭터 화면에서 무기 보기를 켠 채로 시작 (화면 확인용)
 ##   --capture=700,720,740 --capture-dir=폴더    # 그 프레임들의 화면을 PNG로 저장하고 끝냄 (화면 확인용, FrameCapture)
@@ -186,6 +187,7 @@ func _on_player_spawned(player: Player) -> void:
 		pilot.combo_only = OS.get_cmdline_user_args().has("--autoplay=combo")
 		pilot.run_only = OS.get_cmdline_user_args().has("--autoplay=run")
 		pilot.plunge_only = OS.get_cmdline_user_args().has("--autoplay=plunge")
+		pilot.finisher_only = OS.get_cmdline_user_args().has("--autoplay=finisher")
 		player.add_child(pilot)
 
 
@@ -276,7 +278,7 @@ func _hide_window() -> void:
 
 func _apply_command_line() -> void:
 	var args := OS.get_cmdline_user_args()
-	autoplay = args.has("--autoplay") or args.has("--autoplay=combo") or args.has("--autoplay=run") or args.has("--autoplay=plunge")
+	autoplay = args.has("--autoplay") or args.has("--autoplay=combo") or args.has("--autoplay=run") or args.has("--autoplay=plunge") or args.has("--autoplay=finisher")
 	var capture := FrameCapture.from_command_line(args)
 	if capture != null:
 		capture.name = "FrameCapture"

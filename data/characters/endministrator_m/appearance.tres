@@ -64,6 +64,7 @@ weapon_timelines = Dictionary[StringName, PackedFloat32Array]({
 &"draw": PackedFloat32Array(0, 1, 0.42, 2),
 &"finisher": PackedFloat32Array(0, 2),
 &"skill": PackedFloat32Array(0, 2),
+&"sheathe": PackedFloat32Array(0, 2, 0.7, 0),
 &"ui_to_weapon": PackedFloat32Array(0, 0, 0.5641, 3),
 &"ui_weapon": PackedFloat32Array(0, 3),
 &"ui_weapon_out": PackedFloat32Array(0, 3, 1.2002, 0),

@@ -50,12 +50,12 @@ func test_heal_is_capped_and_revive_restores_a_fraction() -> void:
 
 func test_character_kits_are_consistent() -> void:
 	var characters := Characters.all()
-	assert_eq(characters.size(), 2, "관리자(여·남)")
+	assert_eq(characters.size(), 3, "관리자(여·남), 아케쿠리")
 	for character in characters:
 		var kit := character.kit()
 		assert_not_null(kit, String(character.id))
 		assert_not_null(character.appearance(), String(character.id))
-		assert_eq(kit.basic_chain.size(), 5, "기본 공격 5단계")
+		assert_true(kit.basic_chain.size() >= 4 and kit.basic_chain.size() <= 5, "기본 공격 4~5단계: %s" % character.id)
 		for attack in kit.all_attacks():
 			var label := "%s/%s" % [character.id, attack.id]
 			assert_true(PlayerBody.ACTION_CLIPS.has(attack.clip), "몸이 틀 수 있는 동작: " + label)
@@ -71,10 +71,16 @@ func test_character_kits_are_consistent() -> void:
 					"내디딤 거리는 앞으로만 는다: " + label)
 		assert_true(kit.battle_skill.sp_cost > 0.0, "배틀 스킬은 SP를 쓴다")
 		assert_eq(kit.ultimate.energy_cost, kit.max_energy, "궁극기는 에너지를 다 쓴다")
-		assert_eq(kit.battle_skill.hits[0].effect, HitData.Effect.APPLY_CRYSTAL, "배틀 스킬이 원석 결정을 붙인다")
-		assert_eq(kit.ultimate.hits[kit.ultimate.hits.size() - 1].effect, HitData.Effect.SHATTER_CRYSTAL, "궁극기가 깨뜨린다")
+		if String(character.id).begins_with("endministrator"):
+			assert_eq(kit.battle_skill.hits[0].effect, HitData.Effect.APPLY_CRYSTAL, "관리자의 배틀 스킬이 원석 결정을 붙인다")
+			assert_eq(kit.ultimate.hits[kit.ultimate.hits.size() - 1].effect, HitData.Effect.SHATTER_CRYSTAL, "관리자의 궁극기가 깨뜨린다")
 		assert_true(kit.plunge_start.rise_end() > 0.0, "낙하 공격은 먼저 뛰어오른다")
 		assert_true(kit.plunge_land.hits[0].arc >= 180.0, "낙하 공격 착지는 둘레 전체를 친다")
+	var akekuri := Characters.find(&"akekuri").kit()
+	assert_eq(akekuri.basic_chain.size(), 4, "아케쿠리는 기본 공격 4단계")
+	assert_true(akekuri.dash_attack == null, "아케쿠리는 대시 공격이 없다(원작 동작이 없다)")
+	assert_true(akekuri.ultimate.rally_sp > 0.0, "궁극기 소대, 집합!은 동료에게 SP를 나눠 준다")
+	assert_true(akekuri.battle_skill.sp_per_hit > 0.0, "배틀 스킬은 맞히면 SP를 돌려받는다")
 
 
 func test_attack_advance_interpolates() -> void:

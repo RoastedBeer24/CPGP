@@ -2,6 +2,7 @@
 
     python3 tools/extract_character_fx.py "!File/Endministrator_Extras" F assets/characters/endministrator_f/endministrator_f_fx.zip
     python3 tools/extract_character_fx.py "!File/Endministrator_Extras" M assets/characters/endministrator_m/endministrator_m_fx.zip
+    python3 tools/extract_character_fx.py "!File/Akekuri_Assets" Akekuri assets/characters/akekuri/akekuri_fx.zip
 
 원본 꾸러미(사용자가 사이트에서 추출해 준 것)에는 동작마다 언제 어떤 소리·보이스·이펙트가 나는지(animation_events.json)와
 그 파일들(assets/audio_wav, characters/*/effects)이 들어 있다. 게임 이름(attack_1 등)은 tools/extract_character.py의
@@ -20,6 +21,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from extract_character import CHARACTERS, LOOPING, ROLES, TRIM_OVERRIDES, TRIMS  # noqa: E402
 
 LANGUAGES = ["KR", "JP", "EN", "CN"]
+# 원본 꾸러미의 캐릭터 폴더 이름(characters/<이름>) → 동작 이름의 캐릭터 앞부분
+WHO = {"F": "endminf", "M": "endminm", "Akekuri": "karin"}
 
 # 원작 자료에 이펙트가 없는 동작은 비슷한 동작의 원작 이펙트를 타격 시각에 맞춰 빌려 쓴다(게임에서 정한 것).
 # 캐릭터 → 동작 → [(빌려 올 동작, 그 동작의 타격 시각, 이 동작의 타격 시각), ...]. 타격 시각은 data/characters/*/kit.tres.
@@ -34,7 +37,7 @@ def wav_name(m4a):
 
 
 def main(extras, who, target):
-    char = "endminf" if who == "F" else "endminm"
+    char = WHO[who]
     body = CHARACTERS[char]
     events = json.load(open(os.path.join(extras, "characters", who, "animation_events.json"), encoding="utf-8"))
     catalog = json.load(open(os.path.join(extras, "characters", who, "effect_catalog.json"), encoding="utf-8"))
@@ -59,7 +62,7 @@ def main(extras, who, target):
         return found
 
     for role, candidates in ROLES.items():
-        names = [c.format(char=char, body=body) for c in candidates]
+        names = [c.format(char=char, Char=char.capitalize(), body=body) for c in candidates]
         entry = next((events[n] for n in names if n in events), None)
         if entry is None:
             continue

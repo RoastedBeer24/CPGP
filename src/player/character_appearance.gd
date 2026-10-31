@@ -157,6 +157,8 @@ static var _runtime_images: Dictionary[String, Dictionary] = {}
 	&"dodge_f": PackedFloat32Array([0.0, 0, 0.5, 2]),
 	&"dodge_b": PackedFloat32Array([0.0, 0, 0.5, 2]),
 	&"draw": PackedFloat32Array([0.0, 1, 0.4013, 2]),
+	# 무기 거두기: 원작 자료에 없다. 칼을 내리는 동안 들고 있다가 0.7초부터 칼끝부터 지운다.
+	&"sheathe": PackedFloat32Array([0.0, 2, 0.7, 0]),
 	&"ui_to_weapon": PackedFloat32Array([0.0, 0, 0.2583, 3]),
 	&"ui_weapon": PackedFloat32Array([0.0, 3]),
 	&"ui_weapon_out": PackedFloat32Array([0.0, 3, 2.151, 0]),

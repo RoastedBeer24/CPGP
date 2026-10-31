@@ -8,7 +8,10 @@
 | 관리자(여) 모델 (Endministrator_F) | `assets/characters/endministrator_f/endministrator_f.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (studio.warfarin.wiki에서 추출) | 원작: 명일방주: 엔드필드 (Hypergryph) | 상용 게임 자산. 재배포 불가 | 아래 "저장소에 없는 에셋" 참고 |
 | 관리자(남) 모델 (Endministrator_M) | `assets/characters/endministrator_m/endministrator_m.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, 같은 사이트에서 추출) | 원작: 명일방주: 엔드필드 (Hypergryph) | 상용 게임 자산. 재배포 불가 | 원본은 `!File/endministrator_m/` |
 | 관리자 소리·보이스 꾸러미 | `assets/characters/endministrator_{f,m}/*_fx.zip` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Endministrator_Extras/`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `tools/extract_character_fx.py`로 쓰는 동작의 것만 묶음 |
-| 무기 타르 11 (wpn_sword_0003) | `assets/weapons/tarr_11.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Tarr_11.glb`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 왼손(wep_L)에 쥔다 |
+| 무기 타르 11 (wpn_sword_0003) | `assets/weapons/tarr_11.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Tarr_11.glb`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 싸울 때 오른손(wep_R)에 쥔다 |
+| 아케쿠리 모델 (chr_0019_karin) | `assets/characters/akekuri/akekuri.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Akekuri_Complete_Assets.zip`, studio.warfarin.wiki에서 추출) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 원본은 `!File/Akekuri_Assets/models/`. 저해상도 메시(lod1~3)와 그림자 대용 메시는 뺀다 |
+| 아케쿠리 소리·보이스·이펙트 꾸러미 | `assets/characters/akekuri/akekuri_fx.zip` (**저장소에 없음**) | 같은 파일 | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `tools/extract_character_fx.py "!File/Akekuri_Assets" Akekuri ...` |
+| 무기 O.B.J. 엣지 오브 라이트 (wpn_sword_0019) | `assets/weapons/edge_of_lightness.glb` (**저장소에 없음**) | 같은 파일 (`weapons/OBJ_Edge_of_Lightness.glb`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 아케쿠리의 무기. 오른손(wep_R)에 쥔다 |
 
 ## 저장소에 없는 에셋
 공개 저장소에 올릴 수 없는 에셋입니다. 각자 PC에 직접 넣고, `.gitignore`로 커밋에서 뺍니다.
@@ -21,6 +24,8 @@
 | 관리자(남) 모델 | `assets/characters/endministrator_m/endministrator_m.glb` | `Crossfield.exe`가 있는 폴더의 `characters/endministrator_m.glb` |
 | 관리자 소리 꾸러미 | `assets/characters/endministrator_{f,m}/endministrator_{f,m}_fx.zip` | `characters/endministrator_{f,m}_fx.zip` |
 | 무기 모델 | `assets/weapons/tarr_11.glb` | `weapons/tarr_11.glb` |
+| 아케쿠리 모델·꾸러미 | `assets/characters/akekuri/akekuri.glb`, `akekuri_fx.zip` | `characters/akekuri.glb`, `characters/akekuri_fx.zip` |
+| 아케쿠리 무기 | `assets/weapons/edge_of_lightness.glb` | `weapons/edge_of_lightness.glb` |
 | 적 모델 (아직 없음) | `assets/enemies/<이름>.glb` | `Crossfield.exe`가 있는 폴더의 `enemies/<이름>.glb` |
 
 - **애니메이션이 든 원본(`*_Animated.glb`, 약 450MB)에서** 게임에 쓰는 동작(이동·멈추기, 점프·착지, 공격 5단계, 대시 공격, 처형, 낙하 공격, 스킬, 궁극기, 회피, 맞음, 쓰러짐, 쉬는 자세와 특수 대기, 무기 꺼내기·거두기, 캐릭터 화면 동작) 49개만 골라 가벼운 파일(여 약 45MB, 남 약 57MB)을 만들어 넣습니다. 고르는 동작 목록은 도구 안의 `ROLES`에 있고, 여·남은 원본 이름을 보고 알아서 고릅니다.

@@ -6,6 +6,7 @@ const DEFAULT_ID := &"endministrator_f"
 const PATHS: Array[String] = [
 	"res://data/characters/endministrator_f/character.tres",
 	"res://data/characters/endministrator_m/character.tres",
+	"res://data/characters/akekuri/character.tres",
 ]
 
 

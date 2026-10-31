@@ -45,13 +45,29 @@ func test_basic_attack_chain_runs_five_steps_and_hits() -> void:
 
 
 func test_attack_turns_toward_nearby_enemy() -> void:
-	# 적이 옆(+X)에 있으면 공격할 때 그쪽으로 몸을 돌린다.
+	# 적이 옆(+X)에 있으면 그쪽을 노려 친다. 몸은 원작 동작대로 돌며 휘두른다(AttackData.turn).
 	var enemy := _enemy("grunt", Vector3(2.5, 0, 0), false)
 	await _frames(2)
 	intent.attack_pressed = true
 	await _frames(20)
-	assert_true(player.facing().dot(Vector3.RIGHT) > 0.9, "적 쪽을 본다: %s" % player.facing())
+	assert_true(player.action_forward().dot(Vector3.RIGHT) > 0.9, "적 쪽을 노린다: %s" % player.action_forward())
 	assert_true(enemy.health.current < enemy.data.max_health, "맞힌다")
+
+
+func test_body_follows_original_turn_and_keeps_it_after_attack() -> void:
+	# 5타처럼 몸을 크게 돌리는 동작은 플레이어가 직접 돌고, 끝난 뒤에도 그 방향을 본다(예전에는 동작 안에서만 돌아
+	# 끝날 때 몸이 원래 방향으로 튀었다).
+	var attack := player.kit.basic_chain[4]
+	if attack.turn.is_empty():
+		return
+	player._start_action(attack, null, null)
+	var aim := player.action_forward()
+	await _frames(int(attack.duration * 60.0) - 2)
+	var expected := player._yaw_of(aim) + attack.turn_at(player.action_time())
+	assert_almost_eq(angle_difference(player.rotation.y, expected), 0.0, 0.05, "몸은 노린 방향 + 원작 회전")
+	await _frames(20)
+	assert_ne(player.state, Player.State.ACTION, "동작이 끝났다")
+	assert_almost_eq(angle_difference(player.rotation.y, expected), 0.0, 0.1, "끝난 뒤에도 그 방향 그대로(튀지 않는다)")
 
 
 func test_battle_skill_costs_sp_and_applies_crystal() -> void:
@@ -170,6 +186,46 @@ func test_attack_in_air_is_plunge_that_hits_all_around_on_landing() -> void:
 	assert_true(enemy.health.current < enemy.data.max_health, "착지하며 둘레의 적을 친다: %s" % enemy.health.current)
 	await _frames(60)
 	assert_ne(player.state, Player.State.PLUNGE, "착지 동작이 끝나면 다시 움직인다")
+
+
+func test_plunge_onto_enemy_lands_on_the_floor_not_on_its_head() -> void:
+	# 예전에는 적 위로 내리꽂으면 적의 몸 위에 내려서서, 그 위에서 움직이면 공중에 뜬 것처럼 보였다.
+	var enemy := _enemy("heavy", Vector3(0, 0, -3.0), false)
+	player.global_position = Vector3(0, 4.0, -3.0)
+	await _frames(12)
+	intent.attack_pressed = true
+	for i in 150:
+		await _frames(1)
+		if player.action_id == &"plunge_land":
+			break
+	assert_eq(player.action_id, &"plunge_land", "땅에 닿는다")
+	assert_true(player.global_position.y < 0.3, "적의 머리가 아니라 땅에 선다: %.2f" % player.global_position.y)
+	await _frames(70)
+	assert_true(player.global_position.y < 0.3, "착지 뒤에도 땅에 있다: %.2f" % player.global_position.y)
+	assert_true(enemy.health.current < enemy.data.max_health, "바로 밑의 적도 맞는다")
+
+
+func test_rally_ultimate_gives_sp_to_nearby_allies() -> void:
+	# 아케쿠리 궁극기 "소대, 집합!": 곁(8m 안)의 동료 모두(나 포함)가 SP를 얻는다. 먼 동료는 얻지 않는다.
+	player.kit = Characters.find(&"akekuri").kit()
+	var near := PLAYER_SCENE.instantiate() as Player
+	near.use_device_input = false
+	near.position = Vector3(3, 0, 0)
+	add_child_autofree(near)
+	var far := PLAYER_SCENE.instantiate() as Player
+	far.use_device_input = false
+	far.position = Vector3(20, 0, 0)
+	add_child_autofree(far)
+	await _frames(3)
+	for p: Player in [player, near, far]:
+		p.sp = 50.0
+	player.energy = player.kit.max_energy
+	intent.ultimate_pressed = true
+	await _frames(3)
+	assert_eq(player.action_id, &"ultimate")
+	assert_true(player.sp >= 145.0, "나도 SP를 얻는다: %s" % player.sp)
+	assert_true(near.sp >= 145.0, "곁의 동료가 SP를 얻는다: %s" % near.sp)
+	assert_true(far.sp < 60.0, "먼 동료는 얻지 않는다: %s" % far.sp)
 
 
 func test_attack_on_ground_is_not_plunge() -> void:

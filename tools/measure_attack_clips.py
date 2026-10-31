@@ -110,6 +110,14 @@ def main(path, specs):
             times = [v[0] for v in read_floats(doc, data, sampler["input"])]
             tracks[(ch["target"].get("node"), ch["target"]["path"])] = (times, read_floats(doc, data, sampler["output"]))
 
+        def world_rotation(key, t):
+            rot = (0.0, 0.0, 0.0, 1.0)
+            for i in chains[key]:
+                ro = tracks.get((i, "rotation"))
+                ro = sample(*ro, t, True) if ro else nodes[i].get("rotation", [0, 0, 0, 1])
+                rot = qmul(rot, tuple(ro))
+            return rot
+
         def world(key, t):
             pos, rot, scale = (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), (1.0, 1.0, 1.0)
             for i in chains[key]:
@@ -145,6 +153,23 @@ def main(path, specs):
         print("  타격 후보:", " ".join(peaks))
         print("  앞으로:", " ".join("%.2f:%.2f" % (r[0], r[1]) for r in rows if int(round(r[0] * 60)) % 3 == 0))
         print("  높이:", " ".join("%.2f:%.2f" % (r[0], r[3]) for r in rows if int(round(r[0] * 60)) % 3 == 0))
+        # 몸이 처음보다 좌우로 돈 각도(위에서 본 회전, 도). 세상 위쪽 축 둘레 회전(twist)만 재고, 360도를 넘어도 이어 센다.
+        # 모델에서는 이 회전을 빼므로(tools/extract_character.py의 TURN_LOCKED) kit.tres의 turn에 그대로 넣는다.
+        start_inv = world_rotation("root", 0.0)
+        start_inv = (-start_inv[0], -start_inv[1], -start_inv[2], start_inv[3])
+        turns = []
+        previous = 0.0
+        frame = 0
+        while frame / 30.0 <= end + 1e-6:
+            t = frame / 30.0
+            r = qmul(world_rotation("root", t), start_inv)
+            angle = math.degrees(2.0 * math.atan2(r[1], r[3]))
+            angle += round((previous - angle) / 360.0) * 360.0
+            previous = angle
+            turns.append((t, angle))
+            frame += 1
+        print("  돎(도):", " ".join("%.2f:%.0f" % row for row in turns[::3]))
+        print("  turn = PackedVector2Array(%s)" % ", ".join("%g, %g" % (round(t, 4), round(a, 1)) for t, a in turns))
 
 
 if __name__ == "__main__":

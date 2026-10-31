@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3]
+
+[ext_resource type="Script" path="res://src/player/character_data.gd" id="1_character"]
+
+[resource]
+script = ExtResource("1_character")
+id = &"akekuri"
+display_name = "아케쿠리"
+title = "엔드필드 공업 · 선봉"
+description = "빙글 돌며 베는 날랜 검사. 배틀 스킬로 돌진해 적의 균형을 크게 무너뜨리고, 궁극기로 소대를 불러 둘레를 세 번 폭격하며 곁의 동료 모두의 SP를 채운다."
+appearance_path = "res://data/characters/akekuri/appearance.tres"
+kit_path = "res://data/characters/akekuri/kit.tres"

@@ -93,9 +93,11 @@ func has_effects(role: StringName) -> bool:
 	return not (info.get("effects", []) as Array).is_empty()
 
 
-## 동작에 딸린 소리를 시작한다. 앞 동작의 아직 나지 않은 소리는 버린다.
-func play(role: StringName) -> void:
-	_pending.clear()
+## 동작에 딸린 소리를 시작한다. 앞 동작의 아직 나지 않은 소리는 버린다. keep_pending이면 버리지 않는다
+## (낙하 공격처럼 이어지는 동작: 시작 동작의 칼빛이 0.6초에 나오는데 그 전에 땅에 닿을 수 있다).
+func play(role: StringName, keep_pending := false) -> void:
+	if not keep_pending:
+		_pending.clear()
 	var info: Dictionary = _roles.get(String(role), {})
 	if info.is_empty():
 		return

@@ -41,6 +41,15 @@ func test_weapon_timelines_follow_original_data() -> void:
 		assert_eq(look.weapon_place(&"ui_to_weapon", 0.0), HIDDEN, "%s: 무기 보기 시작" % id)
 		assert_eq(look.weapon_place(&"ui_to_weapon", 0.8), MENU, "%s: 무기 보기는 왼손" % id)
 		assert_eq(look.weapon_place(&"ui_weapon_out", 3.0), HIDDEN, "%s: 무기 보기를 끝내면 거둔다" % id)
+		assert_eq(look.weapon_place(&"sheathe", 0.3), HAND, "%s: 거두는 동작 처음에는 들고 있다" % id)
+		assert_eq(look.weapon_place(&"sheathe", 1.0), HIDDEN, "%s: 칼을 내린 뒤 지운다" % id)
+	var akekuri := Characters.find(&"akekuri").appearance()
+	assert_eq(akekuri.weapon_place(&"attack_4", 0.0), HAND, "아케쿠리: 공격은 오른손")
+	assert_eq(akekuri.weapon_place(&"draw", 0.5), BACK, "아케쿠리: 꺼내는 동작은 0.85초까지 등 뒤")
+	assert_eq(akekuri.weapon_place(&"draw", 0.9), HAND)
+	assert_eq(akekuri.weapon_place(&"ultimate", 3.0), HIDDEN, "아케쿠리: 궁극기는 무기 없이 소대를 부른다")
+	assert_eq(akekuri.weapon_place(&"ui_weapon", 0.0), MENU, "아케쿠리: 무기 보기")
+	assert_eq(String(akekuri.weapon_menu_mount), "wep_R", "아케쿠리는 무기 보기도 오른손")
 	var female := Characters.find(&"endministrator_f").appearance()
 	var male := Characters.find(&"endministrator_m").appearance()
 	assert_eq(female.weapon_place(&"draw", 0.41), HAND, "관리자(여)는 0.40초에 오른손으로 옮긴다")
@@ -89,7 +98,15 @@ func test_weapon_appears_in_right_hand_only_while_fighting() -> void:
 	assert_true(player.body.sword_shown(), "전투 대기에서는 무기를 든다")
 	intent.move = Vector2(0, 1)
 	await _frames(40)
-	assert_false(player.body.sword_shown(), "달리면 무기를 거둔다(원작처럼 싸우는 동작에서만 보인다)")
+	assert_true(player.body.sword_shown(), "싸우는 중에는 달려도 든 채로 둔다(지웠다 꺼내기를 되풀이하지 않는다)")
+	assert_eq(player.body.weapon_place(), HAND)
+	intent.move = Vector2.ZERO
+	for i in 480:
+		await _frames(1)
+		if not player.in_combat:
+			break
+	await _frames(90)
+	assert_false(player.body.sword_shown(), "전투가 끝나면 거둔다")
 
 
 func test_combat_start_draws_weapon_from_back() -> void:

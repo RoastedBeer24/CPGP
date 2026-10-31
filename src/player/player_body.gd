@@ -76,6 +76,8 @@ const ACTION_CLIPS: Array[StringName] = [
 ]
 ## 공격이 아닌 동작 (상태가 바뀌어도 끝까지 보여 준다)
 const NON_ATTACK_CLIPS: Array[StringName] = [&"dodge_f", &"dodge_b", &"hit_heavy", &"dead"]
+## 앞 동작에 이어지는 동작: 앞 동작의 아직 나지 않은 소리·이펙트를 버리지 않는다(낙하 공격의 떨어지기·착지)
+const CONTINUING_CLIPS: Array[StringName] = [&"plunge_loop", &"plunge_end"]
 ## 가볍게 맞았을 때 윗몸만 움찔하는 동작 (Player.HitSide 순서: 앞, 뒤, 왼쪽, 오른쪽)
 const FLINCH_CLIPS: Array[StringName] = [&"hit_f", &"hit_b", &"hit_l", &"hit_r"]
 ## 동작이 바뀔 때 섞는 시간, 들어오고 나갈 때 섞는 시간(초)
@@ -97,9 +99,10 @@ const STOP_WINDOW := 0.4
 const STOP_CLIPS := {&"run": [&"run_stop_r", &"run_stop_l"], &"sprint": [&"sprint_stop_l", &"sprint_stop_r"]}
 ## 이보다 높이(m) 떨어져 내려서면 무겁게 착지한다(보통 점프는 1.2m쯤 떨어진다).
 const HEAVY_LANDING_DROP := 3.0
-## 무기가 나타나고 사라지는 시간(초). 싸울 때는 빠르게, 캐릭터 화면의 무기 보기는 원작처럼 천천히.
+## 무기가 나타나고 사라지는 시간(초). 싸울 때 나타날 때는 빠르게(첫 칼질에 늦지 않게), 사라질 때와 캐릭터 화면의
+## 무기 보기는 원작처럼 천천히(원작 소멸 0.5초, 등장 0.6초).
 const WEAPON_APPEAR_TIME := 0.12
-const WEAPON_VANISH_TIME := 0.3
+const WEAPON_VANISH_TIME := 0.5
 const MENU_APPEAR_TIME := 0.6
 const MENU_VANISH_TIME := 0.5
 
@@ -1337,7 +1340,7 @@ func _play_action(clip: StringName, length: float) -> void:
 	_action_end = length
 	_action_elapsed = 0.0
 	if fx != null:
-		fx.play(clip)
+		fx.play(clip, CONTINUING_CLIPS.has(clip))
 
 func _pick_locomotion(speed: float) -> StringName:
 	# 지금 동작에서 벗어날 때만 여유(HYSTERESIS)를 둬서 경계에서 깜빡이지 않게 한다.
@@ -1600,12 +1603,19 @@ func _update_weapon(delta: float) -> void:
 
 ## 무기를 둘 자리. 동작 층의 동작을 보여 주는 중이면 그 동작의 무기 연결 정보(CharacterAppearance.weapon_timelines)를 시각에 맞춰 읽고,
 ## 아니면 이동·대기 동작의 것을 읽는다. 목록에 없는 동작이면 거둔다. 애니메이션이 없는 모델은 싸울 때 오른손에 든다.
+## 싸우는 동안(Player.in_combat)은 달리기·멈추기·회피·맞음에서도 오른손에 든 채로 둔다. 동작마다 지웠다가 다시
+## 꺼내기를 되풀이하면 부자연스러웠다(사용자 지적). 회피·맞음은 원작 자료가 잠깐 숨기지만 싸움 밖에서는 꺼내지 않는다.
 func _wanted_weapon_place() -> int:
 	if not animated:
 		return WeaponPlace.HAND if player.in_combat or player.is_attacking() else WeaponPlace.HIDDEN
-	if _action_showing:
-		return appearance.weapon_place(_action_clip, _action_elapsed)
-	return appearance.weapon_place(locomotion, 0.0)
+	var fighting := player.in_combat or player.is_attacking()
+	if _action_showing and NON_ATTACK_CLIPS.has(_action_clip):
+		return WeaponPlace.HAND if fighting else WeaponPlace.HIDDEN
+	var place := appearance.weapon_place(_action_clip, _action_elapsed) if _action_showing else appearance.weapon_place(locomotion, 0.0)
+	var listed := appearance.weapon_timelines.has(_action_clip if _action_showing else locomotion)
+	if place == WeaponPlace.HIDDEN and not listed and fighting:
+		return WeaponPlace.HAND
+	return place
 
 
 ## 원작 무기 모델을 쥐었는지 (없으면 코드로 만든 검)

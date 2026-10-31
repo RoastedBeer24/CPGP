@@ -30,6 +30,10 @@ extends Resource
 ## 공중 동작의 높이 변화: (시각, 시작한 곳보다 높은 m) 점들. 낙하 공격 시작처럼 뛰어올랐다 내려오는 동작에 쓴다.
 ## 원본 동작의 뿌리 높이를 잰 값이다(모델에서는 빼 두었다). 마지막 점 뒤로는 내리꽂는다(Player).
 @export var rise := PackedVector2Array()
+## 몸이 도는 각도: (시각, 시작한 방향에서 돈 각도, 도, 위에서 봐서 시계 반대 방향이 +) 점들. 원본 공격은 몸을 크게
+## 돌리며 휘두르고 돌아간 채 끝나기도 한다(5타는 180도). 모델에서는 이 회전을 빼 두었고(tools/extract_character.py의
+## TURN_LOCKED) 플레이어가 직접 돈다. 타격과 내디딤은 시작할 때 노린 방향으로 간다.
+@export var turn := PackedVector2Array()
 @export var hits: Array[HitData] = []
 
 @export_group("자원")
@@ -41,6 +45,9 @@ extends Resource
 ## 한 대 맞힐 때마다 얻는 궁극기 에너지와 SP
 @export var energy_per_hit := 1.5
 @export var sp_per_hit := 0.0
+## 동작을 시작하면 곁(Player.RALLY_RADIUS 안)의 살아 있는 동료 모두(나 포함)가 얻는 SP.
+## 아케쿠리 궁극기 "소대, 집합!"처럼 소대를 불러 모으는 기술에 쓴다.
+@export var rally_sp := 0.0
 
 @export_group("방어")
 ## 이 시각까지 무적이다(궁극기 연출, 처형 등).
@@ -57,6 +64,11 @@ func advance_at(t: float) -> float:
 ## t초에 시작한 곳보다 높은 정도(m)
 func rise_at(t: float) -> float:
 	return _curve_at(rise, t)
+
+
+## t초에 시작한 방향에서 돈 각도(라디안)
+func turn_at(t: float) -> float:
+	return deg_to_rad(_curve_at(turn, t))
 
 
 ## 높이 변화가 끝나는 시각(초). 높이 변화가 없으면 0.

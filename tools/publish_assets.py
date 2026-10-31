@@ -28,6 +28,9 @@ FILES = {
     "characters/endministrator_f_fx.zip": "assets/characters/endministrator_f/endministrator_f_fx.zip",
     "characters/endministrator_m_fx.zip": "assets/characters/endministrator_m/endministrator_m_fx.zip",
     "weapons/tarr_11.glb": "assets/weapons/tarr_11.glb",
+    "characters/akekuri.glb": "assets/characters/akekuri/akekuri.glb",
+    "characters/akekuri_fx.zip": "assets/characters/akekuri/akekuri_fx.zip",
+    "weapons/edge_of_lightness.glb": "assets/weapons/edge_of_lightness.glb",
 }
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

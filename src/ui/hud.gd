@@ -224,8 +224,11 @@ func _process(delta: float) -> void:
 	damage_flash.color.a = _flash * 0.35
 	if _player == null:
 		return
-	# 캐릭터 화면이 열리면 오른쪽 아래 스킬 안내가 그 화면을 가리지 않게 숨긴다.
-	(get_node("SkillBox") as Control).visible = not character_screen.visible
+	# 캐릭터 화면이 열리면 스킬 안내·이름과 체력·로비 안내가 원작 구도를 가리지 않게 숨긴다.
+	var playing := not character_screen.visible
+	(get_node("SkillBox") as Control).visible = playing
+	(get_node("HealthBox") as Control).visible = playing
+	wave_label.visible = playing
 	_update_self()
 	_update_room()
 	_update_boss()

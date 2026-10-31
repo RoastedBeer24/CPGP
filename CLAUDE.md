@@ -33,6 +33,7 @@
 | 원작 동작·무기 자리 | 검수 대기 | 전투 무기는 오른손(wep_R)으로 고침, 싸우는 동작에서만 무기가 나타남(칼날이 차오르고 지워짐), 무기 꺼내기·거두기, 쉬는 자세·특수 대기, 멈추기, 무거운 착지, 가벼운 피격(윗몸), 캐릭터 화면 동작·무기 보기 (`docs/dev/review/motions.md`) |
 | 시점·이펙트 다듬기 (3차 포함) | 검수 대기 | 기본 시점(3인칭 고정 거리, V로 1인칭: 팔과 칼만 보임), 자유 시점(`, 얼굴까지 확대), 벽에서 천천히 되돌리기·싸울 때 물러나기, 충격파 고리·화면 왜곡·방사 흐림, 궁극기·대시 공격 이펙트, Shift 짧게 회피·누르고 있으면 질주, Ctrl 걷기, 원작 낙하 공격, 캐릭터 화면 원작 구도 (`docs/dev/review/camera.md`) |
 | 원작 이펙트 | 검수 대기 | 사이트 자료로 원작 셰이더(VFXBaseV2)와 파티클 시스템을 다시 만듦: 기본 공격·처형·배틀 스킬의 칼빛·빛·연기·불꽃 (`docs/dev/effects.md`, 체크리스트는 `docs/dev/review/motions.md`) |
+| 아케쿠리 추가 (M5 일부) | 검수 대기 | 원작 아케쿠리(chr_0019_karin) 모델·동작 47개·무기(엣지 오브 라이트)·소리·보이스·이펙트·카메라, 기본 공격 4연속·배틀 스킬·궁극기(동료 SP 회복 `rally_sp`)·처형·낙하 공격 (`docs/dev/review/akekuri.md`) |
 | M4 거점·영구 성장 ~ M6 다듬기 | 예정 | 구상서 §6 |
 
 ### 지금 구조
@@ -64,7 +65,10 @@ python3 tools/gen_combat_room.py   # 전투 방 씬 셋(방 A·B, 보스 방) �
 python3 tools/gen_lobby.py         # 로비 씬 다시 생성
 python3 tools/extract_character_fx.py "!File/Endministrator_Extras" F assets/characters/endministrator_f/endministrator_f_fx.zip   # 소리·보이스 꾸러미
 godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --join=주소, --character=endministrator_m, --autoplay)
-python3 tools/extract_character.py <원본_Animated.glb> <결과.glb>   # 캐릭터 모델에 쓸 동작만 뽑기 (여·남 자동 구분)
+python3 tools/extract_character.py <원본_Animated.glb> <결과.glb>   # 캐릭터 모델에 쓸 동작만 뽑기 (관리자 여·남, 아케쿠리 자동 구분)
+python3 tools/extract_character.py "!File/Akekuri_Assets/models/Akekuri_Animated.glb" assets/characters/akekuri/akekuri.glb
+python3 tools/extract_character_fx.py "!File/Akekuri_Assets" Akekuri assets/characters/akekuri/akekuri_fx.zip
+godot --path . -- --single --autoplay=combo   # 확인용: combo(연속 공격·스킬·궁극기), plunge(낙하 공격), finisher(처형), run(달리기)
 python3 tools/measure_attack_clips.py <원본_Animated.glb> attack_01:1.4   # 공격 동작의 타격 시각과 내디딤 거리 재기
 python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장소에 올리기 (게임이 자동으로 받음)
 ```
@@ -140,6 +144,11 @@ python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장�
 - **에셋 자동 업데이트:** 모델은 비공개 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스 `assets`에만 올린다. 파일 목록은 `tools/publish_assets.py`의 `FILES`. 그 도구는 저장소가 공개면 거부한다. 게임은 설정의 에셋 키(GitHub 토큰)로 받는데, 키는 GitHub API에만 보낸다. 실제 파일은 다른 호스트로 넘겨받으므로 `max_redirects = 0`으로 직접 따라가며 키를 뺀다(`AssetUpdater._download`). 모델의 동작 이름이 바뀌면 옛 게임이 새 모델을 받아 깨질 수 있으니 **게임 푸시와 에셋 올리기를 함께** 한다.
 - **1인칭:** 머리 메시만 숨기면 목·후드·옷깃이 카메라 앞을 가린다(외투 메시 하나에 몸 전체가 들어 있다). 머리 뼈를 줄이는 방법은 머리카락 옷자락 물리를 망가뜨린다. 그래서 1인칭은 몸 전체를 그림자만 남기고, 팔 뼈(위팔 아래)를 따르는 삼각형만 남긴 메시 사본을 그린다(`PlayerBody._build_arm_meshes`, 처음 1인칭이 될 때 약 50ms). 카메라가 눈 위치 자체를 늦게 따라가면 달릴 때 머리 뒤로 처진다: 몸에서 눈까지의 거리만 부드럽게 따라간다(`_pivot_offset`). 1인칭에서는 몸이 카메라 방향을 보고, 공격도 보는 쪽으로 한다.
 - **낙하 공격:** 원작 시작 동작(`battle_air_atk_start`)은 몸(뿌리 뼈)이 공중 1.8m에서 1.6m 더 뛰어올랐다가 7m 아래로 내리꽂는다(원작은 이 움직임으로 캐릭터를 옮긴다). 추출할 때 뿌리 높이를 떨어지는 동작 높이로 고정하고(`ROOT_HEIGHT_FROM`), 잰 높이 곡선을 `AttackData.rise`에 넣어 캡슐이 직접 뛰어오른 뒤 `plunge_dive_speed`로 내리꽂는다. 상태는 `Player.State.PLUNGE`(시작 → 떨어지기), 땅에 닿으면 착지 동작(`plunge_land`)은 보통 공격(ACTION)으로 돈다. `tools/measure_attack_clips.py`가 높이도 찍는다.
+- **공격의 몸 회전:** 원작 공격 동작은 몸(뿌리 뼈)을 크게 돌리며 휘두르고 돌아간 채 끝나기도 한다(관리자 5타 180도, 아케쿠리 처형 두 바퀴 넘게). 원작은 이 회전으로 캐릭터를 돌린다. 동작 안에 두면 동작이 끝날 때 몸이 원래 방향으로 튀어서(사용자가 "마무리 공격이 이상하다"고 함) 추출할 때 뿌리 뼈의 좌우 회전(위쪽 축 twist)을 빼고(`TURN_LOCKED`), 같은 각도를 `AttackData.turn`에 넣어 플레이어가 직접 돈다(`tools/measure_attack_clips.py`가 `turn = ...` 줄을 찍는다). 타격과 내디딤은 시작할 때 노린 방향(`Player.action_forward`)으로 간다. 동작을 새로 뽑으면 회전도 다시 잰다.
+- **원작 이펙트 자리:** 이벤트의 `pose` 위치는 원작에서 몸이 그 시각까지 나아간 자리다. 이 게임은 플레이어가 직접 나아가므로 위치는 쓰지 않고 발밑(또는 붙일 뼈)에 놓는다(`FxEffect._place`). 이어지는 동작(낙하 공격 떨어지기·착지)은 앞 동작의 아직 나지 않은 이펙트를 버리지 않는다(`PlayerBody.CONTINUING_CLIPS`): 점프 높이에서 내리꽂으면 시작 동작의 칼빛(0.6초)보다 먼저 땅에 닿는다.
+- **낙하 공격과 적:** 플레이어와 적은 서로 부딪히므로(레이어 2) 내리꽂다가 적의 몸 위에 서면 그 위에서 움직여 공중에 뜬 것처럼 보였다. 낙하 공격 중에는 땅(레이어 1)과만 부딪힌다.
+- **새 캐릭터 넣기:** `.gitignore`는 `assets/characters/` 전체를 뺀다(새 캐릭터 폴더가 커밋되지 않게, 파일을 넣기 전에 확인). 추출 도구의 `CHARACTERS`·`ROLES`(후보 이름, `{Char}`는 첫 글자 대문자)·`OPTIONAL_ROLES`·`TRIM_OVERRIDES`, 꾸러미 도구의 `WHO`, `tools/publish_assets.py`의 `FILES`, `Characters.PATHS`, `data/characters/<이름>/`(character, appearance, kit)를 고친다. 원본에 먼 거리용 메시(lod1~3)와 그림자 대용 메시가 함께 있으면 추출 도구가 뺀다(`strip_extra_meshes`).
+- **자동 조종 연속 공격:** 미리 누른 공격은 0.45초만 기억한다. 늦게 이어지는 단계(관리자 4타 → 5타는 0.72초)를 놓치지 않게 확인용 순서는 0.2초마다 누른다. 예전에는 5타가 안 나와 4타 끝을 5타로 잘못 보았다.
 - **근접 판정 각도:** `HitData.arc`는 반각이다. 180도 이상은 둘레 전체로 본다(바로 뒤의 적은 각도가 180을 아주 조금 넘게 계산되어 빠졌다).
 - **회피·질주 키:** Shift 하나로 가른다. 누르자마자 회피하면 달리려고 누를 때 회피가 먼저 나가므로, 뗄 때 짧았으면 회피, 오래 누르고 있으면 질주한다(`Player.dodge_key`, 키 이벤트로 받는다). 테스트는 `dodge_key(true/false)`를 부른다.
 - **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.

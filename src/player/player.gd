@@ -63,6 +63,14 @@ const FREE_INSIDE_DISTANCE := 0.1
 const ZOOM_FACTOR := 1.15
 ## 1인칭에서 자동으로 고르는 공격 대상: 카메라가 보는 쪽에서 이 각도(도) 안의 적만
 const FIRST_PERSON_TARGET_ANGLE := 45.0
+## 땅(world) 레이어만. 낙하 공격으로 내리꽂는 동안 쓴다.
+const WORLD_COLLISION_MASK := 1
+## 공격을 시작할 때 지금 보는 방향에서 노린 방향으로 돌아서는 빠르기(라디안/초). 180도를 약 0.13초에 돈다.
+const ACTION_TURN_SPEED := 25.0
+## 소대를 불러 모으는 기술(AttackData.rally_sp)이 SP를 나눠 주는 거리(m)
+const RALLY_RADIUS := 8.0
+## 낙하 공격이 땅에 닿을 때 화면 흔들림 (적을 맞히지 않아도)
+const PLUNGE_LAND_SHAKE := 0.45
 ## 캐릭터 화면: 원작 카메라 자리로 옮겨 가거나 돌아오는 시간(초), 휠로 다가간 끝의 얼굴과의 거리(m),
 ## 휠로 물러난 끝에 원작 자리에서 더 물러나는 거리(m), 휠 한 칸에 다가가는 정도(showcase_zoom)
 const SHOWCASE_BLEND_TIME := 0.6
@@ -156,6 +164,10 @@ var _action_time := 0.0
 var _action_hit := 0
 var _action_advanced := 0.0
 var _action_target: Enemy
+## 지금 동작이 노린 방향(수평, 길이 1). 타격과 내디딤은 이쪽으로 간다. 몸은 여기에 동작의 회전(turn)을 더한 쪽을 본다.
+var _action_forward := Vector3.FORWARD
+## 동작을 시작할 때 몸이 보던 방향과 맞춰야 할 방향의 차이(라디안). 0으로 줄며 몸이 돌아선다.
+var _turn_lag := 0.0
 ## 기본 공격 연속에서 마지막으로 낸 단계(0부터). -1이면 처음부터.
 var _chain_index := -1
 var _chain_grace := 0.0
@@ -177,6 +189,8 @@ var _walking := false
 ## 낙하 공격을 시작한 높이(세상 y)와, 뛰어오르기를 마치고 내리꽂는 중인지
 var _plunge_from := 0.0
 var _plunge_diving := false
+## 원래 부딪히는 물리 레이어. 낙하 공격 중에는 땅(world)과만 부딪혀 적의 머리 위에 서지 않는다.
+var _normal_collision_mask := 0
 var _combat_left := 0.0
 var _time_since_floor := 0.0
 var _jump_buffer := 0.0
@@ -221,6 +235,7 @@ var _rewards_applied := 0
 
 func _ready() -> void:
 	add_to_group(GROUP)
+	_normal_collision_mask = collision_mask
 	if kit == null:
 		kit = Characters.find(character_id).kit()
 	health.max_health = kit.max_health
@@ -389,6 +404,11 @@ func is_attacking() -> bool:
 	return state == State.ACTION or state == State.PLUNGE
 
 
+## 지금(또는 마지막) 동작이 노린 방향. 몸이 돌며 휘둘러도 타격은 이쪽이다.
+func action_forward() -> Vector3:
+	return _action_forward
+
+
 func action_time() -> float:
 	return _action_time
 
@@ -513,6 +533,9 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if state == State.PLUNGE and _plunge_diving and is_on_floor():
 		_land_plunge()
+	elif state != State.PLUNGE and collision_mask != _normal_collision_mask:
+		# 낙하 공격이 맞음·쓰러짐 등으로 끊겼으면 다시 적과 부딪힌다.
+		collision_mask = _normal_collision_mask
 	if state == State.GROUND or state == State.AIR:
 		state = State.GROUND if is_on_floor() else State.AIR
 	sp = minf(sp + kit.sp_regen * (1.0 + bonus(&"sp_regen")) * delta, kit.max_sp)
@@ -599,6 +622,9 @@ func _start_plunge(intent: PlayerIntent) -> void:
 	_start_action(kit.plunge_start, null, intent)
 	state = State.PLUNGE
 	velocity = Vector3.ZERO
+	# 적 위로 내리꽂으면 적의 몸(캡슐) 위에 내려서서, 그 위에서 움직이면 공중에 뜬 것처럼 보였다(사용자가 찾음).
+	# 내리꽂는 동안에는 적과 동료를 지나쳐 땅에 닿는다. 땅에 닿은 뒤 겹친 몸은 다음 이동에서 서로 밀어낸다.
+	collision_mask = WORLD_COLLISION_MASK
 
 
 ## 낙하 공격 중: 시작 동작의 높이 변화(rise)를 따라 뛰어오른 뒤, 땅에 닿을 때까지 빠르게 내리꽂는다.
@@ -619,10 +645,12 @@ func _process_plunge(delta: float) -> void:
 		state = State.PLUNGE
 
 
-## 낙하 공격이 땅에 닿았다: 착지 동작으로 둘레를 내려친다(kit.plunge_land의 타격).
+## 낙하 공격이 땅에 닿았다: 착지 동작으로 둘레를 내려친다(kit.plunge_land의 타격). 화면을 흔든다.
 func _land_plunge() -> void:
 	_plunge_diving = false
 	velocity = Vector3.ZERO
+	collision_mask = _normal_collision_mask
+	add_shake(PLUNGE_LAND_SHAKE)
 	_start_action(kit.plunge_land, null, null)
 
 
@@ -701,7 +729,8 @@ func _start_action(attack: AttackData, target: Enemy, intent: PlayerIntent) -> v
 	invulnerable = attack.invulnerable_until > 0.0
 	velocity.x = 0.0
 	velocity.z = 0.0
-	# 목표가 있으면 그쪽을, 없으면 입력한 방향을 바로 본다. 1인칭은 카메라가 보는 쪽으로 한다.
+	# 목표가 있으면 그쪽을, 없으면 입력한 방향을, 그것도 없으면 카메라가 보는 쪽을 노린다(원본 동작은 몸을 크게
+	# 돌린 채 끝나기도 해서, 지금 몸 방향을 노리면 연속 공격이 엉뚱한 쪽으로 돈다). 1인칭은 카메라가 보는 쪽으로 한다.
 	# 처형만은 1인칭에서도 경직된 적 쪽으로 돌고, 시선도 같이 돌린다.
 	var aim := Vector3.ZERO
 	var first_person := _first_person_aim()
@@ -711,11 +740,20 @@ func _start_action(attack: AttackData, target: Enemy, intent: PlayerIntent) -> v
 		aim = target.global_position - global_position
 	elif intent != null:
 		aim = _wish_direction(intent)
+	if aim.length() <= 0.05 and intent != null:
+		aim = _camera_forward()
 	aim.y = 0.0
-	if aim.length() > 0.05:
-		_face(aim)
-		if first_person:
-			camera_yaw = rotation.y
+	# 노린 방향(_action_forward)으로 타격하고 내디딘다. 몸은 그 방향 + 동작의 회전(turn)을 보되, 지금 보는 방향에서
+	# 바로 튀지 않고 잠깐(ACTION_TURN_SPEED) 돌아서 맞춘다(_turn_lag).
+	_action_forward = aim.normalized() if aim.length() > 0.05 else facing()
+	if first_person:
+		camera_yaw = _yaw_of(_action_forward)
+		rotation.y = camera_yaw
+		_turn_lag = 0.0
+	else:
+		_turn_lag = angle_difference(rotation.y, _yaw_of(_action_forward) + attack.turn_at(0.0))
+	if attack.rally_sp > 0.0:
+		_rally(attack.rally_sp)
 	# 궁극기: 원작 연출 카메라 컷(얼굴 클로즈업 → 뒤 높은 곳에서 넓게)을 내 화면에서 튼다.
 	if attack == kit.ultimate and body.fx != null:
 		var shots := body.fx.camera_shots(&"ultimate")
@@ -731,23 +769,30 @@ func _process_action(delta: float, intent: PlayerIntent) -> void:
 		velocity.y -= config.gravity * delta
 	else:
 		velocity.y = 0.0
-	# 목표 쪽으로 몸 돌리기 (동작 앞부분만). 1인칭은 카메라가 보는 쪽을 본다(처형은 시작할 때 돌았다).
+	# 노린 방향: 동작 앞부분(turn_until)에는 목표 쪽으로 돌린다. 1인칭은 카메라가 보는 쪽(처형은 시작할 때 돌았다).
 	if _first_person_aim():
 		if attack != kit.finisher:
-			rotation.y = camera_yaw
+			_action_forward = _camera_forward()
 	elif _action_time <= attack.turn_until and _action_target != null and is_instance_valid(_action_target):
 		var to_target := _action_target.global_position - global_position
 		to_target.y = 0.0
 		if to_target.length() > 0.1:
-			_turn_toward(to_target, 20.0 * delta)
-	# 원본 동작의 내디딤만큼 앞으로 나아간다. 목표 바로 앞에서는 멈춘다.
+			var aim_yaw := rotate_toward(_yaw_of(_action_forward), _yaw_of(to_target), 20.0 * delta)
+			_action_forward = Vector3(-sin(aim_yaw), 0.0, -cos(aim_yaw))
+	# 몸: 노린 방향 + 원본 동작의 회전. 1인칭은 회전 없이 카메라 쪽을 본다(팔이 화면 앞에 있게).
+	if _first_person_aim():
+		rotation.y = _yaw_of(_action_forward)
+	else:
+		_turn_lag = move_toward(_turn_lag, 0.0, ACTION_TURN_SPEED * delta)
+		rotation.y = wrapf(_yaw_of(_action_forward) + attack.turn_at(_action_time) - _turn_lag, -PI, PI)
+	# 원본 동작의 내디딤만큼 노린 쪽으로 나아간다. 목표 바로 앞에서는 멈춘다.
 	var step := attack.advance_at(_action_time) - _action_advanced
 	_action_advanced += step
 	step = maxf(step, 0.0)
 	if step > 0.0 and attack.stop_short > 0.0:
 		step = minf(step, _room_ahead(attack.stop_short))
-	velocity.x = facing().x * step / delta
-	velocity.z = facing().z * step / delta
+	velocity.x = _action_forward.x * step / delta
+	velocity.z = _action_forward.z * step / delta
 	# 타격
 	while _action_hit < attack.hits.size() and _action_time >= attack.hits[_action_hit].time:
 		_perform_hit(attack, _action_hit)
@@ -789,7 +834,8 @@ func _end_action() -> void:
 func _perform_hit(attack: AttackData, index: int) -> void:
 	var hit := attack.hits[index]
 	var origin := global_position + Vector3.UP * 1.0
-	var forward := facing()
+	# 몸이 돌며 휘둘러도 노린 쪽을 친다.
+	var forward := _action_forward
 	var predicted := CombatQuery.melee(get_world_3d().direct_space_state, origin, forward, hit.reach, hit.arc, TEAM)
 	if not predicted.is_empty():
 		_hit_stop = hit.hit_stop
@@ -800,6 +846,24 @@ func _perform_hit(attack: AttackData, index: int) -> void:
 		_resolve_hit(multiplayer.get_unique_id(), attack.id, index, origin, forward)
 	else:
 		_request_hit.rpc_id(1, attack.id, index, origin, forward)
+
+
+## 곁의 살아 있는 동료 모두(나 포함)에게 SP를 나눠 준다(AttackData.rally_sp). SP는 각자 조종하는 피어가 가지므로
+## 동료마다 그 피어에게 보낸다.
+func _rally(amount: float) -> void:
+	for ally in Roster.players(self):
+		if not ally.is_alive() or ally.global_position.distance_to(global_position) > RALLY_RADIUS:
+			continue
+		if ally.get_multiplayer_authority() == multiplayer.get_unique_id():
+			ally.receive_rally(amount)
+		else:
+			ally.receive_rally.rpc_id(ally.get_multiplayer_authority(), amount)
+
+
+## 동료가 소대를 불러 모아 SP를 받았다 (이 플레이어를 조종하는 피어에서 실행).
+@rpc("any_peer", "call_remote", "reliable")
+func receive_rally(amount: float) -> void:
+	sp = minf(sp + amount, kit.max_sp)
 
 
 ## 조종하는 피어가 타격 판정을 요청한다 (호스트에서 실행).
@@ -1179,7 +1243,7 @@ func _room_ahead(stop_short: float) -> float:
 		return INF
 	var to_target := target.global_position - global_position
 	to_target.y = 0.0
-	var along := to_target.dot(facing())
+	var along := to_target.dot(_action_forward)
 	if along <= 0.0:
 		return INF
 	return maxf(along - target.radius() - stop_short, 0.0)
@@ -1207,7 +1271,12 @@ func _wish_direction(intent: PlayerIntent) -> Vector3:
 
 ## 몸을 그 방향으로 바로 돌린다.
 func _face(direction: Vector3) -> void:
-	rotation.y = atan2(-direction.x, -direction.z)
+	rotation.y = _yaw_of(direction)
+
+
+## 수평 방향을 보는 몸의 회전 각도(rotation.y)
+static func _yaw_of(direction: Vector3) -> float:
+	return atan2(-direction.x, -direction.z)
 
 
 func _turn_toward(direction: Vector3, max_step: float) -> void:
