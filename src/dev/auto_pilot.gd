@@ -5,12 +5,15 @@ extends Node
 ## 가까운 적에게 달려가 공격하고, SP가 차면 배틀 스킬, 에너지가 차면 궁극기를 쓰고, 근처 적이 예고하면 회피한다.
 ## --autoplay=combo면 로비에 남아 제자리에서 정해진 순서(기본 공격 5연속 → 회피 뒤 대시 공격 → 배틀 스킬 → 궁극기)를
 ## 되풀이한다(원작 이펙트 확인용). 스킬과 궁극기는 SP·에너지를 채워서 쓴다.
+## --autoplay=plunge면 같은 방식으로 점프 → 공중 공격(낙하 공격)만 되풀이한다.
 
 var player: Player
 ## true면 로비에서 제자리 공격만 되풀이한다. 카메라는 캐릭터 뒤에 둔다.
 var combo_only := false
 ## true면 로비에서 원을 그리며 달리고(반은 질주), 카메라는 자유 시점으로 한쪽에서 비춘다(--autoplay=run, 옷자락 확인용).
 var run_only := false
+## true면 로비에서 제자리 낙하 공격만 되풀이한다(--autoplay=plunge).
+var plunge_only := false
 var _run_time := 0.0
 
 var _intent := PlayerIntent.new()
@@ -23,6 +26,7 @@ const COMBO_STEPS := [
 	[0.0, "attack"], [0.3, "attack"], [0.6, "attack"], [0.95, "attack"], [1.35, "attack"],
 	[3.0, "dodge"], [3.25, "attack"], [4.8, "skill"], [6.4, "ultimate"], [11.0, "loop"],
 ]
+const PLUNGE_STEPS := [[0.0, "jump"], [0.3, "attack"], [2.6, "loop"]]
 
 
 func _ready() -> void:
@@ -35,7 +39,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_intent.move = Vector2.ZERO
-	if combo_only:
+	if combo_only or plunge_only:
 		_combo(delta)
 		return
 	if run_only:
@@ -96,10 +100,13 @@ func _run(delta: float) -> void:
 func _combo(delta: float) -> void:
 	player.camera_yaw = lerp_angle(player.camera_yaw, player.rotation.y, minf(delta * 4.0, 1.0))
 	_combo_time += delta
-	while _combo_step < COMBO_STEPS.size() and _combo_time >= float(COMBO_STEPS[_combo_step][0]):
-		match str(COMBO_STEPS[_combo_step][1]):
+	var steps: Array = PLUNGE_STEPS if plunge_only else COMBO_STEPS
+	while _combo_step < steps.size() and _combo_time >= float(steps[_combo_step][0]):
+		match str(steps[_combo_step][1]):
 			"attack":
 				_intent.attack_pressed = true
+			"jump":
+				_intent.jump_pressed = true
 			"dodge":
 				_intent.move = Vector2(0, 1)
 				_intent.dodge_pressed = true

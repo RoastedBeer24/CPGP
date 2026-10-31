@@ -23,7 +23,7 @@
 | 무기 모델 | `assets/weapons/tarr_11.glb` | `weapons/tarr_11.glb` |
 | 적 모델 (아직 없음) | `assets/enemies/<이름>.glb` | `Crossfield.exe`가 있는 폴더의 `enemies/<이름>.glb` |
 
-- **애니메이션이 든 원본(`*_Animated.glb`, 약 450MB)에서** 게임에 쓰는 동작(이동·멈추기, 점프·착지, 공격 5단계, 대시 공격, 처형, 스킬, 궁극기, 회피, 맞음, 쓰러짐, 쉬는 자세와 특수 대기, 무기 꺼내기·거두기, 캐릭터 화면 동작) 46개만 골라 가벼운 파일(여 약 44MB, 남 약 56MB)을 만들어 넣습니다. 고르는 동작 목록은 도구 안의 `ROLES`에 있고, 여·남은 원본 이름을 보고 알아서 고릅니다.
+- **애니메이션이 든 원본(`*_Animated.glb`, 약 450MB)에서** 게임에 쓰는 동작(이동·멈추기, 점프·착지, 공격 5단계, 대시 공격, 처형, 낙하 공격, 스킬, 궁극기, 회피, 맞음, 쓰러짐, 쉬는 자세와 특수 대기, 무기 꺼내기·거두기, 캐릭터 화면 동작) 49개만 골라 가벼운 파일(여 약 45MB, 남 약 57MB)을 만들어 넣습니다. 고르는 동작 목록은 도구 안의 `ROLES`에 있고, 여·남은 원본 이름을 보고 알아서 고릅니다.
   ```bash
   python3 tools/extract_character.py "!File/Endministrator_F_Animated.glb" assets/characters/endministrator_f/endministrator_f.glb
   python3 tools/extract_character.py "!File/endministrator_m/Endministrator_M_Animated.glb" assets/characters/endministrator_m/endministrator_m.glb

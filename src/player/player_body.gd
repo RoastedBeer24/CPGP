@@ -37,9 +37,9 @@ const OUTLINE_WIDTH := 0.0012
 const FACE_FLATNESS := 0.85
 const EMISSION_ENERGY := 2.0
 ## 1인칭 팔: 카메라에서 ARM_NEAR_FADE_TO(m)보다 가까우면 점점이 지우기 시작해 ARM_NEAR_FADE_FROM에서 다 지운다.
-## 어깨 쪽 위팔과 얼굴 앞을 스치는 소매가 화면을 덮지 않는다.
-const ARM_NEAR_FADE_FROM := 0.1
-const ARM_NEAR_FADE_TO := 0.22
+## 얼굴 바로 앞을 스치는 소매만 지운다. 더 멀리서부터 지우면 어깨 쪽 위팔이 지워져 팔이 허공에 떠 보였다.
+const ARM_NEAR_FADE_FROM := 0.06
+const ARM_NEAR_FADE_TO := 0.14
 
 ## 몸 기준 앞(-Z)과 오른쪽(+X)
 const FORWARD := Vector3(0, 0, -1)
@@ -72,7 +72,7 @@ const IDLE_CLIPS: Array[StringName] = [
 ## 동작 층에서 트는 동작들 (이것과 IDLE_CLIPS 중 모델에 있는 것만 쓴다)
 const ACTION_CLIPS: Array[StringName] = [
 	&"attack_1", &"attack_2", &"attack_3", &"attack_4", &"attack_5", &"dash_attack", &"finisher", &"skill", &"ultimate",
-	&"dodge_f", &"dodge_b", &"hit_heavy", &"dead",
+	&"plunge_start", &"plunge_loop", &"plunge_end", &"dodge_f", &"dodge_b", &"hit_heavy", &"dead",
 ]
 ## 공격이 아닌 동작 (상태가 바뀌어도 끝까지 보여 준다)
 const NON_ATTACK_CLIPS: Array[StringName] = [&"dodge_f", &"dodge_b", &"hit_heavy", &"dead"]
@@ -181,11 +181,17 @@ var _pelvis_drop := 0.0
 # 벗을 수 있는 머리 장비(바이저) 메시와, 지금 보이는지
 var _headgear: Array[GeometryInstance3D] = []
 var _headgear_on := true
+## 카메라 쪽으로 당겨 그리는 재질(눈썹·속눈썹, toon의 depth_bias)과 원래 당기는 거리. 바이저를 쓰면 당기지 않는다
+## (당기는 거리가 바이저를 뚫어 바이저 위에 눈이 그려졌다).
+var _biased_materials: Array[ShaderMaterial] = []
+var _material_biases: Array[float] = []
 # 얼굴 메시(얼굴, 눈썹, 눈동자)와, 머리 뼈 공간에서 얼굴 정면·오른쪽 방향
 var _face_meshes: Array[GeometryInstance3D] = []
-## 1인칭인지와, 1인칭에서 보이는 팔(메시마다 위팔부터 손끝까지만 남긴 사본, 처음 1인칭이 될 때 만든다)
+## 1인칭인지와, 1인칭에서 보이는 팔(메시마다 위팔부터 손끝까지만 남긴 사본, 처음 1인칭이 될 때 만든다),
+## 지금 팔과 칼을 보여 주는지(공격하는 동안만)
 var _first_person := false
 var _arm_meshes: Array[MeshInstance3D] = []
+var _arms_shown := false
 ## 눈 뼈(왼쪽·오른쪽)와 처음 자세의 두 눈 가운데(몸 기준). 1인칭 카메라 위치를 정한다.
 var _eye_bones: Array[int] = []
 var _rest_eye := Vector3.ZERO
@@ -282,8 +288,8 @@ func set_view_mode(mode: ViewMode) -> void:
 	visible = mode != ViewMode.HIDDEN
 	_apply_visibility()
 
-## 1인칭: 내 몸은 그림자만 남기고, 팔(위팔부터 손끝까지)과 손에 든 무기만 보인다. 머리·목·후드·옷깃이 카메라
-## 앞을 가리지 않고, 공격 동작이 몸을 크게 돌려도 휘두르는 팔과 칼만 보인다.
+## 1인칭: 내 몸은 그림자만 남기고, 공격하는 동안만 팔(위팔부터 손끝까지)과 손에 든 무기가 보인다. 머리·목·후드·
+## 옷깃이 카메라 앞을 가리지 않고, 달리거나 서 있을 때 화면 아래에 손이 떠 보이지 않는다.
 func set_first_person(enabled: bool) -> void:
 	if enabled == _first_person:
 		return
@@ -299,6 +305,10 @@ func first_person() -> bool:
 ## 1인칭에서 보이는 팔 메시 수 (테스트용)
 func arm_mesh_count() -> int:
 	return _arm_meshes.size()
+
+## 1인칭에서 지금 팔과 칼이 보이는지 (테스트용)
+func first_person_arms_visible() -> bool:
+	return _first_person and _arms_shown and not _arm_meshes.is_empty() and _arm_meshes[0].visible
 
 ## 눈 위치(세상 좌표, 지금 동작의 자세). 자유 시점에서 얼굴을 가까이 볼 때의 중심이다.
 ## 모델이 없으면 몸 위 눈 높이(캡슐 몸).
@@ -329,8 +339,8 @@ func _apply_visibility() -> void:
 			continue
 		var geometry := node as GeometryInstance3D
 		if _arm_meshes.has(geometry):
-			geometry.visible = _first_person
-		elif _first_person and not _held_weapon_part(geometry):
+			geometry.visible = _first_person and _arms_shown
+		elif _first_person and not (_arms_shown and _held_weapon_part(geometry)):
 			geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 		else:
 			_apply_shadow_mode(geometry)
@@ -449,6 +459,7 @@ func _process(delta: float) -> void:
 		_headgear_on = player.visor_on
 		for mesh in _headgear:
 			mesh.visible = _headgear_on
+		_apply_depth_biases()
 	if _cloth != null and global_position.distance_to(_last_position) > TELEPORT_DISTANCE:
 		_cloth.reset()
 	_last_position = global_position
@@ -624,7 +635,10 @@ func _setup_materials() -> void:
 				toon.set_shader_parameter(&"rim_strength", 0.15)
 				if not _face_meshes.has(mesh_instance):
 					_face_meshes.append(mesh_instance)
-			toon.set_shader_parameter(&"depth_bias", appearance.depth_biases.get(material_name, 0.0))
+			var bias: float = appearance.depth_biases.get(material_name, 0.0)
+			if bias > 0.0:
+				_biased_materials.append(toon)
+				_material_biases.append(bias)
 			toon.set_shader_parameter(&"gloss_strength", appearance.gloss_materials.get(material_name, 0.0))
 			var normal_name: String = appearance.normal_maps.get(material_name, "")
 			var normal_map := appearance.texture(normal_name) if not normal_name.is_empty() else null
@@ -646,6 +660,20 @@ func _setup_materials() -> void:
 			_set_material(mesh_instance, i, toon)
 	# 얼굴 빛 방향은 메시마다 넣는 값(instance uniform)이다. 재질이 빈 면이 하나라도 있으면 렌더러가 오류를 내므로 뺀다.
 	_face_meshes = _face_meshes.filter(func(face: GeometryInstance3D) -> bool: return _all_surfaces_have_material(face as MeshInstance3D))
+	_apply_depth_biases()
+
+## 눈썹·속눈썹을 카메라 쪽으로 당겨 앞머리 위에 보이게 한다. 바이저를 쓰고 있으면 당기지 않는다:
+## 당기는 거리(3.5cm)가 얼굴 앞 바이저까지 넘어서 바이저 위에 눈이 그려졌다(사용자가 찾음).
+func _apply_depth_biases() -> void:
+	var visor := has_headgear() and _headgear_on
+	for i in _biased_materials.size():
+		_biased_materials[i].set_shader_parameter(&"depth_bias", 0.0 if visor else _material_biases[i])
+
+## 눈썹·속눈썹을 카메라 쪽으로 당기는 거리(m). 테스트용.
+func brow_depth_bias() -> float:
+	if _biased_materials.is_empty():
+		return 0.0
+	return float(_biased_materials[0].get_shader_parameter(&"depth_bias"))
 
 ## 메시의 한 면에 재질을 입힌다. 면이 하나뿐이면 메시 전체 재질(material_override)로 넣는다. 실행 중에 읽은 glTF의
 ## 눈동자 메시는 면별 재질을 넣으면 화면 없는 실행(테스트)의 렌더러가 오류를 냈다(보기는 같다).
@@ -1272,7 +1300,7 @@ func _update_actions(delta: float) -> void:
 		# 대기 연출 중에 움직이거나 뛰면 바로 끊는다.
 		showing = false
 		_action_end = 0.0
-	elif showing and not idle_clip and not NON_ATTACK_CLIPS.has(_action_clip) and player.state != Player.State.ACTION:
+	elif showing and not idle_clip and not NON_ATTACK_CLIPS.has(_action_clip) and not player.is_attacking():
 		# 공격을 끊고 움직이면(조종하는 피어의 상태가 바뀌면) 원격 몸도 바로 푼다.
 		showing = false
 	var fade := ACTION_FADE_IN if showing else ACTION_FADE_OUT
@@ -1281,6 +1309,12 @@ func _update_actions(delta: float) -> void:
 		fade = IDLE_FADE_IN if showing else (IDLE_FADE_OUT if _is_standing() else ACTION_FADE_OUT)
 	_action_amount = move_toward(_action_amount, 1.0 if showing else 0.0, delta / fade)
 	_action_showing = showing
+	# 1인칭: 공격 동작(대기 연출·회피·맞음이 아닌 것)을 보여 주는 동안만 팔과 칼을 그린다.
+	var arms := showing and not idle_clip and not NON_ATTACK_CLIPS.has(_action_clip)
+	if arms != _arms_shown:
+		_arms_shown = arms
+		if _first_person:
+			_apply_visibility()
 	_tree.set(&"parameters/action/blend_amount", _action_amount)
 	if trail != null:
 		# 원작 이펙트(칼빛)가 있는 동작은 임시 검기를 그리지 않는다.
@@ -1568,7 +1602,7 @@ func _update_weapon(delta: float) -> void:
 ## 아니면 이동·대기 동작의 것을 읽는다. 목록에 없는 동작이면 거둔다. 애니메이션이 없는 모델은 싸울 때 오른손에 든다.
 func _wanted_weapon_place() -> int:
 	if not animated:
-		return WeaponPlace.HAND if player.in_combat or player.state == Player.State.ACTION else WeaponPlace.HIDDEN
+		return WeaponPlace.HAND if player.in_combat or player.is_attacking() else WeaponPlace.HIDDEN
 	if _action_showing:
 		return appearance.weapon_place(_action_clip, _action_elapsed)
 	return appearance.weapon_place(locomotion, 0.0)

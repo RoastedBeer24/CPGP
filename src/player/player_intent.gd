@@ -11,6 +11,8 @@ var attack_pressed := false
 var dodge_pressed := false
 ## 질주한다(누르고 있는 동안). 키보드에서는 회피 키(Shift)를 오래 누르고 있을 때다(Player.dodge_key).
 var sprint_held := false
+## 걷는다. 키보드에서는 걷기 키(Ctrl)를 누르고 있거나 켜 두었을 때다(Player.walk_key).
+var walk_held := false
 var skill_pressed := false
 var skill_held := false
 var ultimate_pressed := false
@@ -44,6 +46,7 @@ func copy() -> PlayerIntent:
 	other.attack_pressed = attack_pressed
 	other.dodge_pressed = dodge_pressed
 	other.sprint_held = sprint_held
+	other.walk_held = walk_held
 	other.skill_pressed = skill_pressed
 	other.skill_held = skill_held
 	other.ultimate_pressed = ultimate_pressed

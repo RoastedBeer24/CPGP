@@ -64,10 +64,14 @@ func test_first_person_body_faces_where_you_look() -> void:
 	intent.move = Vector2(-1, 0)
 	await _frames(10)
 	assert_true(player.facing().dot(Vector3.RIGHT) > 0.99, "옆으로 가도 보는 쪽을 본다: %s" % player.facing())
+	if player.body.animated:
+		assert_false(player.body.first_person_arms_visible(), "걷고 서 있을 때는 팔이 화면 아래에 떠 보이지 않는다")
 	intent.attack_pressed = true
 	await _frames(3)
 	assert_not_null(player.current_action(), "공격한다")
 	assert_true(player.facing().dot(Vector3.RIGHT) > 0.99, "보는 쪽으로 공격한다: %s" % player.facing())
+	if player.body.animated:
+		assert_true(player.body.first_person_arms_visible(), "공격하는 동안은 휘두르는 팔과 칼이 보인다")
 
 
 func test_free_view_zooms_close_to_the_face() -> void:

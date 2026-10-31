@@ -60,7 +60,8 @@ static func melee(space: PhysicsDirectSpaceState3D, origin: Vector3, direction: 
 		if to_target.length() > reach + 0.5:
 			continue
 		var flat := Vector3(to_target.x, 0.0, to_target.z)
-		if flat.length() > 0.3 and rad_to_deg(Vector3(forward.x, 0.0, forward.z).angle_to(flat)) > arc_degrees:
+		# arc가 180도 이상이면 둘레 전체다(바로 뒤는 각도가 180을 아주 조금 넘게 계산되어 빠졌다).
+		if arc_degrees < 180.0 and flat.length() > 0.3 and rad_to_deg(Vector3(forward.x, 0.0, forward.z).angle_to(flat)) > arc_degrees:
 			continue
 		# 벽 너머는 베지 않는다.
 		var wall := PhysicsRayQueryParameters3D.create(origin, hitbox.global_position, WORLD_MASK)

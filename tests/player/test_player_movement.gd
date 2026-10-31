@@ -19,6 +19,38 @@ func before_each() -> void:
 	await _frames(2)
 
 
+func after_each() -> void:
+	GameSettings.reset_to_defaults()
+
+
+func test_walk_key_walks_while_held_and_toggles_by_setting() -> void:
+	await _frames(5)
+	intent.move = Vector2(0, 1)
+	player.walk_key(true)
+	await _frames(40)
+	assert_almost_eq(player.horizontal_speed(), player.config.walk_speed, 0.05, "Ctrl을 누르고 있는 동안 걷는다")
+	if player.body.animated:
+		assert_eq(player.body.locomotion, &"walk", "걷기 동작")
+	player.walk_key(false)
+	await _frames(40)
+	assert_almost_eq(player.horizontal_speed(), player.config.run_speed, 0.05, "떼면 달린다")
+	GameSettings.walk_toggle = true
+	player.walk_key(true)
+	player.walk_key(false)
+	await _frames(40)
+	assert_almost_eq(player.horizontal_speed(), player.config.walk_speed, 0.05, "설정을 바꾸면 한 번 눌러 켠다")
+	player.dodge_key(true)
+	await _frames(40)
+	assert_true(player.is_sprinting(), "걷는 중에도 Shift를 누르고 있으면 질주")
+	player.dodge_key(false)
+	await _frames(40)
+	assert_almost_eq(player.horizontal_speed(), player.config.walk_speed, 0.05, "질주를 그만두면 다시 걷는다")
+	player.walk_key(true)
+	player.walk_key(false)
+	await _frames(40)
+	assert_almost_eq(player.horizontal_speed(), player.config.run_speed, 0.05, "다시 눌러 끈다")
+
+
 func test_runs_at_run_speed() -> void:
 	intent.move = Vector2(0, 1)
 	await _frames(40)

@@ -24,7 +24,7 @@ signal got_hit(heavy: bool)
 ## SP나 에너지가 모자라 스킬을 못 쓸 때
 signal skill_denied(reason: String)
 
-enum State { GROUND, AIR, DODGE, ACTION, HURT, DOWN }
+enum State { GROUND, AIR, DODGE, ACTION, HURT, DOWN, PLUNGE }
 
 ## 모든 플레이어가 들어가는 그룹. 적이 목표를 찾을 때 쓴다.
 const GROUP := &"players"
@@ -172,6 +172,11 @@ var _skill_hold := -1.0
 var _dodge_key_down := false
 var _dodge_key_hold := 0.0
 var _dodge_key_tapped := false
+## 걷기 키로 걷는 중인지(누르고 있기, 또는 설정에 따라 켜 둠)
+var _walking := false
+## 낙하 공격을 시작한 높이(세상 y)와, 뛰어오르기를 마치고 내리꽂는 중인지
+var _plunge_from := 0.0
+var _plunge_diving := false
 var _combat_left := 0.0
 var _time_since_floor := 0.0
 var _jump_buffer := 0.0
@@ -246,9 +251,13 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority() or not use_device_input or input_blocked:
 		return
-	# 회피 키는 다른 행동 키처럼 마우스가 잡혀 있지 않아도 받는다.
+	# 회피·걷기 키는 다른 행동 키처럼 마우스가 잡혀 있지 않아도 받는다.
 	if event.is_action(InputActions.DODGE) and not event.is_echo():
 		dodge_key(event.is_pressed())
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action(InputActions.WALK) and not event.is_echo():
+		walk_key(event.is_pressed())
 		get_viewport().set_input_as_handled()
 		return
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
@@ -321,6 +330,21 @@ func dodge_key(pressed: bool) -> void:
 		_dodge_key_tapped = _dodge_key_hold < config.dodge_tap_time
 
 
+## 걷기 키(기본 Ctrl)를 눌렀다(pressed)·뗐다. 기본은 누르고 있는 동안만 걷고, 설정(GameSettings.walk_toggle)에서
+## 눌러서 켜고 끄기로 바꿀 수 있다. 질주(Shift를 누르고 있기)가 걷기보다 먼저다.
+func walk_key(pressed: bool) -> void:
+	if GameSettings.walk_toggle:
+		if pressed:
+			_walking = not _walking
+	else:
+		_walking = pressed
+
+
+## 걷는 중인지 (걷기 키를 누르고 있거나 켜 두었는지)
+func is_walking() -> bool:
+	return _walking
+
+
 ## 자유 시점을 켜거나 끈다(끄면 기본 시점으로 돌아간다).
 func toggle_free_view() -> void:
 	set_camera_mode(_base_camera if camera_mode == CameraMode.FREE else CameraMode.FREE)
@@ -357,7 +381,12 @@ func is_alive() -> bool:
 
 ## 지금 하고 있는 공격 동작. 없으면 null.
 func current_action() -> AttackData:
-	return _action if state == State.ACTION else null
+	return _action if is_attacking() else null
+
+
+## 공격 동작(낙하 공격 포함) 중인지. 상태는 동기화되므로 원격 플레이어에서도 맞다(current_action은 조종하는 피어에만 있다).
+func is_attacking() -> bool:
+	return state == State.ACTION or state == State.PLUNGE
 
 
 func action_time() -> float:
@@ -477,9 +506,13 @@ func _physics_process(delta: float) -> void:
 			_process_dodge(delta, intent)
 		State.ACTION:
 			_process_action(delta, intent)
+		State.PLUNGE:
+			_process_plunge(delta)
 		_:
 			_process_free(delta, intent)
 	move_and_slide()
+	if state == State.PLUNGE and _plunge_diving and is_on_floor():
+		_land_plunge()
 	if state == State.GROUND or state == State.AIR:
 		state = State.GROUND if is_on_floor() else State.AIR
 	sp = minf(sp + kit.sp_regen * (1.0 + bonus(&"sp_regen")) * delta, kit.max_sp)
@@ -512,7 +545,11 @@ func _process_free(delta: float, intent: PlayerIntent) -> void:
 		_sprinting = true
 	elif _sprinting and (not intent.sprint_held or wish == Vector3.ZERO):
 		_sprinting = false
-	var speed := config.sprint_speed if _sprinting else config.run_speed
+	var speed := config.run_speed
+	if _sprinting:
+		speed = config.sprint_speed
+	elif intent.walk_held:
+		speed = config.walk_speed
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z)
 	var rate := config.air_acceleration
 	if on_floor:
@@ -540,7 +577,53 @@ func _handle_combat_input(intent: PlayerIntent) -> bool:
 	if _attack_buffer > 0.0 and is_on_floor():
 		_attack_buffer = 0.0
 		return _attack(intent)
+	if _attack_buffer > 0.0 and _can_plunge():
+		_attack_buffer = 0.0
+		_start_plunge(intent)
+		return true
 	return false
+
+
+## 공중에서 공격하면 낙하 공격을 한다. 발판에서 막 떨어진 순간(코요테 시간)은 아직 땅으로 본다.
+func _can_plunge() -> bool:
+	if is_on_floor() or _time_since_floor <= config.coyote_time:
+		return false
+	return kit.plunge_start != null and kit.plunge_fall != null and kit.plunge_land != null
+
+
+## 낙하 공격 시작: 원작 동작대로 뛰어올랐다가(AttackData.rise) 내리꽂는다(_process_plunge).
+func _start_plunge(intent: PlayerIntent) -> void:
+	_plunge_from = global_position.y
+	_plunge_diving = false
+	_chain_index = -1
+	_start_action(kit.plunge_start, null, intent)
+	state = State.PLUNGE
+	velocity = Vector3.ZERO
+
+
+## 낙하 공격 중: 시작 동작의 높이 변화(rise)를 따라 뛰어오른 뒤, 땅에 닿을 때까지 빠르게 내리꽂는다.
+## 시작 동작이 끝났는데도 떨어지는 중이면 떨어지는 동작(plunge_fall)으로 바꾼다. 땅에 닿으면 _land_plunge.
+func _process_plunge(delta: float) -> void:
+	_action_time += delta
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if _first_person_aim():
+		rotation.y = camera_yaw
+	if not _plunge_diving and _action == kit.plunge_start and _action_time < _action.rise_end():
+		velocity.y = (_plunge_from + _action.rise_at(_action_time) - global_position.y) / delta
+		return
+	_plunge_diving = true
+	velocity.y = -config.plunge_dive_speed
+	if _action == kit.plunge_start and _action_time >= _action.duration:
+		_start_action(kit.plunge_fall, null, null)
+		state = State.PLUNGE
+
+
+## 낙하 공격이 땅에 닿았다: 착지 동작으로 둘레를 내려친다(kit.plunge_land의 타격).
+func _land_plunge() -> void:
+	_plunge_diving = false
+	velocity = Vector3.ZERO
+	_start_action(kit.plunge_land, null, null)
 
 
 ## 배틀 스킬 키: 궁극기 에너지가 차 있으면 길게 눌렀는지 보고 궁극기, 아니면 배틀 스킬.
@@ -1152,24 +1235,33 @@ func _read_intent() -> PlayerIntent:
 		intent = PlayerIntent.new()
 	else:
 		intent = PlayerIntent.from_device()
-	_read_dodge_key(intent)
+	_read_key_state(intent)
 	return intent
 
 
-## 회피 키 상태를 입력에 넣는다: 짧게 눌렀다 뗐으면 회피, 오래 누르고 있으면 질주.
-## 누른 시간은 실제 시간으로 잰다(완벽한 회피의 느린 시간 중에도 같은 길이로 누르면 같게 된다).
-func _read_dodge_key(intent: PlayerIntent) -> void:
-	if input_blocked or (use_device_input and _dodge_key_down and not Input.is_action_pressed(InputActions.DODGE)):
-		# 메뉴가 열린 사이에 뗀 키는 회피도 질주도 아니다.
+## 키 이벤트로 받는 키 상태를 입력에 넣는다.
+##   회피 키: 짧게 눌렀다 뗐으면 회피, 오래 누르고 있으면 질주. 누른 시간은 실제 시간으로 잰다(완벽한 회피의
+##   느린 시간 중에도 같은 길이로 누르면 같게 된다).
+##   걷기 키: 누르고 있거나 켜 두었으면 걷는다.
+func _read_key_state(intent: PlayerIntent) -> void:
+	if input_blocked:
+		# 메뉴가 열린 동안은 회피도 질주도 걷기도 아니다(켜 둔 걷기는 남는다).
 		_dodge_key_down = false
 		_dodge_key_tapped = false
 		return
+	if use_device_input and _dodge_key_down and not Input.is_action_pressed(InputActions.DODGE):
+		# 메뉴가 열린 사이에 뗀 키는 회피도 질주도 아니다.
+		_dodge_key_down = false
+		_dodge_key_tapped = false
 	if _dodge_key_down:
 		_dodge_key_hold += get_physics_process_delta_time() / maxf(Engine.time_scale, 0.01)
 		intent.sprint_held = intent.sprint_held or _dodge_key_hold >= config.dodge_tap_time
 	if _dodge_key_tapped:
 		_dodge_key_tapped = false
 		intent.dodge_pressed = true
+	if _walking and use_device_input and not GameSettings.walk_toggle and not Input.is_action_pressed(InputActions.WALK):
+		_walking = false
+	intent.walk_held = intent.walk_held or _walking
 
 
 # ---- 카메라 ----

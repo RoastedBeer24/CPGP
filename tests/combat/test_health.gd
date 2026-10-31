@@ -59,7 +59,9 @@ func test_character_kits_are_consistent() -> void:
 		for attack in kit.all_attacks():
 			var label := "%s/%s" % [character.id, attack.id]
 			assert_true(PlayerBody.ACTION_CLIPS.has(attack.clip), "몸이 틀 수 있는 동작: " + label)
-			assert_true(attack.hits.size() > 0, "타격이 있음: " + label)
+			# 낙하 공격의 시작(뛰어오르기)과 떨어지기는 타격이 없다. 착지에서 친다.
+			if attack != kit.plunge_start and attack != kit.plunge_fall:
+				assert_true(attack.hits.size() > 0, "타격이 있음: " + label)
 			var last := -1.0
 			for hit in attack.hits:
 				assert_true(hit.time > last and hit.time < attack.duration, "타격 시각이 차례대로 동작 안에: " + label)
@@ -71,6 +73,8 @@ func test_character_kits_are_consistent() -> void:
 		assert_eq(kit.ultimate.energy_cost, kit.max_energy, "궁극기는 에너지를 다 쓴다")
 		assert_eq(kit.battle_skill.hits[0].effect, HitData.Effect.APPLY_CRYSTAL, "배틀 스킬이 원석 결정을 붙인다")
 		assert_eq(kit.ultimate.hits[kit.ultimate.hits.size() - 1].effect, HitData.Effect.SHATTER_CRYSTAL, "궁극기가 깨뜨린다")
+		assert_true(kit.plunge_start.rise_end() > 0.0, "낙하 공격은 먼저 뛰어오른다")
+		assert_true(kit.plunge_land.hits[0].arc >= 180.0, "낙하 공격 착지는 둘레 전체를 친다")
 
 
 func test_attack_advance_interpolates() -> void:

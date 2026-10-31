@@ -286,6 +286,50 @@ energy_per_hit = 0.0
 invulnerable_until = 3.0
 super_armor = true
 
+[sub_resource type="Resource" id="plunge_start"]
+script = ExtResource("2_attack")
+id = &"plunge_start"
+display_name = "낙하 공격"
+description = "공중에서 공격하면 뛰어올랐다가 칼을 아래로 겨누고 내리꽂는다. 땅에 닿으며 둘레의 적을 모두 내려친다."
+clip = &"plunge_start"
+duration = 1.07
+rise = PackedVector2Array(0, 0, 0.05, -0.28, 0.1, -0.45, 0.15, 0.06, 0.2, 0.83, 0.25, 1.46, 0.3, 1.81, 0.35, 1.93, 0.4, 1.78, 0.45, 1.38, 0.5, 0.62, 0.55, -0.23)
+energy_per_hit = 0.0
+super_armor = true
+
+[sub_resource type="Resource" id="plunge_fall"]
+script = ExtResource("2_attack")
+id = &"plunge_fall"
+display_name = "낙하 공격"
+clip = &"plunge_loop"
+duration = 30.0
+energy_per_hit = 0.0
+super_armor = true
+
+[sub_resource type="Resource" id="hit_plunge"]
+script = ExtResource("3_hit")
+time = 0.03
+damage = 2.2
+stagger = 25.0
+reach = 3.2
+arc = 180.0
+knockback = 1.2
+hit_stop = 0.08
+shake = 0.5
+
+[sub_resource type="Resource" id="plunge_land"]
+script = ExtResource("2_attack")
+id = &"plunge_land"
+display_name = "낙하 공격 착지"
+clip = &"plunge_end"
+duration = 1.05
+chain_from = 0.6
+move_cancel_from = 0.8
+dodge_cancel_from = 0.25
+turn_until = 0.0
+hits = Array[ExtResource("3_hit")]([SubResource("hit_plunge")])
+energy_per_hit = 3.0
+
 [resource]
 script = ExtResource("1_kit")
 id = &"endministrator_m"
@@ -297,3 +341,6 @@ dash_attack = SubResource("dash_attack")
 finisher = SubResource("finisher")
 battle_skill = SubResource("battle_skill")
 ultimate = SubResource("ultimate")
+plunge_start = SubResource("plunge_start")
+plunge_fall = SubResource("plunge_fall")
+plunge_land = SubResource("plunge_land")

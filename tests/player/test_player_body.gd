@@ -165,11 +165,13 @@ func test_visor_key_takes_headgear_off_and_on() -> void:
 	assert_false(player.visor_on, "H를 누르면 벗는다")
 	if player.body.has_headgear():
 		assert_false(player.body.headgear_shown(), "바이저 메시가 숨는다")
+		assert_true(player.body.brow_depth_bias() > 0.0, "바이저를 벗으면 눈썹을 앞머리 위로 당겨 그린다")
 	intent.visor_pressed = true
 	await _frames(2)
 	assert_true(player.visor_on, "다시 누르면 쓴다")
 	if player.body.has_headgear():
 		assert_true(player.body.headgear_shown())
+		assert_eq(player.body.brow_depth_bias(), 0.0, "바이저를 쓰면 눈썹·속눈썹이 바이저를 뚫고 보이지 않게 당기지 않는다")
 
 
 func test_cloth_hangs_and_stays_above_ground() -> void:

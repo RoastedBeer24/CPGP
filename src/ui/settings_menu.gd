@@ -230,6 +230,8 @@ func _build_controls(rows: VBoxContainer) -> void:
 		func(value: float) -> void: GameSettings.fov = value)
 	_add_check(rows, "자유 시점을 눌러서 켜고 끄기 (끄면 누르고 있는 동안만)", GameSettings.free_view_toggle,
 		func(on: bool) -> void: GameSettings.free_view_toggle = on)
+	_add_check(rows, "걷기를 눌러서 켜고 끄기 (끄면 누르고 있는 동안만)", GameSettings.walk_toggle,
+		func(on: bool) -> void: GameSettings.walk_toggle = on)
 
 	var header := Label.new()
 	header.text = "키 설정"

@@ -5,8 +5,10 @@ extends Resource
 @export_group("속도 (m/s)")
 ## 평소 이동(달리기). 원본 달리기 동작의 원래 속도는 4.3m/s다.
 @export var run_speed := 5.0
-## 회피 뒤에 회피 키를 누르고 있으면 질주한다. 원본 질주 동작은 6.2m/s다.
+## 회피 키(Shift)를 오래 누르고 있으면 질주한다. 원본 질주 동작은 6.2m/s다.
 @export var sprint_speed := 7.0
+## 걷기 키(Ctrl)로 걷는 속도. 원본 걷기 동작의 원래 속도는 약 1.0m/s다.
+@export var walk_speed := 1.3
 ## 이동 방향으로 몸을 돌리는 속도(라디안/초)
 @export var turn_speed := 14.0
 
@@ -39,6 +41,10 @@ extends Resource
 @export var dodge_cooldown := 0.25
 ## 회피 키(Shift)를 이보다 짧게(초) 눌렀다 떼면 회피, 더 오래 누르고 있으면 질주
 @export var dodge_tap_time := 0.2
+
+@export_group("낙하 공격")
+## 뛰어오른 뒤 내리꽂는 속도(m/s). 원작 동작은 초속 30~50m로 내리꽂는다.
+@export var plunge_dive_speed := 24.0
 ## 회피가 끝난 뒤 이 시간(초) 안에 공격하면 대시 공격이 나간다.
 @export var dash_attack_window := 0.35
 

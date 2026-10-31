@@ -143,6 +143,41 @@ func test_attack_right_after_dodge_is_dash_attack() -> void:
 	assert_eq(player.action_id, &"dash_attack")
 
 
+func test_attack_in_air_is_plunge_that_hits_all_around_on_landing() -> void:
+	# 적이 등 뒤(+Z)에 있어도 착지 타격은 둘레 전체를 내려친다.
+	var enemy := _enemy("grunt", Vector3(0, 0, 2.2), false)
+	await _frames(2)
+	intent.jump_pressed = true
+	await _frames(15)
+	assert_eq(player.state, Player.State.AIR, "점프 중")
+	var jumped_from := player.global_position.y
+	intent.attack_pressed = true
+	await _frames(2)
+	assert_eq(player.state, Player.State.PLUNGE, "공중에서 공격하면 낙하 공격")
+	assert_eq(player.action_id, &"plunge_start")
+	var highest := jumped_from
+	var landed := false
+	for i in 120:
+		await _frames(1)
+		highest = maxf(highest, player.global_position.y)
+		if player.action_id == &"plunge_land":
+			landed = true
+			break
+	assert_true(highest > jumped_from + 1.0, "원작 동작처럼 먼저 뛰어오른다: %.2f → %.2f" % [jumped_from, highest])
+	assert_true(landed, "땅에 닿으면 착지 동작")
+	assert_true(player.is_on_floor())
+	await _frames(10)
+	assert_true(enemy.health.current < enemy.data.max_health, "착지하며 둘레의 적을 친다: %s" % enemy.health.current)
+	await _frames(60)
+	assert_ne(player.state, Player.State.PLUNGE, "착지 동작이 끝나면 다시 움직인다")
+
+
+func test_attack_on_ground_is_not_plunge() -> void:
+	intent.attack_pressed = true
+	await _frames(3)
+	assert_eq(player.action_id, &"attack_1", "땅에서는 기본 공격")
+
+
 func test_dodge_cancels_attack() -> void:
 	intent.attack_pressed = true
 	await _frames(5)

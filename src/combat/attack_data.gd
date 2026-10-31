@@ -27,6 +27,9 @@ extends Resource
 @export var advance := PackedVector2Array()
 ## 목표 앞에서 이 거리(m)까지만 나아간다. 적을 지나치지 않게 한다. 0이면 막지 않는다.
 @export var stop_short := 1.1
+## 공중 동작의 높이 변화: (시각, 시작한 곳보다 높은 m) 점들. 낙하 공격 시작처럼 뛰어올랐다 내려오는 동작에 쓴다.
+## 원본 동작의 뿌리 높이를 잰 값이다(모델에서는 빼 두었다). 마지막 점 뒤로는 내리꽂는다(Player).
+@export var rise := PackedVector2Array()
 @export var hits: Array[HitData] = []
 
 @export_group("자원")
@@ -48,11 +51,25 @@ extends Resource
 
 ## t초까지 나아간 거리(m)
 func advance_at(t: float) -> float:
-	if advance.is_empty() or t <= advance[0].x:
-		return 0.0 if advance.is_empty() else advance[0].y
-	for i in range(1, advance.size()):
-		var a := advance[i - 1]
-		var b := advance[i]
+	return _curve_at(advance, t)
+
+
+## t초에 시작한 곳보다 높은 정도(m)
+func rise_at(t: float) -> float:
+	return _curve_at(rise, t)
+
+
+## 높이 변화가 끝나는 시각(초). 높이 변화가 없으면 0.
+func rise_end() -> float:
+	return rise[rise.size() - 1].x if not rise.is_empty() else 0.0
+
+
+static func _curve_at(points: PackedVector2Array, t: float) -> float:
+	if points.is_empty() or t <= points[0].x:
+		return 0.0 if points.is_empty() else points[0].y
+	for i in range(1, points.size()):
+		var a := points[i - 1]
+		var b := points[i]
 		if t <= b.x:
 			return lerpf(a.y, b.y, (t - a.x) / maxf(b.x - a.x, 0.0001))
-	return advance[advance.size() - 1].y
+	return points[points.size() - 1].y

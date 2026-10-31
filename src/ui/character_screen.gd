@@ -211,7 +211,7 @@ func _refresh() -> void:
 	_description.text = character.description
 	_stats.text = "체력 %d   공격력 %d   궁극기 에너지 %d" % [roundi(kit.max_health), roundi(kit.attack_power), roundi(kit.max_energy)]
 	var lines: PackedStringArray = ["[왼쪽 클릭] 기본 공격 5연속"]
-	for attack: AttackData in [kit.basic_chain.back(), kit.dash_attack, kit.finisher, kit.battle_skill, kit.ultimate]:
+	for attack: AttackData in [kit.basic_chain.back(), kit.dash_attack, kit.finisher, kit.plunge_start, kit.battle_skill, kit.ultimate]:
 		if attack != null and not attack.description.is_empty():
 			lines.append("%s\n    %s" % [attack.display_name, attack.description])
 	_skills.text = "\n".join(lines)

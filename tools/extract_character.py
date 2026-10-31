@@ -68,6 +68,10 @@ ROLES = {
     "finisher": ["A_actor_{char}_battle_power_attack"],
     "skill": ["A_actor_{char}_battle_normal_skill"],
     "ultimate": ["A_actor_{char}_battle_skill_ult"],
+    # 낙하 공격: 공중에서 뛰어올랐다가 내리꽂고(시작) → 떨어지는 동안(반복) → 땅에 닿으며 내려친다(착지)
+    "plunge_start": ["A_actor_{char}_battle_air_atk_start"],
+    "plunge_loop": ["A_actor_{char}_battle_air_atk_loop"],
+    "plunge_end": ["A_actor_{char}_battle_air_atk_end"],
     # 맞음: 가볍게 움찔(맞은 쪽: 앞·뒤·왼쪽·오른쪽), 크게 휘청, 쓰러짐
     "hit_f": ["A_actor_{body}_battle_hit_f"],
     "hit_b": ["A_actor_{body}_battle_hit_b"],
@@ -78,7 +82,7 @@ ROLES = {
 }
 
 # 루프로 재생할 동작 (glTF에는 반복 여부가 없어서 이름 끝에 -loop를 붙이면 Godot가 반복으로 가져온다)
-LOOPING = {"idle", "walk", "run", "sprint", "battle_idle", "fall", "relax", "ui_idle", "ui_weapon"}
+LOOPING = {"idle", "walk", "run", "sprint", "battle_idle", "fall", "relax", "ui_idle", "ui_weapon", "plunge_loop"}
 
 # 모든 동작에서 움직임을 빼는 뼈(눈동자). 원본의 대화·전투 동작은 오른쪽 눈 뼈만 2~6도씩 움직여서
 # (왼쪽은 그대로) 한쪽 눈만 돌아간다. 원래 게임은 시선을 따로 정하는 것으로 보여, 눈은 처음 자세(정면)로 둔다.
@@ -102,6 +106,8 @@ TRIMS = {
     "dodge_f": (0.0, 0.6),
     "dodge_b": (0.0, 0.7),
     "hit_heavy": (0.0, 1.0),
+    # 원본 착지는 5초 넘게 이어지지만 1초쯤이면 일어선다.
+    "plunge_end": (0.0, 1.6),
 }
 # 캐릭터마다 다른 구간
 TRIM_OVERRIDES = {
@@ -115,7 +121,12 @@ TRIM_OVERRIDES = {
 ROOT_LOCKED = {
     "attack_1", "attack_2", "attack_3", "attack_4", "attack_5", "dash_attack", "finisher", "skill", "ultimate",
     "dodge_f", "dodge_b", "hit_heavy", "dead", "run_stop_l", "run_stop_r", "sprint_stop_l", "sprint_stop_r",
+    "plunge_start", "plunge_end",
 }
+# 뿌리 뼈의 높이도 없애고 다른 동작의 처음 높이로 고정할 것. 원본 낙하 공격 시작은 몸(뿌리 뼈)이 공중 1.8m에서
+# 1.6m 더 뛰어올랐다가 7m 아래로 내리꽂는다(원작은 이 움직임으로 캐릭터를 옮긴다). 게임에서는 플레이어(캡슐)가
+# 직접 뛰어오르고 내리꽂으므로(AttackData.rise) 몸은 떨어지는 동작(plunge_loop)의 높이에 둔다.
+ROOT_HEIGHT_FROM = {"plunge_start": "plunge_loop"}
 # 뿌리 뼈. 부모(Root)가 돌아가 있지 않아서 이동 값의 y가 위, x와 z가 수평이다.
 ROOT_BONE = "Bip001"
 
@@ -170,8 +181,18 @@ def add_floats(doc, data, values, type_name):
     return len(doc["accessors"]) - 1
 
 
-def reshape(doc, data, anim, trim, lock_root):
-    """동작을 [시작, 끝] 구간으로 자르고(시간은 0부터), lock_root면 뿌리 뼈의 수평 이동을 없앤다."""
+def root_height(doc, data, anim):
+    """동작의 처음 뿌리 뼈 높이(이동 값의 y). 뿌리 뼈 이동이 없으면 None."""
+    nodes = doc["nodes"]
+    for c in anim["channels"]:
+        if nodes[c["target"]["node"]].get("name") == ROOT_BONE and c["target"]["path"] == "translation":
+            return read_floats(doc, data, anim["samplers"][c["sampler"]]["output"])[0][1]
+    return None
+
+
+def reshape(doc, data, anim, trim, lock_root, fixed_height=None):
+    """동작을 [시작, 끝] 구간으로 자르고(시간은 0부터), lock_root면 뿌리 뼈의 수평 이동을 없앤다.
+    fixed_height가 있으면 뿌리 뼈의 높이도 그 값으로 고정한다."""
     nodes = doc["nodes"]
     root_samplers = {c["sampler"] for c in anim["channels"]
                      if nodes[c["target"]["node"]].get("name") == ROOT_BONE and c["target"]["path"] == "translation"}
@@ -189,7 +210,7 @@ def reshape(doc, data, anim, trim, lock_root):
             times = [max(times[k] - start, 0.0) for k in keep]
             values = [values[k] for k in keep]
         if lock_root and index in root_samplers:
-            values = [[0.0, v[1], 0.0] for v in values]
+            values = [[0.0, v[1] if fixed_height is None else fixed_height, 0.0] for v in values]
         sampler["input"] = add_floats(doc, data, [[t] for t in times], "SCALAR")
         sampler["output"] = add_floats(doc, data, values, doc["accessors"][sampler["output"]]["type"])
 
@@ -238,7 +259,10 @@ def main(source, target):
         anim = json.loads(json.dumps(by_name[name]))
         anim["name"] = role + ("-loop" if role in LOOPING else "")
         if role in trims or role in ROOT_LOCKED:
-            reshape(doc, data, anim, trims.get(role), role in ROOT_LOCKED)
+            height = None
+            if role in ROOT_HEIGHT_FROM:
+                height = root_height(doc, data, by_name[names[ROOT_HEIGHT_FROM[role]]])
+            reshape(doc, data, anim, trims.get(role), role in ROOT_LOCKED, height)
         freeze(doc, anim)
         animations.append(anim)
     doc["animations"] = animations

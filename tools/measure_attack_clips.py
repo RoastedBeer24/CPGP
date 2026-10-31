@@ -135,14 +135,16 @@ def main(path, specs):
             weapon = world("weapon", t)
             speed = math.dist(weapon, previous) / step if previous is not None else 0.0
             previous = weapon
-            # 모델은 +Z를 앞으로 본다.
-            rows.append((t, world("root", t)[2] - root0[2], speed))
+            # 모델은 +Z를 앞으로 본다. 높이는 처음 자세에서 얼마나 떴는지다(낙하 공격처럼 뛰어오르는 동작).
+            root = world("root", t)
+            rows.append((t, root[2] - root0[2], speed, root[1] - root0[1]))
             t += step
         peaks = ["%.2f(%.0f)" % (rows[k][0], rows[k][2]) for k in range(2, len(rows) - 2)
                  if rows[k][2] > 9.0 and rows[k][2] >= max(rows[k - 2][2], rows[k - 1][2], rows[k + 1][2], rows[k + 2][2])]
         print("== %s (%.2f초까지)" % (name, end))
         print("  타격 후보:", " ".join(peaks))
         print("  앞으로:", " ".join("%.2f:%.2f" % (r[0], r[1]) for r in rows if int(round(r[0] * 60)) % 3 == 0))
+        print("  높이:", " ".join("%.2f:%.2f" % (r[0], r[3]) for r in rows if int(round(r[0] * 60)) % 3 == 0))
 
 
 if __name__ == "__main__":
