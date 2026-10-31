@@ -113,6 +113,11 @@ static func _material(effect: EffectLibrary.Effect, index: int, data: Dictionary
 		var streams: Variant = renderer.get("streams", null)
 		var second_uv := typeof(streams) == TYPE_ARRAY and (streams as Array).has(5)
 		material = FxMaterial.build(extras, effect, renderer, draw, mesh, second_uv)
+	# 텍스처 시트(연기·파편처럼 그림 한 장에 여러 칸이 든 것): 칸 수를 알려 줘야 파티클마다 한 칸만 그린다.
+	# 빠뜨리면 그림 전체가 작게 반복되어 바닥에 이상한 무늬가 깔린다.
+	var sheet: Dictionary = (data.get("modules", {}) as Dictionary).get("UVModule", {})
+	if not sheet.is_empty() and int(sheet.get("mode", 0)) == 0:
+		material.set_shader_parameter(&"sheet_tiles", Vector2(maxi(int(sheet.get("tilesX", 1)), 1), maxi(int(sheet.get("tilesY", 1)), 1)))
 	effect.system_materials[index] = material
 	return material
 

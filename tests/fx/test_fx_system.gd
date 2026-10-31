@@ -102,6 +102,21 @@ func test_material_slot_roles_follow_original_settings() -> void:
 	assert_true(FxMaterial.screen_effect("HGRP/Effect/VFXRefract"), "재질 자료가 없는 화면 왜곡은 비슷하게 만든다")
 
 
+func test_texture_sheet_draws_one_tile_per_particle() -> void:
+	# 연기 그림처럼 한 장에 여러 칸(2x2)이 든 텍스처 시트: 재질이 칸 수를 알아야 파티클마다 한 칸만 그린다.
+	var effect := EffectLibrary.Effect.new()
+	effect.materials.append({"name": "smoke", "extras": {"shader": "HGRP/Effect/VFXBaseV2", "floats": {}, "colors": {}, "vfx": {"keywords": []}}})
+	var data := {"renderer": {"mode": 0, "align": 0, "materials": [0]},
+		"modules": {"UVModule": {"mode": 0, "tilesX": 2, "tilesY": 2, "cycles": 1.0, "frameOverTime": {"m": 0, "c": 0.6}}}}
+	var material := FxEffect._material(effect, 0, data)
+	assert_eq(material.get_shader_parameter(&"sheet_tiles"), Vector2(2, 2), "재질에 칸 수를 넘긴다")
+	var p := FxSystem.Particle.new()
+	p.rand = PackedFloat32Array()
+	p.rand.resize(FxSystem.R.COUNT)
+	var sheet: Dictionary = (data["modules"] as Dictionary)["UVModule"]
+	assert_eq(FxSystem._sheet_frame(sheet, Vector2i(2, 2), 0.5, p), 2.0, "수명에 따른 칸 번호 (0.6 x 4칸 → 2번째 칸)")
+
+
 func test_original_attack_effect_plays_with_attack() -> void:
 	var floor_body := StaticBody3D.new()
 	var shape := CollisionShape3D.new()
