@@ -63,6 +63,9 @@ const FREE_INSIDE_DISTANCE := 0.1
 ## 1인칭은 카메라가 이펙트 한가운데(몸)에 있어서, 낙하 공격 착지 섬광이 화면을 하얗게 덮었다. 더 멀리서부터 흐린다.
 const FX_CAMERA_FADE := Vector2(0.15, 0.5)
 const FIRST_PERSON_FX_CAMERA_FADE := Vector2(0.5, 2.2)
+## 원작 연출 카메라 컷이 끝나고 원래 카메라로 섞어 돌아오는 가장 짧은 시간(초). 원작 자료가 0인 컷은 끝나는 순간
+## 화면이 튀었다.
+const SHOT_MIN_EASE_OUT := 0.35
 ## 휠 한 칸에 카메라 거리가 바뀌는 배율. 가까울수록 조금씩, 멀수록 크게 바뀐다.
 const ZOOM_FACTOR := 1.15
 ## 1인칭에서 자동으로 고르는 공격 대상: 카메라가 보는 쪽에서 이 각도(도) 안의 적만
@@ -1481,13 +1484,12 @@ func play_camera_shot(shot: Dictionary) -> void:
 func _apply_shot(delta: float) -> void:
 	_shot_time += delta
 	var duration := float(_shot.get("duration", 0.0))
-	var ease_out := maxf(float(_shot.get("easeOut", 0.0)), 0.001)
+	var ease_out := maxf(float(_shot.get("easeOut", 0.0)), SHOT_MIN_EASE_OUT)
 	var weight := 1.0
 	if _shot_time > duration:
 		weight = 1.0 - smoothstep(0.0, 1.0, (_shot_time - duration) / ease_out)
 	if weight <= 0.0 or not is_alive():
-		cinematic = false
-		_apply_view()
+		_end_shot()
 		return
 	var view := _shot_view(minf(_shot_time, duration))
 	# 원래 카메라(중심 + 팔 길이)와 컷의 카메라를 섞는다. 컷 동안은 1, 끝나면 easeOut 동안 0으로.
@@ -1496,6 +1498,16 @@ func _apply_shot(delta: float) -> void:
 	var normal := camera_rig.global_transform * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, _arm_length))
 	camera.global_transform = normal.interpolate_with(view[0], weight)
 	camera.fov = lerpf(GameSettings.fov, float(view[1]), weight)
+
+
+## 컷을 끝내고 카메라를 원래 자리·방향·시야각으로 되돌린다. 카메라 팔은 다음 물리 프레임에 위치만 되돌리고 방향은
+## 그대로 두어서, 되돌아오는 시간이 0인 컷(아크라이트)이 끝나면 마지막 장면의 기울기가 남아 높은 곳에서 내려다보는
+## 화면이 되었다(사용자가 찾음).
+func _end_shot() -> void:
+	cinematic = false
+	camera.transform = Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, _arm_length))
+	camera.fov = GameSettings.fov
+	_apply_view()
 
 
 ## 컷의 t초 카메라: [세상 변환, 시야각]. follow가 꺼진 쪽(위치·방향)은 컷이 시작될 때의 캐릭터를 기준으로 한다.

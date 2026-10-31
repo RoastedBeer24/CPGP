@@ -129,10 +129,10 @@ TRIM_OVERRIDES = {
              "attack_5": (0.0, 1.28), "dash_attack": (0.0, 1.23), "finisher": (0.0, 1.68), "skill": (0.0, 1.5),
              "ultimate": (0.0, 5.02)},
     "ikut": {"attack_1": (0.0, 0.78), "attack_2": (0.0, 0.75), "attack_3": (0.0, 1.03), "attack_4": (0.0, 0.82),
-             "attack_5": (0.0, 1.07), "dash_attack": (0.0, 1.58), "finisher": (0.0, 2.05), "skill": (0.0, 1.17),
+             "attack_5": (0.0, 1.07), "dash_attack": (0.0, 1.17), "finisher": (0.0, 2.05), "skill": (0.0, 3.12),
              "ultimate": (0.0, 2.87)},
     "pograni": {"attack_1": (0.0, 0.9), "attack_2": (0.0, 1.07), "attack_3": (0.0, 1.1), "attack_4": (0.0, 0.93),
-                "attack_5": (0.0, 1.23), "dash_attack": (0.0, 2.13), "finisher": (0.0, 1.88), "skill": (0.0, 1.9),
+                "attack_5": (0.0, 1.23), "dash_attack": (0.0, 2.67), "finisher": (0.0, 1.88), "skill": (0.0, 1.9),
                 "ultimate": (0.0, 2.43)},
 }
 
@@ -392,6 +392,24 @@ def pick_character(by_name):
     sys.exit("알고 있는 캐릭터(관리자 여·남, 아케쿠리)의 전투 동작이 없는 원본입니다")
 
 
+# 캐릭터마다 원작 자료(metadata/battle.json)대로 정한 역할 동작. ROLES 후보보다 먼저 쓴다. 아크라이트의 연계 스킬은
+# normal_skill02이고 배틀 스킬은 그 뒤 normal_skill03이다(combo_skill·battle_dash_attack에는 소리·이펙트가 없다).
+# 포그라니치니크의 연계 스킬은 combo_skill_03이다(combo_skill에는 소리·이펙트가 없다).
+ROLE_OVERRIDES = {
+    "ikut": {"dash_attack": "A_actor_ikut_battle_normal_skill02", "skill": "A_actor_ikut_battle_normal_skill03"},
+    "pograni": {"dash_attack": "A_actor_pograni_battle_combo_skill_03"},
+}
+
+
+def role_clip(role, char, names):
+    """그 캐릭터가 그 역할로 쓸 원본 동작 이름(names에 있는 것). 없으면 None."""
+    candidates = []
+    if role in ROLE_OVERRIDES.get(char, {}):
+        candidates.append(ROLE_OVERRIDES[char][role])
+    candidates += [c.format(char=char, Char=char.capitalize(), body=CHARACTERS[char]) for c in ROLES[role]]
+    return next((c for c in candidates if c in names), None)
+
+
 def main(source, target):
     doc, data = read_glb(source)
     data = bytearray(data)
@@ -399,11 +417,10 @@ def main(source, target):
     char = pick_character(by_name)
     names = {}
     missing = []
-    for role, candidates in ROLES.items():
-        found = [c.format(char=char, Char=char.capitalize(), body=CHARACTERS[char]) for c in candidates]
-        found = [c for c in found if c in by_name]
+    for role in ROLES:
+        found = role_clip(role, char, by_name)
         if found:
-            names[role] = found[0]
+            names[role] = found
         elif role not in OPTIONAL_ROLES:
             missing.append(role)
     if missing:

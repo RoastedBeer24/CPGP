@@ -56,6 +56,33 @@ func test_weapon_timelines_follow_original_data() -> void:
 	assert_eq(male.weapon_place(&"draw", 0.41), BACK, "관리자(남)는 0.42초에 옮긴다")
 
 
+func test_props_follow_original_binding() -> void:
+	# 소품(보조 무기): 포그라니치니크는 배틀 스킬 동안 칼 대신 왼손에 소품을 들고, 평소에는 숨긴다(사용자 지적: 맨손으로
+	# 스킬을 썼다). 원작 소품 꾸러미가 있는 PC에서만 확인한다.
+	assert_eq(PlayerBody._timeline_place([0.0, 0, 4.3, 2], 1.0), 0)
+	assert_eq(PlayerBody._timeline_place([0.0, 2, 4.3, 0], 1.0), 2)
+	if not await _spawn_with_model(&"pogranichnik") or player.body.prop_count() == 0:
+		return
+	await _frames(10)
+	assert_eq(player.body.prop_place(0), 0, "평소에는 소품을 숨긴다")
+	player.sp = player.kit.max_sp
+	intent.skill_pressed = true
+	await _frames(20)
+	intent.skill_pressed = false
+	assert_eq(player.current_action(), player.kit.battle_skill, "배틀 스킬")
+	assert_eq(player.body.prop_place(0), 2, "배틀 스킬 동안 왼손에 소품을 든다")
+	assert_eq(player.body.weapon_place(), HIDDEN, "칼은 거둔다")
+	await _frames(int(player.kit.battle_skill.duration * 60.0) + 40)
+	assert_eq(player.body.prop_place(0), 0, "스킬이 끝나면 소품을 거둔다")
+	player.queue_free()
+	await _frames(1)
+	if not await _spawn_with_model(&"chen_qianyu") or player.body.prop_count() < 2:
+		return
+	await _frames(10)
+	assert_eq(player.body.prop_place(0), 1, "진천우는 평소 소품을 몸에 단다")
+	assert_eq(player.body.prop_place(1), 1)
+
+
 func test_noticing_enemy_puts_player_in_combat() -> void:
 	await _spawn()
 	assert_false(player.in_combat)

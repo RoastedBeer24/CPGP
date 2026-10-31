@@ -49,6 +49,12 @@ const FIRST_PERSON_EYE_DEPTH := 0.04
 ## 숙여야 눈(카메라)이 가슴 앞으로 나가 다리와 발이 보인다(눈 위치 그대로 내려다보면 가슴이 발을 가렸다).
 const LOOK_DOWN_SHARES: Dictionary[StringName, float] = {&"spine": 0.12, &"chest": 0.18, &"neck": 0.15, &"head": 0.3}
 const LOOK_UP_SHARES: Dictionary[StringName, float] = {&"chest": 0.08, &"neck": 0.15, &"head": 0.3}
+## 1인칭 격한 동작(공격·스킬·회피·맞음) 중: 시점을 처음 자세의 눈동자 자리(몸 가운데 위)로 모으고, 그 높이에서 이만큼(m)
+## 아래까지만 내려가게 한다. 카메라 가까운 몸은 VIEW_ACTION_FADE_FROM~TO(m)에서 점점이 지운다. 동작이 머리를 크게
+## 흔들거나 숙이면 눈을 그대로 따라간 카메라가 몸·팔 속에 묻히고, 몸이 화면을 가득 덮었다(사용자 지적).
+const FIRST_PERSON_ACTION_DIP := 0.35
+const VIEW_ACTION_FADE_FROM := 0.25
+const VIEW_ACTION_FADE_TO := 0.5
 ## 시선 쪽을 보며 옆·뒤로 갈 때 다리를 돌리는 가장 큰 각도(라디안)와 따라가는 빠르기(초당)
 const LEG_TWIST_MAX := PI * 0.5
 const LEG_TURN_RATE := 10.0
@@ -223,6 +229,12 @@ var _eye_depth := FIRST_PERSON_EYE_DEPTH
 ## 1인칭에서 보는 쪽으로 숙인 자세의 눈동자 자리(몸 기준). 숙인 자세는 그리는 프레임에만 남아서 덧입힐 때 적어 둔다.
 var _look_eye := Vector3.ZERO
 var _look_eye_ready := false
+## 처음 자세의 두 눈동자 자리(몸 기준)와, 1인칭 격한 동작 정도(0~1, 부드럽게 바뀐다)
+var _rest_eye := Vector3.ZERO
+var _fp_action := 0.0
+## 1인칭 몸 사본의 재질(카메라 가까운 곳을 지우는 거리를 바꾼다)과 지금 그 거리를 정한 격한 동작 정도
+var _view_materials: Array[Material] = []
+var _view_fade := 0.0
 var _face_axis := Vector3.ZERO
 var _face_right_axis := Vector3.ZERO
 ## 숨기는 뼈(눈 하이라이트)
@@ -242,6 +254,8 @@ var _weapon_anchors: Dictionary[int, Node3D] = {}
 var _weapon_place := WeaponPlace.HIDDEN
 var _weapon_reveal := 0.0
 var _weapon_materials: Array[ShaderMaterial] = []
+## 소품(보조 무기): [{node, idle(쉬는 자리), fight(싸우는 자리), place(지금 자리), shown, timelines}]
+var _props: Array[Dictionary] = []
 ## 원작 이펙트를 붙일 노드 (이름 → 노드)
 var _effect_anchors: Dictionary[StringName, Node3D] = {}
 ## 동작에 맞춰 원작 소리·보이스를 낸다. 꾸러미가 없으면 소리 없이 돈다.
@@ -373,9 +387,17 @@ func eye_position() -> Vector3:
 func first_person_eye() -> Vector3:
 	if _skeleton == null or _eye_bones.is_empty():
 		return eye_position()
-	if _first_person and _look_eye_ready:
-		return global_transform * _look_eye
-	return _pupil_point()
+	var eye := global_transform * _look_eye if _first_person and _look_eye_ready else _pupil_point()
+	if _fp_action > 0.0:
+		var stable := global_transform * _rest_eye
+		stable.y = maxf(eye.y, stable.y - FIRST_PERSON_ACTION_DIP)
+		eye = eye.lerp(stable, _fp_action)
+	return eye
+
+
+## 1인칭 격한 동작 정도 (테스트용)
+func first_person_action() -> float:
+	return _fp_action
 
 ## 처음 자세에서 뼈들의 가운데 (뼈대 공간)
 func _rest_middle(bones: Array[int]) -> Vector3:
@@ -409,8 +431,11 @@ func _apply_visibility() -> void:
 		else:
 			_apply_shadow_mode(geometry)
 
-## 손에 든 무기의 메시인지 (등에 멘 무기는 1인칭 카메라 뒤에 떠 보이므로 아니다)
+## 손에 든 무기·소품의 메시인지 (등에 멘 무기는 1인칭 카메라 뒤에 떠 보이므로 아니다)
 func _held_weapon_part(geometry: GeometryInstance3D) -> bool:
+	for prop in _props:
+		if int(prop["place"]) == 2 and (prop["node"] as Node3D).is_ancestor_of(geometry):
+			return true
 	return _sword != null and _weapon_place != WeaponPlace.BACK and (_sword == geometry or _sword.is_ancestor_of(geometry))
 
 ## 뼈의 몸 기준 위치. 모델이 없거나 뼈 이름이 없으면 Vector3.ZERO.
@@ -665,6 +690,8 @@ func _load_model(scene: PackedScene) -> void:
 	if not _eye_bones.is_empty() and not irises.is_empty() and irises.size() == appearance.iris_bones.size():
 		var gap := _rest_middle(irises) - _rest_middle(_eye_bones)
 		_eye_depth = clampf((_body_from_skeleton.basis * gap).dot(FORWARD), 0.0, 0.08)
+	if not _eye_bones.is_empty():
+		_rest_eye = _body_from_skeleton * _rest_middle(_eye_bones) + FORWARD * _eye_depth
 	_setup_materials()
 	_setup_animation()
 	_setup_cloth()
@@ -673,6 +700,7 @@ func _load_model(scene: PackedScene) -> void:
 	fx.name = "Fx"
 	add_child(fx)
 	fx.setup(appearance.fx_file())
+	_attach_props()
 
 ## 원본 게임 전용 셰이더로 그리던 재질을 Godot에서 비슷하게 보이게 바꾼다.
 ##   - 만화풍(셀 셰이딩, toon.gdshader): 빛을 받는 정도를 원본의 색 띠(ramp)로 칠하고, 테두리 빛과 외곽선
@@ -874,7 +902,12 @@ func _view_copy(source: MeshInstance3D, hidden_bones: Dictionary[int, bool]) -> 
 		# 정점 형식 중 배열만 봐서는 모르는 것(뼈 8개, 추가 UV 형식)은 그대로 넘긴다.
 		var custom_formats := ((1 << (Mesh.ARRAY_FORMAT_CUSTOM_BITS * 4)) - 1) << Mesh.ARRAY_FORMAT_CUSTOM_BASE
 		body.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, format & (Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS | custom_formats))
-		materials.append(_near_faded(material))
+		var faded := _near_faded(material)
+		var pass_material := faded
+		while pass_material != null:
+			_view_materials.append(pass_material)
+			pass_material = pass_material.next_pass
+		materials.append(faded)
 	if body.get_surface_count() == 0:
 		return null
 	var copy := MeshInstance3D.new()
@@ -891,6 +924,24 @@ func _view_copy(source: MeshInstance3D, hidden_bones: Dictionary[int, bool]) -> 
 	for i in materials.size():
 		_set_material(copy, i, materials[i])
 	return copy
+
+
+## 1인칭 몸 사본이 카메라 가까운 곳을 지우는 거리를 격한 동작 정도에 맞춘다(바뀐 만큼이 작으면 그대로 둔다).
+func _update_view_fade() -> void:
+	if absf(_fp_action - _view_fade) < 0.03 and not (_fp_action == 0.0 and _view_fade != 0.0):
+		return
+	_view_fade = _fp_action
+	var from := lerpf(VIEW_NEAR_FADE_FROM, VIEW_ACTION_FADE_FROM, _view_fade)
+	var to := lerpf(VIEW_NEAR_FADE_TO, VIEW_ACTION_FADE_TO, _view_fade)
+	for material in _view_materials:
+		var shader := material as ShaderMaterial
+		var base := material as BaseMaterial3D
+		if shader != null:
+			shader.set_shader_parameter(&"near_fade_from", from)
+			shader.set_shader_parameter(&"near_fade_to", to)
+		elif base != null:
+			base.distance_fade_min_distance = from
+			base.distance_fade_max_distance = to
 
 
 ## 카메라에 아주 가까운 곳(VIEW_NEAR_FADE_FROM~TO)을 점점이 지우는 재질 사본 (1인칭 몸)
@@ -1465,6 +1516,11 @@ func _update_actions(delta: float) -> void:
 		fade = IDLE_FADE_IN if showing else (IDLE_FADE_OUT if _is_standing() else ACTION_FADE_OUT)
 	_action_amount = move_toward(_action_amount, 1.0 if showing else 0.0, delta / fade)
 	_action_showing = showing
+	# 1인칭 격한 동작: 대기 연출이 아닌 동작(공격·스킬·회피·맞음)을 보이는 동안
+	var intense := showing and not idle_clip
+	_fp_action = move_toward(_fp_action, 1.0 if intense else 0.0, delta / (0.12 if intense else 0.35))
+	if _first_person:
+		_update_view_fade()
 	_tree.set(&"parameters/action/blend_amount", _action_amount)
 	if trail != null:
 		# 원작 이펙트(칼빛)가 있는 동작은 임시 검기를 그리지 않는다.
@@ -1546,7 +1602,8 @@ func _bend_to_look() -> void:
 	if not _first_person or _eye_bones.is_empty():
 		_look_eye_ready = false
 		return
-	var pitch := player.camera_pitch
+	# 격한 동작 중에는 숙이지 않는다(동작이 이미 몸을 크게 움직인다).
+	var pitch := player.camera_pitch * (1.0 - _fp_action)
 	var shares := LOOK_DOWN_SHARES if pitch < 0.0 else LOOK_UP_SHARES
 	for role: StringName in shares:
 		_rotate_bone(role, RIGHT, pitch * shares[role])
@@ -1775,8 +1832,71 @@ func _make_weapon_materials() -> void:
 			_weapon_materials.append(material)
 
 
+## 소품(보조 무기, 원작 꾸러미의 props)을 모델의 자리 노드에 붙여 둔다(처음에는 숨김).
+func _attach_props() -> void:
+	if fx == null:
+		return
+	for info: Dictionary in fx.props():
+		var scene := fx.prop_scene(str(info.get("file", "")))
+		var idle := _model.find_child(str(info.get("idle", "")), true, false) as Node3D
+		var fight := _model.find_child(str(info.get("fight", "")), true, false) as Node3D
+		if scene == null or (idle == null and fight == null):
+			continue
+		var node := scene.instantiate() as Node3D
+		node.name = "Prop%d" % _props.size()
+		for geometry: Node in node.find_children("*", "GeometryInstance3D", true, false):
+			(geometry as GeometryInstance3D).layers |= CHARACTER_RENDER_LAYER
+		var rest := idle if idle != null else fight
+		rest.add_child(node)
+		node.visible = false
+		_props.append({"node": node, "idle": rest, "fight": fight if fight != null else rest, "place": 0,
+				"shown": bool(info.get("shown", false)), "timelines": info.get("timelines", {})})
+
+
+## 소품 수와 그 소품이 지금 있는 자리(0 숨김, 1 쉬는 자리, 2 싸우는 자리) (테스트용)
+func prop_count() -> int:
+	return _props.size()
+
+func prop_place(index: int) -> int:
+	return int(_props[index]["place"])
+
+
+## 소품을 동작마다 원작 시간표대로 쉬는 자리·싸우는 자리에 두거나 숨긴다. 시간표가 없는 동작(이동·대기)에서는 정한
+## 대로 쉬는 자리에 보이거나 숨긴다. 포그라니치니크는 배틀 스킬·처형·궁극기 동안 칼 대신 왼손에 소품을 든다.
+func _update_props() -> void:
+	for prop in _props:
+		var timelines: Dictionary = prop["timelines"]
+		var place := 1 if prop["shown"] else 0
+		if _action_showing and timelines.has(String(_action_clip)):
+			place = _timeline_place(timelines[String(_action_clip)], _action_elapsed)
+		elif not _action_showing and timelines.has(String(locomotion)):
+			place = _timeline_place(timelines[String(locomotion)], 0.0)
+		var node: Node3D = prop["node"]
+		node.visible = place != 0
+		if place != 0:
+			var anchor: Node3D = prop["fight"] if place == 2 else prop["idle"]
+			if node.get_parent() != anchor:
+				node.reparent(anchor, false)
+				node.transform = Transform3D.IDENTITY
+		if place != int(prop["place"]):
+			prop["place"] = place
+			if _first_person:
+				_apply_visibility()
+
+
+## 시간표([시각, 자리, ...])에서 time초의 자리
+static func _timeline_place(timeline: Array, time: float) -> int:
+	var place := 0
+	for i in range(0, timeline.size() - 1, 2):
+		if float(timeline[i]) > time:
+			break
+		place = int(timeline[i + 1])
+	return place
+
+
 ## 지금 보이는 동작에 맞춰 무기를 옮기고, 나타나거나 사라지게 한다.
 func _update_weapon(delta: float) -> void:
+	_update_props()
 	if _sword == null:
 		return
 	var wanted := _wanted_weapon_place()

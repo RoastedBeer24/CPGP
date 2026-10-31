@@ -9,17 +9,20 @@
 그 파일들(assets/audio_wav, characters/*/effects)이 들어 있다. 게임 이름(attack_1 등)은 tools/extract_character.py의
 ROLES와 같고, 그 도구가 잘라 쓰는 구간(TRIMS) 밖의 소리는 뺀다.
 
-zip 안에는 fx.json(동작 이름 → 시각별 소리·보이스·이펙트)과 audio/*.wav, effects/*.glb가 들어간다.
+zip 안에는 fx.json(동작 이름 → 시각별 소리·보이스·이펙트, 소품 목록)과 audio/*.wav, effects/*.glb, props/*.glb(보조 무기)가
+들어간다.
 게임은 실행 중에 이 zip을 읽는다(src/player/character_fx.gd). 원작 자산이라 재배포할 수 없으므로 저장소에 올리지 않고
 비공개 에셋 저장소에만 올린다(docs/assets.md).
 """
 import json
 import os
 import sys
+import tempfile
 import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from extract_character import CHARACTERS, LOOPING, ROLES, TRIM_OVERRIDES, TRIMS  # noqa: E402
+from extract_character import (LOOPING, ROLES, TRIM_OVERRIDES, TRIMS, read_glb, role_clip, save_compact,  # noqa: E402
+                               strip_extra_meshes)
 
 LANGUAGES = ["KR", "JP", "EN", "CN"]
 # 원본 꾸러미의 캐릭터 폴더 이름(characters/<이름>) → 동작 이름의 캐릭터 앞부분
@@ -34,13 +37,65 @@ BORROWED = {
 }
 
 
+# 소품(보조 무기): 원작 무기 연결 정보(weapon_binding.json)의 battle.copies 가운데 칼 다음 것들. 캐릭터 →
+# [(copy의 index, 꾸러미의 소품 이름(object_catalog), 시간표가 없는 동작(이동·대기)에서 쉬는 자리에 보이는지)].
+# 진천우는 싸울 때 왼손에 wpn_misc_0002를 들고(평소엔 inner 자리) 허리(outer)에 wpn_misc_0003을 단다. 포그라니치니크는
+# 처형·배틀 스킬·궁극기 동안 칼을 거두고 왼손에 wpn_misc_0035를 든다(그 밖에는 숨김).
+PROPS = {
+    "chen": [(10, "deco:1", True), (11, "deco:2", True)],
+    "pograni": [(10, "deco:7", False)],
+}
+
+
 def wav_name(m4a):
     return os.path.splitext(m4a)[0] + ".wav"
 
 
+def prop_bytes(path):
+    """소품 glb에서 먼 거리용 메시(lod1~3)와 그림자 대용 메시를 빼고 쓰는 데이터만 남긴 glb 내용."""
+    doc, data = read_glb(path)
+    doc.setdefault("animations", [])
+    strip_extra_meshes(doc)
+    with tempfile.TemporaryDirectory() as folder:
+        out = os.path.join(folder, "prop.glb")
+        save_compact(doc, bytearray(data), out)
+        with open(out, "rb") as f:
+            return f.read()
+
+
+def collect_props(extras, who, char, catalog):
+    """소품 목록(fx.json의 props)과 zip에 넣을 소품 파일(이름 → 내용). 동작별 시간표는 [시각, 자리, ...]이고
+    자리는 0 숨김, 1 쉬는 자리(idle), 2 싸우는 자리(fight)다."""
+    props, files = [], {}
+    binding_path = os.path.join(extras, "characters", who, "weapon_binding.json")
+    clips_path = os.path.join(extras, "characters", who, "metadata", "clips.json")
+    if char not in PROPS or not os.path.isfile(binding_path) or not os.path.isfile(clips_path):
+        return props, files
+    binding = json.load(open(binding_path, encoding="utf-8"))
+    file_of = {c["name"]: c["file"] for c in json.load(open(clips_path, encoding="utf-8"))}
+    copies = binding["battle"]["copies"]
+    for copy_index, deco, shown in PROPS[char]:
+        slot = next(i for i, c in enumerate(copies) if c["index"] == copy_index)
+        info = catalog.get(deco) or {}
+        source = os.path.join(extras, info.get("glb", ""))
+        if not os.path.isfile(source):
+            print("  소품 모델이 없어 건너뜀:", deco)
+            continue
+        timelines = {}
+        for role in ROLES:
+            name = role_clip(role, char, file_of)
+            per_copy = binding["battle"]["clips"].get(file_of.get(name, "")) if name else None
+            if per_copy and slot < len(per_copy):
+                timelines[role] = [x for t, v in per_copy[slot] for x in (round(t, 4), int(v))]
+        name = "props/%d.glb" % copy_index
+        files[name] = prop_bytes(source)
+        props.append({"file": name, "idle": copies[slot].get("idle"), "fight": copies[slot].get("fight"),
+                      "shown": shown, "timelines": timelines})
+    return props, files
+
+
 def main(extras, who, target):
     char = WHO[who]
-    body = CHARACTERS[char]
     events = json.load(open(os.path.join(extras, "characters", who, "animation_events.json"), encoding="utf-8"))
     # 꾸러미마다 이름이 조금 다르다: 이펙트 목록(effect_catalog.json 또는 object_catalog.json), 소리 폴더
     # (assets/audio_wav 또는 audio/wav), 파티클 설정 키(particle_data 또는 particles).
@@ -70,9 +125,9 @@ def main(extras, who, target):
                 missing.add(wav)
         return found
 
-    for role, candidates in ROLES.items():
-        names = [c.format(char=char, Char=char.capitalize(), body=body) for c in candidates]
-        entry = next((events[n] for n in names if n in events), None)
+    for role in ROLES:
+        name = role_clip(role, char, events)
+        entry = events[name] if name else None
         if entry is None:
             continue
         end = trims[role][1] if role in trims else float(entry.get("duration", 0.0))
@@ -147,7 +202,8 @@ def main(extras, who, target):
     camera_path = os.path.join(extras, "characters", who, "metadata", "camera.json")
     camera = json.load(open(camera_path, encoding="utf-8")) if os.path.isfile(camera_path) else {}
 
-    manifest = {"character": char, "languages": LANGUAGES, "roles": roles,
+    props, prop_files = collect_props(extras, who, char, catalog)
+    manifest = {"character": char, "languages": LANGUAGES, "roles": roles, "props": props,
                 "camera": camera.get("shots", {}), "camera_poses": camera.get("pages", {}).get("poses", {})}
     os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -156,8 +212,11 @@ def main(extras, who, target):
             archive.write(os.path.join(audio_dir, wav), "audio/" + wav)
         for name, source in sorted(effect_files.items()):
             archive.write(source, "effects/" + name)
+        for name, content in sorted(prop_files.items()):
+            archive.writestr(name, content)
     size = os.path.getsize(target)
-    print("%s: 동작 %d개, 소리 %d개, 이펙트 %d개, %.1fMB" % (target, len(roles), len(audio_files), len(effect_files), size / 1e6))
+    print("%s: 동작 %d개, 소리 %d개, 이펙트 %d개, 소품 %d개, %.1fMB" % (target, len(roles), len(audio_files), len(effect_files),
+                                                              len(props), size / 1e6))
     for role, data in roles.items():
         print("  %-12s 소리 %2d  보이스 %d  이펙트 %d" % (role, len(data["sounds"]), len(data["voices"]), len(data["effects"])))
     if missing:

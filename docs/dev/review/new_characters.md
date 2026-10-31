@@ -35,7 +35,23 @@
 | 배율·경직 | 관리자(여)를 기준으로 한 기본값(1~5타 0.8·0.9·1.4·1.5·2.2배, 스킬 2.6배, 궁극기 9배를 타격 수로 나눔) | `kit.tres`, `tools/draft_kit.py` |
 | 타격 시각·내디딤·회전 | 원작 동작에서 잰 값(무기가 가장 빠른 순간) | `tools/draft_kit.py`로 다시 만들 수 있음 |
 | 동작 길이 | 마지막 타격 뒤 0.45~0.8초까지 | `tools/extract_character.py`의 `TRIM_OVERRIDES` |
-| 아크라이트 배틀 스킬 | 원작 세 부분 중 둘째 동작(normal_skill02) | `tools/extract_character.py`의 `ROLES` |
+| 아크라이트 배틀 스킬 | (7차에서 바뀜) 원작 battle.json대로 셋째 동작 normal_skill03, 둘째(normal_skill02)는 연계 스킬 | `tools/extract_character.py`의 `ROLE_OVERRIDES` |
 | 포그라니치니크 궁극기 | 방패병 부대는 그리지 않고, 본인 동작의 두 번 휘두름으로 앞쪽을 친다 | `kit.tres`의 `ultimate` |
 | 전용 무기 | 세 자루 모두 ★6, 공격력 +15% | `data/weapons/*.tres` |
 | 옷자락 물리 | 아직 넣지 않음 (원작 동작의 움직임 그대로) | `appearance.tres`의 `cloth_chains` |
+
+## 7차 고침 (사용자 지적)
+- [ ] 궁극기를 쓴 뒤 카메라가 높은 곳에서 내려다보는 채로 남지 않고 원래 자리로 부드럽게 돌아오는가 (아크라이트·포그라니치니크)
+- [ ] 포그라니치니크가 배틀 스킬·처형·궁극기 동안 칼을 거두고 왼손에 원작 소품(wpn_misc_0035)을 들고 싸우다가 칼을 다시 드는가
+- [ ] 진천우가 왼손에 칼집(wpn_misc_0002)을 들고, 허리에 장식(wpn_misc_0003)을 다는가
+- [ ] 아크라이트의 대시 공격(천둥의 울림)과 배틀 스킬(질풍 섬광), 포그라니치니크의 대시 공격(보름달 참격)에 원작 소리·이펙트가 나오는가 (예전에는 소리·이펙트가 없는 다른 동작이었다)
+- [ ] 1인칭에서 공격·스킬·회피 같은 격한 동작 중에 몸이 화면을 가득 덮거나 시점이 몸속에 묻히지 않는가
+
+| 7차에 제가 정한 것 | 정한 값 | 바꾸려면 |
+|---|---|---|
+| 아크라이트 동작 | 연계 스킬 normal_skill02, 배틀 스킬 normal_skill03 (원작 battle.json) | `tools/extract_character.py`의 `ROLE_OVERRIDES` |
+| 포그라니치니크 대시 공격 | combo_skill_03 (원작 battle.json의 연계 스킬) | 같은 곳 |
+| 소품 | 원작 무기 연결 정보의 둘째 무기부터: 진천우 칼집·장식(평소에도 보임), 포그라니치니크 왼손 소품(스킬 동안만) | `tools/extract_character_fx.py`의 `PROPS` |
+| 궁극기 컷 되돌아오기 | 원작 자료가 0이어도 0.35초 동안 섞어 돌아옴 | `Player.SHOT_MIN_EASE_OUT` |
+| 1인칭 격한 동작 | 시점을 처음 자세의 눈 자리로 모으고 0.35m까지만 내려감, 숙이기 끔, 카메라 0.25~0.5m 안의 몸을 점점이 지움 | `PlayerBody.FIRST_PERSON_ACTION_DIP`, `VIEW_ACTION_FADE_*` |
+| 포그라니치니크 궁극기 방패 | 방패병 자리(Spawn01~04)의 방패는 아직 그리지 않음 | - |

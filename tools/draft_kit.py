@@ -159,10 +159,9 @@ def main(source, battle_path, kit_id, display_name, target):
     char = ec.pick_character(by_name)
     clips = {}
     for role in list(WINDOWS) + ["plunge_start", "plunge_end"]:
-        candidates = [c.format(char=char, Char=char.capitalize(), body=ec.CHARACTERS[char]) for c in ec.ROLES[role]]
-        found = [c for c in candidates if c in by_name]
+        found = ec.role_clip(role, char, by_name)
         if found:
-            clips[role] = Clip(doc, data, by_name[found[0]], nodes, chains)
+            clips[role] = Clip(doc, data, by_name[found], nodes, chains)
     battle = json.load(open(battle_path, encoding="utf-8"))
     names = {e["id"]: e.get("name", {}).get("KR", "") for e in battle["entries"]}
 

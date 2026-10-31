@@ -41,6 +41,10 @@ var _voice_ready_at := 0.0
 ## 미리 읽어 둘 이펙트 [glb 파일, 파티클 파일]. 처음 틀 때 멈칫하지 않게 한 프레임에 하나씩 읽는다.
 var _preload: Array[Array] = []
 var _sounds_started := 0
+## 소품(보조 무기) 목록: [{file, idle, fight, shown, timelines}] (tools/extract_character_fx.py의 PROPS)
+var _props: Array = []
+## 읽은 소품 장면: "zip|파일" → PackedScene
+static var _prop_scenes: Dictionary[String, PackedScene] = {}
 
 
 ## 꾸러미를 읽는다. 없거나 읽지 못하면 false (소리 없이 돈다).
@@ -57,6 +61,7 @@ func setup(zip_path: String) -> bool:
 	_streams = _loaded[zip_path]["streams"]
 	_cameras = _loaded[zip_path].get("camera", {})
 	_camera_poses = _loaded[zip_path].get("camera_poses", {})
+	_props = _loaded[zip_path].get("props", [])
 	_voice = _make_player(&"Voice")
 	for role: String in _roles:
 		for effect: Dictionary in (_roles[role] as Dictionary).get("effects", []):
@@ -131,6 +136,38 @@ func fire_between(role: StringName, from: float, to: float) -> void:
 		var time := float(voice["time"])
 		if time > from and time <= to:
 			_play_voice(voice)
+
+
+## 소품(보조 무기) 목록. 항목마다 file(zip 안 모델), idle·fight(쉬는 자리·싸우는 자리 노드 이름), shown(시간표가 없는
+## 동작에서 쉬는 자리에 보이는지), timelines(동작 이름 → [시각, 자리, ...], 자리 0 숨김·1 쉬는 자리·2 싸우는 자리)가 있다.
+func props() -> Array:
+	return _props
+
+
+## 소품 모델 장면(zip 안 glb를 실행 중에 읽는다, 플레이어끼리 한 번만). 읽지 못하면 null.
+func prop_scene(file: String) -> PackedScene:
+	var key := "%s|%s" % [_source, file]
+	if _prop_scenes.has(key):
+		return _prop_scenes[key]
+	var scene: PackedScene = null
+	var reader := ZIPReader.new()
+	if reader.open(_source) == OK:
+		var glb := reader.read_file(file)
+		reader.close()
+		var document := GLTFDocument.new()
+		var state := GLTFState.new()
+		if not glb.is_empty() and document.append_from_buffer(glb, "", state) == OK:
+			var root := document.generate_scene(state)
+			if root != null:
+				CharacterAppearance._add_mipmaps(root)
+				for node: Node in root.find_children("*", "", true, false):
+					node.owner = root
+				scene = PackedScene.new()
+				if scene.pack(root) != OK:
+					scene = null
+				root.free()
+	_prop_scenes[key] = scene
+	return scene
 
 
 ## 지금까지 낸 효과음 수 (테스트용)
@@ -263,4 +300,5 @@ static func _read_package(zip_path: String) -> Dictionary:
 			if stream != null:
 				streams[entry.get_file()] = stream
 	reader.close()
-	return {"roles": manifest.get("roles", {}), "streams": streams, "camera": cameras, "camera_poses": manifest.get("camera_poses", {})}
+	return {"roles": manifest.get("roles", {}), "streams": streams, "camera": cameras, "camera_poses": manifest.get("camera_poses", {}),
+			"props": manifest.get("props", [])}

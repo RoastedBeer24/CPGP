@@ -103,6 +103,25 @@ func test_first_person_body_faces_where_you_look() -> void:
 		assert_true(player.body.first_person_body_visible(), "공격하는 동안에도 몸과 휘두르는 팔이 보인다")
 
 
+func test_first_person_steadies_during_attacks() -> void:
+	# 격한 동작 중에는 시점을 몸 가운데 위(처음 자세의 눈 자리)로 모아 몸·팔 속에 묻히지 않게 하고, 끝나면 다시
+	# 지금 동작의 눈을 따라간다(사용자 지적: 격한 동작에서 시점이 몸속에 묻혔다).
+	player.toggle_first_person()
+	await _frames(30)
+	if not player.body.animated:
+		return
+	intent.attack_pressed = true
+	await _frames(12)
+	assert_true(player.body.first_person_action() > 0.8, "공격 중: %s" % player.body.first_person_action())
+	var eye := player.body.first_person_eye()
+	var flat := Vector2(eye.x - player.global_position.x, eye.z - player.global_position.z).length()
+	assert_true(flat < 0.2, "시점이 몸 가운데 위에 있다: %.2f" % flat)
+	assert_true(eye.y - player.global_position.y > 1.0, "너무 낮게 내려가지 않는다: %.2f" % (eye.y - player.global_position.y))
+	intent.attack_pressed = false
+	await _frames(150)
+	assert_true(player.body.first_person_action() < 0.05, "동작이 끝나면 다시 눈을 따라간다")
+
+
 func test_first_person_legs_follow_movement() -> void:
 	# 1인칭은 몸이 시선 쪽을 본다. 옆으로 가면 다리만 가는 쪽으로 돌리고, 뒤로 가면 이동 동작을 거꾸로 튼다
 	# (예전에는 옆걸음에도 앞으로 뛰는 다리가 보였다).
@@ -242,3 +261,18 @@ func test_camera_shot_plays_then_returns() -> void:
 	await _frames(60)
 	assert_false(player.cinematic, "컷이 끝나면 원래 카메라로 돌아온다")
 	assert_almost_eq(player.camera_length(), player.config.camera_distance, 0.1)
+
+
+func test_camera_shot_without_ease_out_restores_camera_direction() -> void:
+	# 원작 자료의 되돌아오기 시간이 0인 컷(아크라이트 궁극기): 끝난 뒤 카메라가 컷의 마지막 방향(위에서 내려다봄)으로
+	# 남지 않고, 원래 카메라 방향과 시야각으로 돌아온다.
+	var frames: Array = []
+	var down := Quaternion(Vector3.RIGHT, deg_to_rad(-50.0))
+	for i in 31:
+		frames.append_array([0.0, 6.0, -5.0, down.x, down.y, down.z, down.w, 70.0])
+	player.play_camera_shot({"duration": 0.5, "easeOut": 0, "follow": [true, true], "rate": 60.0, "frames": frames})
+	await _frames(90)
+	assert_false(player.cinematic)
+	var tilt := player.camera.global_basis.z.angle_to(player.camera_rig.global_basis.z)
+	assert_true(tilt < deg_to_rad(1.0), "카메라가 원래 방향으로: %.1f도" % rad_to_deg(tilt))
+	assert_almost_eq(player.camera.fov, GameSettings.fov, 1.0, "시야각도 원래대로")
