@@ -35,7 +35,7 @@
 | 원작 이펙트 | 검수 대기 | 사이트 자료로 원작 셰이더(VFXBaseV2)와 파티클 시스템을 다시 만듦: 기본 공격·처형·배틀 스킬의 칼빛·빛·연기·불꽃 (`docs/dev/effects.md`, 체크리스트는 `docs/dev/review/motions.md`) |
 | 아케쿠리 추가 (M5 일부) | 검수 대기 | 원작 아케쿠리(chr_0019_karin) 모델·동작 47개·무기(엣지 오브 라이트)·소리·보이스·이펙트·카메라, 기본 공격 4연속·배틀 스킬·궁극기(동료 SP 회복 `rally_sp`)·처형·낙하 공격 (`docs/dev/review/akekuri.md`) |
 | 1인칭·무기·캐릭터 고르기 (6차) | 검수 대기 | 1인칭에서 내 몸(머리·목·옷깃을 뺀 사본)과 손이 보이고 시점은 각 캐릭터의 눈동자(내려다보면 고개·윗몸을 숙임, 옆·뒤로 가면 다리만 돌림), 공식 초상화 아이콘으로 캐릭터 고르기, 같은 무기군 안에서 무기 고르기, 무기는 싸우는 동작에서만, 대시 공격 = 원작 연계 스킬, 아케쿠리 꼬리·귀 물리, 1인칭 이펙트 흐림 (`docs/dev/review/fp_loadout.md`) |
-| 진천우·아크라이트·포그라니치니크 (M5) | 작업 예정 | 꾸러미를 받음(`!File/Chen_Arclight_Pogranichnik_Complete_Assets.zip`: chr_0005_chen, chr_0007_ikut, chr_0029_pograni, 한손검 셋). 이름은 '첸'이 아니라 진천우 |
+| 진천우·아크라이트·포그라니치니크 (M5) | 검수 대기 | 원작 chr_0005_chen·chr_0007_ikut·chr_0029_pograni의 모델·동작 49개·전용 한손검(숭배의 시선, 십이문, 끝없는 방랑)·소리·보이스·이펙트·궁극기 카메라. 전투 구성은 `tools/draft_kit.py`가 원작 동작을 재서 만든 초안. 이름은 '첸'이 아니라 진천우 (`docs/dev/review/new_characters.md`) |
 | M4 거점·영구 성장 ~ M6 다듬기 | 예정 | 구상서 §6 |
 
 ### 지금 구조
@@ -70,6 +70,7 @@ godot --path . -- --single    # 메뉴 건너뛰고 혼자 하기 (--host, --joi
 python3 tools/extract_character.py <원본_Animated.glb> <결과.glb>   # 캐릭터 모델에 쓸 동작만 뽑기 (관리자 여·남, 아케쿠리 자동 구분)
 python3 tools/extract_character.py "!File/Akekuri_Assets/models/Akekuri_Animated.glb" assets/characters/akekuri/akekuri.glb
 python3 tools/extract_character_fx.py "!File/Akekuri_Assets" Akekuri assets/characters/akekuri/akekuri_fx.zip
+python3 tools/draft_kit.py <원본_Animated.glb> <metadata/battle.json> <이름> <표시 이름> data/characters/<이름>/kit.tres   # 새 캐릭터 전투 구성 초안(원작 동작을 잼)
 godot --path . -- --single --autoplay=combo   # 확인용: combo(연속 공격·스킬·궁극기), plunge(낙하 공격), finisher(처형), run(달리기)
 tools/capture.sh build/screenshots/fp 120 --single --first-person --pitch=-60   # 1인칭에서 내려다보기 (--third-person: 저장된 1인칭을 무시)
 python tools/make_icons.py   # 공식 초상화(!File/Portraits/)에서 캐릭터 고르기 아이콘 만들기 (Pillow가 있는 python)
@@ -164,3 +165,6 @@ python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장�
 - **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.
 - **적 모델 동작:** 원작 적 동작도 몸(뿌리 뼈)이 앞으로 2~12m 나가고 돈다. `tools/extract_enemy.py`가 모두 제자리로 묶고 적은 게임이 움직인다(이동 속도, `lunge`). 공격 동작은 예고 동안 `clip_from`에서 `clip_hit`(무기가 가장 빠른 순간, `tools/measure_attack_clips.py --weapon=`)까지를 예고 시간에 맞춘 빠르기로 튼다. 예고가 짧다고 앞부분을 건너뛰면, 로댄의 내려찍기(5.5m 뛰어올랐다 내리꽂음)가 이미 공중에서 시작해 보스가 화면 위로 사라졌다. 저격수(lbhunt)는 무기가 빠르게 움직이지 않는 원거리 적이라 쏘는 반동(작은 속도 봉우리)으로 시각을 찾았다. 사수(hvybow)는 이름과 달리 근접이다.
 - **본 크러셔 꾸러미:** 일반 적에는 소리·이펙트 자료가 없고, 로댄·네파리스(1·2형태)에만 소리가 있다. 적 모델은 기본 재질(StandardMaterial3D)로 그려도 읽기 좋다. 덩치 큰 적이 붙으면 카메라가 몸속에 들어가서 카메라 가까운 곳(0.3~0.9m)은 점점이 지운다.
+- **새 꾸러미 형식(진천우·아크라이트·포그라니치니크):** 모델이 `characters/<ID>/<ID>_Animated.glb`, 이펙트 목록이 `object_catalog.json`(파티클 키 `particles`), 소리가 `audio/wav`다. `tools/extract_character_fx.py`는 두 형식을 다 읽는다(캐릭터 폴더 이름 `chr_0005_chen` 등을 `WHO`에 적는다). 기술의 한국어 이름은 `metadata/battle.json`의 `name.KR`, 무기 자리는 `weapon_binding.json`(동작 이름 ↔ 원본 파일은 `metadata/clips.json`).
+- **같은 이름의 뼈대가 여럿:** 포그라니치니크 원본에는 궁극기 방패병(`Soldier_Root` 아래 Rush01~04)의 뼈대 4벌이 본인과 같은 이름으로 들어 있다. 재는 도구가 이름이 같은 뼈 중 마지막(움직이지 않는 사본)을 골라 타격을 못 찾았다: 첫 번째를 쓴다. 추출할 때 이 노드들을 장면에서 빼는데(`DROPPED_NODES`), 파일에 같은 이름으로 남아 있으면 Godot가 본인 뼈 이름을 `Bip001_Pelvis_2`처럼 바꿔 몸이 움직이지 않았다. 빼낸 노드는 이름도 바꾼다. 뼈대(Skeleton3D)가 여럿이면 몸 코드는 골반 뼈가 있는 것을 쓴다.
+- **새 캐릭터 공통 동작:** 점프 시작·회피는 공통 동작 이름 끝에 `_01`이 붙기도 하고(`girl_run_jump_start_l_01`), 아크라이트의 연계 스킬은 `ikut_combo_skill`(battle_ 없음), 배틀 스킬은 세 부분(`normal_skill01~03`), 포그라니치니크는 `gentleman` 공통 동작과 소문자 `_01` 캐릭터 화면 동작이다. `ROLES` 후보에 넣어 두었다.

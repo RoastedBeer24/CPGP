@@ -7,6 +7,9 @@ const PATHS: Array[String] = [
 	"res://data/characters/endministrator_f/character.tres",
 	"res://data/characters/endministrator_m/character.tres",
 	"res://data/characters/akekuri/character.tres",
+	"res://data/characters/chen_qianyu/character.tres",
+	"res://data/characters/arclight/character.tres",
+	"res://data/characters/pogranichnik/character.tres",
 ]
 
 

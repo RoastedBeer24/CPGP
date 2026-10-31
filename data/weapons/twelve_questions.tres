@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://src/combat/weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"twelve_questions"
+display_name = "십이문"
+description = "아크라이트의 전용 한손검(원작 wpn_sword_0018, Twelve Questions). 공격력이 크게 오른다."
+weapon_type = &"sword"
+rarity = 6
+model_path = "res://assets/weapons/twelve_questions.glb"
+external_file = "weapons/twelve_questions.glb"
+attack_bonus = 0.15

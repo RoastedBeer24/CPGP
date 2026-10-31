@@ -14,8 +14,9 @@ import json
 import struct
 import sys
 
-# 캐릭터 전용 동작의 앞부분 → 그 캐릭터의 공통 동작(이동 등) 앞부분. karin은 아케쿠리(chr_0019_karin)다.
-CHARACTERS = {"endminf": "girl", "endminm": "boy", "karin": "girl"}
+# 캐릭터 전용 동작의 앞부분 → 그 캐릭터의 공통 동작(이동 등) 앞부분. karin은 아케쿠리(chr_0019_karin), chen은 진천우,
+# ikut은 아크라이트, pograni는 포그라니치니크다(포그라니치니크의 공통 동작은 gentleman).
+CHARACTERS = {"endminf": "girl", "endminm": "boy", "karin": "girl", "chen": "girl", "ikut": "girl", "pograni": "gentleman"}
 
 # 게임에서 부르는 이름 -> 원본 애니메이션 이름 후보({char}: endminf/endminm/karin, {Char}: 첫 글자를 대문자로,
 # {body}: girl/boy). 앞의 것부터 찾는다. 아케쿠리는 캐릭터 화면 동작이 "A_actor_Karin_ui_..._01"이다.
@@ -29,11 +30,11 @@ ROLES = {
     "battle_idle": ["A_actor_{char}_battle_loop"],
     # 점프: 도약(제자리, 달리며) -> 낙하 -> 착지(제자리, 달리며)
     "jump_idle": ["A_actor_{body}_idle_jump_start_l", "A_actor_{char}_idle_jump_start_l"],
-    "jump_run": ["A_actor_{body}_run_jump_start_l", "A_actor_{body}_run_jump_start_l_02"],
+    "jump_run": ["A_actor_{body}_run_jump_start_l", "A_actor_{body}_run_jump_start_l_02", "A_actor_{body}_run_jump_start_l_01"],
     "fall": ["A_actor_{body}_fall_loop_l"],
     "land": ["A_actor_{body}_idle_jump_land_l"],
     "run_land": ["A_actor_{body}_run_jump_land_l"],
-    "jump_sprint": ["A_actor_{body}_sprint_jump_start_l", "A_actor_{body}_sprint_jump_start_l_02"],
+    "jump_sprint": ["A_actor_{body}_sprint_jump_start_l", "A_actor_{body}_sprint_jump_start_l_02", "A_actor_{body}_sprint_jump_start_l_01"],
     "sprint_land": ["A_actor_{body}_sprint_jump_land_l"],
     # 높은 곳에서 떨어져 무릎을 굽히며 착지
     "land_heavy": ["A_actor_{body}_idle_jump_land_heavy_l"],
@@ -51,15 +52,15 @@ ROLES = {
     "draw": ["A_actor_{char}_idle_to_battle"],
     "sheathe": ["A_actor_{char}_battle_to_idle"],
     # 캐릭터 화면: 들어오기 → 대기, 쓰다듬기 반응, 무기 보기(왼손에 무기를 든다) ↔ 대기
-    "ui_enter": ["A_actor_{char}_ui_overview_start", "A_actor_{Char}_ui_overview_start_01"],
-    "ui_idle": ["A_actor_{char}_ui_overview_loop", "A_actor_{Char}_ui_overview_loop_01"],
+    "ui_enter": ["A_actor_{char}_ui_overview_start", "A_actor_{Char}_ui_overview_start_01", "A_actor_{char}_ui_overview_start_01"],
+    "ui_idle": ["A_actor_{char}_ui_overview_loop", "A_actor_{Char}_ui_overview_loop_01", "A_actor_{char}_ui_overview_loop_01"],
     "ui_react": ["A_actor_{char}_ui_relax_react", "A_actor_{char}_relax_react"],
     "ui_to_weapon": ["A_actor_{char}_ui_overview_to_weapon", "A_actor_{Char}_ui_overview_to_weapon_01"],
     "ui_weapon": ["A_actor_{char}_ui_overview_weapon_loop", "A_actor_{Char}_ui_overview_weapon_loop_01"],
     "ui_weapon_out": ["A_actor_{char}_ui_weapon_to_overview", "A_actor_{Char}_ui_weapon_to_overview_01"],
     # 회피: 캐릭터 전용 동작이 없으면(아케쿠리) 공통 동작
-    "dodge_f": ["A_actor_{char}_battle_dodge_f_l", "A_actor_{body}_battle_dodge_f_l"],
-    "dodge_b": ["A_actor_{char}_battle_dodge_b_l", "A_actor_{body}_battle_dodge_b_l"],
+    "dodge_f": ["A_actor_{char}_battle_dodge_f_l", "A_actor_{body}_battle_dodge_f_l", "A_actor_{body}_battle_dodge_f_l_01"],
+    "dodge_b": ["A_actor_{char}_battle_dodge_b_l", "A_actor_{body}_battle_dodge_b_l", "A_actor_{body}_battle_dodge_b_l_01"],
     # 기본 공격 5단계, 대시 공격, 처형(강공격), 배틀 스킬, 궁극기. 타격 시각과 내디딤 거리는 data/kits/*.tres에 있다.
     "attack_1": ["A_actor_{char}_battle_attack_01"],
     "attack_2": ["A_actor_{char}_battle_attack_02"],
@@ -67,9 +68,10 @@ ROLES = {
     "attack_4": ["A_actor_{char}_battle_attack_04"],
     "attack_5": ["A_actor_{char}_battle_attack_05"],
     # 대시 공격(회피 직후 공격)은 원작 연계 스킬(크게 내달리며 베기, 소리·보이스·이펙트가 있다)을 쓴다.
-    "dash_attack": ["A_actor_{char}_battle_combo_skill"],
+    # 아크라이트는 연계 스킬 이름에 battle_이 없다.
+    "dash_attack": ["A_actor_{char}_battle_combo_skill", "A_actor_{char}_combo_skill"],
     "finisher": ["A_actor_{char}_battle_power_attack"],
-    "skill": ["A_actor_{char}_battle_normal_skill"],
+    "skill": ["A_actor_{char}_battle_normal_skill", "A_actor_{char}_battle_normal_skill02"],
     "ultimate": ["A_actor_{char}_battle_skill_ult"],
     # 낙하 공격: 공중에서 뛰어올랐다가 내리꽂고(시작) → 떨어지는 동안(반복) → 땅에 닿으며 내려친다(착지)
     "plunge_start": ["A_actor_{char}_battle_air_atk_start"],
@@ -122,6 +124,16 @@ TRIM_OVERRIDES = {
     # 아케쿠리: 4타가 마무리 일격(0.6초에 3.9m 내닫기), 궁극기는 세 번째 폭발(3.97초) 뒤까지
     "karin": {"attack_1": (0.0, 1.0), "attack_2": (0.0, 1.1), "attack_3": (0.0, 1.2), "attack_4": (0.0, 1.4),
               "finisher": (0.0, 1.7), "skill": (0.0, 1.3), "ultimate": (0.0, 4.4), "dash_attack": (0.0, 1.5)},
+    # 진천우·아크라이트·포그라니치니크: tools/draft_kit.py가 마지막 타격에 맞춰 찍은 구간
+    "chen": {"attack_1": (0.0, 0.97), "attack_2": (0.0, 0.83), "attack_3": (0.0, 1.02), "attack_4": (0.0, 0.97),
+             "attack_5": (0.0, 1.28), "dash_attack": (0.0, 1.23), "finisher": (0.0, 1.68), "skill": (0.0, 1.5),
+             "ultimate": (0.0, 5.02)},
+    "ikut": {"attack_1": (0.0, 0.78), "attack_2": (0.0, 0.75), "attack_3": (0.0, 1.03), "attack_4": (0.0, 0.82),
+             "attack_5": (0.0, 1.07), "dash_attack": (0.0, 1.58), "finisher": (0.0, 2.05), "skill": (0.0, 1.17),
+             "ultimate": (0.0, 2.87)},
+    "pograni": {"attack_1": (0.0, 0.9), "attack_2": (0.0, 1.07), "attack_3": (0.0, 1.1), "attack_4": (0.0, 0.93),
+                "attack_5": (0.0, 1.23), "dash_attack": (0.0, 2.13), "finisher": (0.0, 1.88), "skill": (0.0, 1.9),
+                "ultimate": (0.0, 2.43)},
 }
 
 # 제자리 동작으로 바꿀 것. 원본 공격·회피는 내디디며 몸(뿌리 뼈)이 앞으로 1~4m 나가지만,
@@ -295,6 +307,49 @@ def freeze(doc, anim):
     anim["channels"] = channels
 
 
+# 모델에서 뺄 노드(아래 전부). 포그라니치니크 원본에는 궁극기 방패병(Rush01~04)의 뼈대가 본인과 같은 이름으로 함께
+# 들어 있다(방패병 메시는 없다).
+DROPPED_NODES = {"Soldier_Root"}
+
+
+def drop_nodes(doc):
+    """DROPPED_NODES와 그 아래를 장면에서 빼고, 그 노드를 움직이는 동작 채널도 뺀다."""
+    nodes = doc["nodes"]
+    dropped = set()
+
+    def drop(index):
+        dropped.add(index)
+        for child in nodes[index].get("children", []):
+            drop(child)
+
+    for i, node in enumerate(nodes):
+        if node.get("name") in DROPPED_NODES:
+            drop(i)
+    if not dropped:
+        return
+    for node in nodes:
+        if "children" in node:
+            node["children"] = [c for c in node["children"] if c not in dropped]
+    # 장면에서 빠져도 파일에 남은 노드의 이름이 본인 뼈와 같으면, Godot가 이름을 겹치지 않게 본인 뼈 이름을 바꾼다
+    # (Bip001_Pelvis → Bip001_Pelvis_2). 빼낸 노드의 이름을 따로 바꿔 둔다.
+    for i in dropped:
+        nodes[i]["name"] = "dropped_%d" % i
+        nodes[i].pop("mesh", None)
+        nodes[i].pop("skin", None)
+    for skin in doc.get("skins", []):
+        if any(j in dropped for j in skin["joints"]):
+            sys.exit("뺄 노드가 스킨의 뼈로 쓰인다")
+    for anim in doc.get("animations", []):
+        channels = [c for c in anim["channels"] if c["target"].get("node") not in dropped]
+        used = sorted({c["sampler"] for c in channels})
+        remap = {old: new for new, old in enumerate(used)}
+        anim["samplers"] = [anim["samplers"][old] for old in used]
+        for channel in channels:
+            channel["sampler"] = remap[channel["sampler"]]
+        anim["channels"] = channels
+    print("뺀 노드(방패병 뼈대 등) %d개" % len(dropped))
+
+
 def strip_extra_meshes(doc):
     """먼 거리용 저해상도 메시 묶음(lod1~3)과 그림자 대용 메시(shadowProxy)를 뺀다. 게임은 가장 고운 메시(lod0)만
     그리는데, 아케쿠리 원본에는 이것들이 같은 자리에 함께 들어 있어 겹쳐 보인다. 쓰이지 않게 된 메시도 지운다."""
@@ -370,6 +425,7 @@ def main(source, target):
         animations.append(anim)
     doc["animations"] = animations
     strip_extra_meshes(doc)
+    drop_nodes(doc)
     save_compact(doc, data, target)
 
 

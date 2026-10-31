@@ -50,7 +50,7 @@ func test_heal_is_capped_and_revive_restores_a_fraction() -> void:
 
 func test_character_kits_are_consistent() -> void:
 	var characters := Characters.all()
-	assert_eq(characters.size(), 3, "관리자(여·남), 아케쿠리")
+	assert_eq(characters.size(), 6, "관리자(여·남), 아케쿠리, 진천우, 아크라이트, 포그라니치니크")
 	for character in characters:
 		var kit := character.kit()
 		assert_not_null(kit, String(character.id))

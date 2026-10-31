@@ -5,6 +5,9 @@ extends RefCounted
 const PATHS: Array[String] = [
 	"res://data/weapons/tarr_11.tres",
 	"res://data/weapons/edge_of_lightness.tres",
+	"res://data/weapons/aspirant.tres",
+	"res://data/weapons/twelve_questions.tres",
+	"res://data/weapons/never_rest.tres",
 ]
 
 

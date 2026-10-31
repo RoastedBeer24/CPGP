@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3]
+
+[ext_resource type="Script" path="res://src/player/character_data.gd" id="1_character"]
+
+[resource]
+script = ExtResource("1_character")
+id = &"pogranichnik"
+display_name = "포그라니치니크"
+title = "엔드필드 공업 · 방어"
+description = "칼과 방패를 든 국경 수비대장. 기본 공격 전면 공세 5연속, 배틀 스킬 전선 분쇄로 방패를 앞세워 밀어붙이고, 궁극기 방패병 부대, 전진으로 앞을 휩쓴다."
+appearance_path = "res://data/characters/pogranichnik/appearance.tres"
+kit_path = "res://data/characters/pogranichnik/kit.tres"
+weapon_type = &"sword"
+default_weapon = &"never_rest"

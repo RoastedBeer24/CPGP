@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3]
+
+[ext_resource type="Script" path="res://src/player/character_data.gd" id="1_character"]
+
+[resource]
+script = ExtResource("1_character")
+id = &"arclight"
+display_name = "아크라이트"
+title = "엔드필드 공업 · 선봉"
+description = "번개처럼 파고드는 검사. 기본 공격 추적 사냥 5연속, 배틀 스킬 질풍 섬광으로 돌진해 베고, 궁극기 천둥번개로 앞쪽에 벼락을 내리친다."
+appearance_path = "res://data/characters/arclight/appearance.tres"
+kit_path = "res://data/characters/arclight/kit.tres"
+weapon_type = &"sword"
+default_weapon = &"twelve_questions"

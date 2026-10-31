@@ -90,7 +90,10 @@ def main(path, specs):
     for i, n in enumerate(nodes):
         for c in n.get("children", []):
             parent[c] = i
-    index = {n.get("name", ""): i for i, n in enumerate(nodes)}
+    # 이름이 같은 뼈가 여럿이면 첫 번째(본인 뼈대)를 쓴다. 포그라니치니크는 궁극기 방패병의 뼈대 4벌이 같은 이름으로 들어 있다.
+    index = {}
+    for i, n in enumerate(nodes):
+        index.setdefault(n.get("name", ""), i)
 
     def chain(name):
         i = index[name]

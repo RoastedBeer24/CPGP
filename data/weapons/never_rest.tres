@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://src/combat/weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"never_rest"
+display_name = "끝없는 방랑"
+description = "포그라니치니크의 전용 한손검(원작 wpn_sword_0016, Never Rest). 공격력이 크게 오른다."
+weapon_type = &"sword"
+rarity = 6
+model_path = "res://assets/weapons/never_rest.glb"
+external_file = "weapons/never_rest.glb"
+attack_bonus = 0.15

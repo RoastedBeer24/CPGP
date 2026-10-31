@@ -602,7 +602,12 @@ func _load_model(scene: PackedScene) -> void:
 	var skeletons := _model.find_children("*", "Skeleton3D", true, false)
 	if skeletons.is_empty():
 		return
+	# 뼈대가 여럿이면(포그라니치니크: 방패·장식 스킨이 따로 묶인다) 골반 뼈가 있는 몸 뼈대를 쓴다.
 	var skeleton := skeletons[0] as Skeleton3D
+	for candidate: Node in skeletons:
+		if (candidate as Skeleton3D).find_bone(appearance.pelvis_bone) >= 0:
+			skeleton = candidate as Skeleton3D
+			break
 	var names: Dictionary[StringName, StringName] = {
 		&"pelvis": appearance.pelvis_bone,
 		&"spine": appearance.spine_bone,

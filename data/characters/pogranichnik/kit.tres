@@ -1,0 +1,421 @@
+[gd_resource type="Resource" script_class="KitData" format=3]
+
+[ext_resource type="Script" path="res://src/combat/kit_data.gd" id="1_kit"]
+[ext_resource type="Script" path="res://src/combat/attack_data.gd" id="2_attack"]
+[ext_resource type="Script" path="res://src/combat/hit_data.gd" id="3_hit"]
+
+[sub_resource type="Resource" id="hit_attack_1_1"]
+script = ExtResource("3_hit")
+time = 0.3
+damage = 0.8
+stagger = 8
+reach = 2.7
+arc = 80
+knockback = 0.3
+hit_stop = 0.05
+shake = 0.12
+
+[sub_resource type="Resource" id="attack_1"]
+script = ExtResource("2_attack")
+id = &"attack_1"
+display_name = "전면 공세 1"
+clip = &"attack_1"
+turn = PackedVector2Array(0, 0, 0.0333, 22, 0.0667, 44.1, 0.1, 56.9, 0.1333, 57.7, 0.1667, 49.1, 0.2, 30.1, 0.2333, -23.6, 0.2667, -95.2, 0.3, -105.6, 0.3333, -110.4, 0.3667, -114.6, 0.4, -117.2, 0.4333, -118, 0.4667, -118.4, 0.5, -118.6, 0.5333, -118.6, 0.5667, -118.5, 0.6, -118.4, 0.6333, -118.6, 0.6667, -119, 0.7, -119.7, 0.7333, -120.7, 0.7667, -121.8, 0.8, -123, 0.8333, -124.2, 0.8667, -125.3, 0.9, -126.3)
+duration = 0.75
+chain_from = 0.42
+move_cancel_from = 0.6
+advance = PackedVector2Array(0, 0, 0.05, 0.02, 0.1, 0.09, 0.15, 0.31, 0.2, 0.57, 0.25, 0.73)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_attack_1_1")])
+
+[sub_resource type="Resource" id="hit_attack_2_1"]
+script = ExtResource("3_hit")
+time = 0.22
+damage = 0.36
+stagger = 3.6
+reach = 2.7
+arc = 80
+knockback = 0.3
+hit_stop = 0.05
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_attack_2_2"]
+script = ExtResource("3_hit")
+time = 0.47
+damage = 0.54
+stagger = 5.4
+reach = 2.7
+arc = 80
+knockback = 0.3
+hit_stop = 0.05
+shake = 0.12
+
+[sub_resource type="Resource" id="attack_2"]
+script = ExtResource("2_attack")
+id = &"attack_2"
+display_name = "전면 공세 2"
+clip = &"attack_2"
+turn = PackedVector2Array(0, 0, 0.0333, 22, 0.0667, 44.1, 0.1, 69.1, 0.1333, 102.7, 0.1667, 138.5, 0.2, 163.5, 0.2333, 226.4, 0.2667, 250.4, 0.3, 250.5, 0.3333, 225, 0.3667, 189.5, 0.4, 157.3, 0.4333, 120.4, 0.4667, 159.4, 0.5, 170, 0.5333, 169.9, 0.5667, 169, 0.6, 169.2, 0.6333, 170.4, 0.6667, 170.6, 0.7, 170.5, 0.7333, 170.2, 0.7667, 169.9, 0.8, 169.5, 0.8333, 169, 0.8667, 168.6, 0.9, 168.1, 0.9333, 167.7, 0.9667, 167.3, 1, 166.8, 1.0333, 166.3, 1.0667, 165.6)
+duration = 0.92
+chain_from = 0.59
+move_cancel_from = 0.77
+advance = PackedVector2Array(0, 0, 0.05, 0.24, 0.1, 0.51, 0.15, 0.97, 0.2, 1.28, 0.25, 1.44, 0.35, 1.46, 0.4, 1.82, 0.45, 2.11, 0.5, 2.27)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_attack_2_1"), SubResource("hit_attack_2_2")])
+
+[sub_resource type="Resource" id="hit_attack_3_1"]
+script = ExtResource("3_hit")
+time = 0.23
+damage = 0.56
+stagger = 6.8
+reach = 2.7
+arc = 80
+knockback = 0.3
+hit_stop = 0.05
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_attack_3_2"]
+script = ExtResource("3_hit")
+time = 0.5
+damage = 0.84
+stagger = 10.2
+reach = 2.7
+arc = 80
+knockback = 0.3
+hit_stop = 0.05
+shake = 0.12
+
+[sub_resource type="Resource" id="attack_3"]
+script = ExtResource("2_attack")
+id = &"attack_3"
+display_name = "전면 공세 3"
+clip = &"attack_3"
+turn = PackedVector2Array(0, -0, 0.0333, 6.8, 0.0667, 15.5, 0.1, 37.1, 0.1333, 75, 0.1667, 113.7, 0.2, 153.9, 0.2333, 233.9, 0.2667, 283.3, 0.3, 336.7, 0.3333, 342.5, 0.3667, 344.4, 0.4, 361.6, 0.4333, 340.1, 0.4667, 274.3, 0.5, 196.8, 0.5333, 147.6, 0.5667, 128, 0.6, 125, 0.6333, 123.6, 0.6667, 123.6, 0.7, 125, 0.7333, 126.6, 0.7667, 128.1, 0.8, 129.7, 0.8333, 131.2, 0.8667, 132.7, 0.9, 134.2, 0.9333, 135.7, 0.9667, 137.2, 1, 138.7, 1.0333, 140.2, 1.0667, 141.8, 1.1, 143.4)
+duration = 0.95
+chain_from = 0.62
+move_cancel_from = 0.8
+advance = PackedVector2Array(0, 0, 0.2, 0.13, 0.25, 0.94, 0.3, 1.6, 0.35, 1.69, 0.4, 1.8, 0.45, 1.94)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_attack_3_1"), SubResource("hit_attack_3_2")])
+
+[sub_resource type="Resource" id="hit_attack_4_1"]
+script = ExtResource("3_hit")
+time = 0.08
+damage = 0.6
+stagger = 8
+reach = 2.7
+arc = 80
+knockback = 0.3
+hit_stop = 0.05
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_attack_4_2"]
+script = ExtResource("3_hit")
+time = 0.33
+damage = 0.9
+stagger = 12
+reach = 2.7
+arc = 80
+knockback = 0.3
+hit_stop = 0.05
+shake = 0.12
+
+[sub_resource type="Resource" id="attack_4"]
+script = ExtResource("2_attack")
+id = &"attack_4"
+display_name = "전면 공세 4"
+clip = &"attack_4"
+turn = PackedVector2Array(0, 0, 0.0333, 74.6, 0.0667, 150.6, 0.1, 164.9, 0.1333, 195.3, 0.1667, 197.7, 0.2, 198, 0.2333, 187.8, 0.2667, 156.6, 0.3, 111.1, 0.3333, 72.3, 0.3667, -4.1, 0.4, -53, 0.4333, -113.8, 0.4667, -171.9, 0.5, -203.1, 0.5333, -211.6, 0.5667, -213.8, 0.6, -214.8, 0.6333, -215.4, 0.6667, -216, 0.7, -216.5, 0.7333, -217, 0.7667, -217.4, 0.8, -217.8, 0.8333, -218.2, 0.8667, -218.6, 0.9, -219.1)
+duration = 0.78
+chain_from = 0.45
+move_cancel_from = 0.63
+advance = PackedVector2Array(0, 0, 0.05, 0.87, 0.1, 4.36, 0.15, 6.72, 0.2, 7.85)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_attack_4_1"), SubResource("hit_attack_4_2")])
+
+[sub_resource type="Resource" id="hit_attack_5_1"]
+script = ExtResource("3_hit")
+time = 0.48
+damage = 2.2
+stagger = 40
+reach = 3
+arc = 80
+knockback = 1.2
+hit_stop = 0.1
+shake = 0.45
+
+[sub_resource type="Resource" id="attack_5"]
+script = ExtResource("2_attack")
+id = &"attack_5"
+display_name = "마무리 일격"
+description = "전면 공세 마지막 타. 크게 베어 경직을 많이 쌓고 SP를 돌려받는다."
+clip = &"attack_5"
+turn = PackedVector2Array(0, 0, 0.0333, 4, 0.0667, 6.6, 0.1, -0.2, 0.1333, -15.8, 0.1667, -34.8, 0.2, -56.5, 0.2333, -80.1, 0.2667, -101.3, 0.3, -120.4, 0.3333, -139.4, 0.3667, -160.2, 0.4, -183.9, 0.4333, -232.6, 0.4667, -278.4, 0.5, -353.2, 0.5333, -447.2, 0.5667, -435.6, 0.6, -431.1, 0.6333, -426.2, 0.6667, -423.5, 0.7, -423.2, 0.7333, -423.5, 0.7667, -424.1, 0.8, -425.1, 0.8333, -426.1, 0.8667, -427.1, 0.9, -428, 0.9333, -428.6, 0.9667, -428.7, 1, -428.3, 1.0333, -427.3, 1.0667, -425.8, 1.1, -424.1, 1.1333, -422.2, 1.1667, -419.9, 1.2, -417)
+duration = 1.08
+chain_from = 1.08
+move_cancel_from = 0.86
+advance = PackedVector2Array(0, 0, 0.05, 0.05, 0.1, 0.15, 0.15, 0.31, 0.2, 0.47, 0.25, 0.64, 0.3, 0.8, 0.35, 0.99, 0.4, 1.28, 0.45, 1.98, 0.5, 2.97, 0.55, 3.18)
+stop_short = 1.2
+energy_per_hit = 4.0
+sp_per_hit = 10.0
+hits = Array[ExtResource("3_hit")]([SubResource("hit_attack_5_1")])
+
+[sub_resource type="Resource" id="hit_dash_attack_1"]
+script = ExtResource("3_hit")
+time = 0.22
+damage = 0.35
+stagger = 4
+reach = 3
+arc = 90
+knockback = 0.3
+hit_stop = 0.04
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_dash_attack_2"]
+script = ExtResource("3_hit")
+time = 0.45
+damage = 0.35
+stagger = 4
+reach = 3
+arc = 90
+knockback = 0.3
+hit_stop = 0.04
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_dash_attack_3"]
+script = ExtResource("3_hit")
+time = 0.9
+damage = 0.35
+stagger = 4
+reach = 3
+arc = 90
+knockback = 0.3
+hit_stop = 0.04
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_dash_attack_4"]
+script = ExtResource("3_hit")
+time = 1.48
+damage = 1.56
+stagger = 18
+reach = 3
+arc = 90
+knockback = 1
+hit_stop = 0.1
+shake = 0.5
+
+[sub_resource type="Resource" id="dash_attack"]
+script = ExtResource("2_attack")
+id = &"dash_attack"
+display_name = "대시 공격: 보름달 참격"
+description = "회피 직후 공격하면 원작 연계 스킬로 내달리며 벤다."
+clip = &"dash_attack"
+turn = PackedVector2Array(0, -0, 0.0333, -4.4, 0.0667, -0.5, 0.1, 23.5, 0.1333, 40.3, 0.1667, 47.7, 0.2, 51.5, 0.2333, 48, 0.2667, 46.5, 0.3, 43.7, 0.3333, 35, 0.3667, 34.5, 0.4, 44.6, 0.4333, 72, 0.4667, 97.3, 0.5, 121.6, 0.5333, 141.4, 0.5667, 151.8, 0.6, 158.8, 0.6333, 165.1, 0.6667, 168.1, 0.7, 162.6, 0.7333, 150.7, 0.7667, 135.8, 0.8, 119.2, 0.8333, 96.4, 0.8667, 57.6, 0.9, -4.9, 0.9333, -45.5, 0.9667, -57.7, 1, -53.1, 1.0333, -46.4, 1.0667, -43.4, 1.1, -42.2, 1.1333, -41.8, 1.1667, -41.8, 1.2, -39.2, 1.2333, -35.9, 1.2667, -38.9, 1.3, -56.5, 1.3333, -94.1, 1.3667, -141, 1.4, -212, 1.4333, -275.6, 1.4667, -318.8, 1.5, -385.2, 1.5333, -429.8, 1.5667, -432.2, 1.6, -432.4, 1.6333, -430.6, 1.6667, -427, 1.7, -423.5, 1.7333, -420, 1.7667, -416.4, 1.8, -412.9, 1.8333, -409.4, 1.8667, -405.8, 1.9, -402.2, 1.9333, -398.6, 1.9667, -394.9, 2, -391.2, 2.0333, -387.5, 2.0667, -383.7, 2.1, -379.9)
+duration = 1.98
+chain_from = 1.73
+move_cancel_from = 1.78
+turn_until = 0.15
+stop_short = 1.2
+energy_per_hit = 2.0
+advance = PackedVector2Array(0, 0, 0.05, 1.94, 0.1, 3.21, 0.15, 3.97, 0.2, 4.59, 0.25, 5.02, 0.3, 5.49, 0.35, 5.57, 0.4, 5.89, 0.45, 6.22, 0.5, 6.42, 0.55, 6.55, 0.6, 6.64, 0.65, 6.72, 0.7, 6.78, 0.8, 6.88, 0.85, 7.14, 0.9, 7.44, 0.95, 7.69, 1, 7.75, 1.25, 7.9, 1.3, 8.12, 1.35, 8.35, 1.4, 8.81, 1.45, 9.47, 1.5, 10.24, 1.55, 10.75)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_dash_attack_1"), SubResource("hit_dash_attack_2"), SubResource("hit_dash_attack_3"), SubResource("hit_dash_attack_4")])
+
+[sub_resource type="Resource" id="hit_finisher_1"]
+script = ExtResource("3_hit")
+time = 0.28
+damage = 0.41
+stagger = 0
+reach = 3.2
+arc = 90
+knockback = 0.3
+hit_stop = 0.04
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_finisher_2"]
+script = ExtResource("3_hit")
+time = 0.48
+damage = 0.41
+stagger = 0
+reach = 3.2
+arc = 90
+knockback = 0.3
+hit_stop = 0.04
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_finisher_3"]
+script = ExtResource("3_hit")
+time = 0.87
+damage = 0.41
+stagger = 0
+reach = 3.2
+arc = 90
+knockback = 0.3
+hit_stop = 0.04
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_finisher_4"]
+script = ExtResource("3_hit")
+time = 1.13
+damage = 4.96
+stagger = 0
+reach = 3.2
+arc = 90
+knockback = 1
+hit_stop = 0.1
+shake = 0.5
+
+[sub_resource type="Resource" id="finisher"]
+script = ExtResource("2_attack")
+id = &"finisher"
+display_name = "처형"
+description = "경직된 적 가까이서 공격하면 나간다. 무적이며 아주 큰 피해."
+clip = &"finisher"
+turn = PackedVector2Array(0, -0, 0.0333, -4.9, 0.0667, -6.5, 0.1, 1.2, 0.1333, 13.2, 0.1667, 24.6, 0.2, 52.2, 0.2333, 95.8, 0.2667, 142.7, 0.3, 174, 0.3333, 220.4, 0.3667, 281, 0.4, 326.7, 0.4333, 360.9, 0.4667, 407.4, 0.5, 442.4, 0.5333, 451.4, 0.5667, 460.1, 0.6, 465.1, 0.6333, 460.8, 0.6667, 447.4, 0.7, 431.1, 0.7333, 409, 0.7667, 375.7, 0.8, 335, 0.8333, 279.4, 0.8667, 216, 0.9, 145.1, 0.9333, 119.5, 0.9667, 89.5, 1, -48.4, 1.0333, -152.1, 1.0667, -186.3, 1.1, -212.7, 1.1333, -234.6, 1.1667, -251.8, 1.2, -265.3, 1.2333, -283.5, 1.2667, -298.1, 1.3, -309.1, 1.3333, -313.8, 1.3667, -315.6, 1.4, -316, 1.4333, -316, 1.4667, -316.5, 1.5, -317.9, 1.5333, -319.7, 1.5667, -321.3, 1.6, -322, 1.6333, -321.4, 1.6667, -320.7, 1.7, -319.9, 1.7333, -319, 1.7667, -318, 1.8, -316.7, 1.8333, -315.2, 1.8667, -313.4)
+duration = 1.73
+chain_from = 1.73
+move_cancel_from = 1.58
+dodge_cancel_from = 1.43
+turn_until = 0.1
+stop_short = 1.0
+energy_per_hit = 8.0
+invulnerable_until = 1.63
+super_armor = true
+advance = PackedVector2Array(0, 0, 0.05, 0.07, 0.1, 0.22, 0.15, 0.49, 0.2, 0.98, 0.25, 1.52, 0.3, 1.98, 0.35, 2.45, 0.4, 2.77, 0.45, 3.16, 0.5, 3.41, 0.65, 3.43)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_finisher_1"), SubResource("hit_finisher_2"), SubResource("hit_finisher_3"), SubResource("hit_finisher_4")])
+
+[sub_resource type="Resource" id="hit_battle_skill_1"]
+script = ExtResource("3_hit")
+time = 0.88
+damage = 1.04
+stagger = 12
+reach = 4
+arc = 90
+knockback = 0.3
+hit_stop = 0.04
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_battle_skill_2"]
+script = ExtResource("3_hit")
+time = 1.25
+damage = 1.56
+stagger = 18
+reach = 4
+arc = 90
+knockback = 1
+hit_stop = 0.1
+shake = 0.5
+
+[sub_resource type="Resource" id="battle_skill"]
+script = ExtResource("2_attack")
+id = &"battle_skill"
+display_name = "배틀 스킬: 전선 분쇄"
+description = "SP 100. 크게 베어 적의 균형을 무너뜨린다."
+clip = &"skill"
+turn = PackedVector2Array(0, 0, 0.0333, -1.8, 0.0667, -3.6, 0.1, -5.5, 0.1333, -7.3, 0.1667, -9, 0.2, -10.7, 0.2333, -12.3, 0.2667, -13.8, 0.3, -15.5, 0.3333, -17.5, 0.3667, -20.4, 0.4, -23.6, 0.4333, -25.8, 0.4667, -27.6, 0.5, -25.4, 0.5333, -4.7, 0.5667, 14.4, 0.6, 45.9, 0.6333, 60.8, 0.6667, 74.8, 0.7, 86.5, 0.7333, 94.4, 0.7667, 96.9, 0.8, 92.2, 0.8333, 81.9, 0.8667, 68.2, 0.9, 29.7, 0.9333, 2.7, 0.9667, -46.7, 1, -89.9, 1.0333, -113.1, 1.0667, -126.6, 1.1, -134.3, 1.1333, -133.3, 1.1667, -123.7, 1.2, -105.2, 1.2333, -55.5, 1.2667, -0.8, 1.3, 19.5, 1.3333, 30.8, 1.3667, 37.9, 1.4, 41, 1.4333, 43.5, 1.4667, 47.1, 1.5, 50.8, 1.5333, 54.3, 1.5667, 57.5, 1.6, 60.1, 1.6333, 61.8, 1.6667, 62.7, 1.7, 63.3, 1.7333, 63.5, 1.7667, 63.4, 1.8, 63.1, 1.8333, 62.8, 1.8667, 62.4, 1.9, 62)
+duration = 1.75
+chain_from = 1.5
+move_cancel_from = 1.55
+turn_until = 0.12
+stop_short = 1.4
+sp_cost = 100.0
+energy_gain = 12.0
+energy_per_hit = 2.0
+super_armor = true
+advance = PackedVector2Array(0, 0, 0.25, 0.02, 0.3, 0.04, 0.35, 0.08, 0.4, 0.15, 0.45, 0.19, 0.95, 0.51, 1, 1.01, 1.05, 1.09, 1.25, 1.59, 1.3, 2.34, 1.35, 2.81, 1.4, 2.95, 1.45, 2.99)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_battle_skill_1"), SubResource("hit_battle_skill_2")])
+
+[sub_resource type="Resource" id="hit_ultimate_1"]
+script = ExtResource("3_hit")
+time = 0.95
+damage = 3.6
+stagger = 48
+reach = 6.5
+arc = 90
+knockback = 0.3
+hit_stop = 0.04
+shake = 0.12
+
+[sub_resource type="Resource" id="hit_ultimate_2"]
+script = ExtResource("3_hit")
+time = 1.48
+damage = 5.4
+stagger = 72
+reach = 6.5
+arc = 90
+knockback = 1
+hit_stop = 0.1
+shake = 0.5
+
+[sub_resource type="Resource" id="ultimate"]
+script = ExtResource("2_attack")
+id = &"ultimate"
+display_name = "궁극기: 방패병 부대, 전진"
+description = "궁극기 에너지 80. 앞쪽을 휩쓰는 큰 일격."
+clip = &"ultimate"
+turn = PackedVector2Array(0, 0, 0.0333, 5.2, 0.0667, 23.4, 0.1, 42.2, 0.1333, 66.9, 0.1667, 95.9, 0.2, 121.4, 0.2333, 137.8, 0.2667, 147.9, 0.3, 152.9, 0.3333, 155.6, 0.3667, 157.5, 0.4, 158.9, 0.4333, 159.7, 0.4667, 160.3, 0.5, 160.9, 0.5333, 161.6, 0.5667, 162.2, 0.6, 162.9, 0.6333, 164.5, 0.6667, 166.9, 0.7, 170.2, 0.7333, 174.8, 0.7667, 182.6, 0.8, 193.6, 0.8333, 207.8, 0.8667, 224.9, 0.9, 245.1, 0.9333, 267.5, 0.9667, 289.5, 1, 311, 1.0333, 326, 1.0667, 333.1, 1.1, 335.8, 1.1333, 336.4, 1.1667, 336.7, 1.2, 337.3, 1.2333, 337.7, 1.2667, 337.7, 1.3, 336.9, 1.3333, 336.2, 1.3667, 335.7, 1.4, 334.7, 1.4333, 333, 1.4667, 329.5, 1.5, 324.3, 1.5333, 322.5, 1.5667, 312.4, 1.6, 305.9, 1.6333, 305.7, 1.6667, 305.5, 1.7, 305.3, 1.7333, 305.2, 1.7667, 305.2, 1.8, 305.2, 1.8333, 305.2, 1.8667, 305.3, 1.9, 305.3, 1.9333, 305.3, 1.9667, 305.3, 2, 305.2, 2.0333, 305.2, 2.0667, 305.2, 2.1, 305.1, 2.1333, 305, 2.1667, 304.8, 2.2, 304.8, 2.2333, 305.1, 2.2667, 306.1, 2.3, 308.5, 2.3333, 311.3, 2.3667, 313.6, 2.4, 314.9)
+duration = 2.28
+chain_from = 2.28
+move_cancel_from = 1.98
+dodge_cancel_from = 1.98
+turn_until = 0.3
+energy_cost = 80.0
+energy_per_hit = 0.0
+invulnerable_until = 2.28
+super_armor = true
+advance = PackedVector2Array(0, 0, 0.1, 0.04, 0.15, 0.16, 0.2, 0.3, 0.25, 0.38, 0.3, 0.41, 0.7, 0.45, 0.75, 0.56, 0.8, 0.74, 0.85, 0.87, 0.9, 0.96, 0.95, 1.02, 1, 1.05, 1.1, 1.07)
+hits = Array[ExtResource("3_hit")]([SubResource("hit_ultimate_1"), SubResource("hit_ultimate_2")])
+
+[sub_resource type="Resource" id="plunge_start"]
+script = ExtResource("2_attack")
+id = &"plunge_start"
+display_name = "낙하 공격"
+description = "공중에서 공격하면 뛰어올랐다가 내리꽂는다. 땅에 닿으며 둘레의 적을 모두 내려친다."
+clip = &"plunge_start"
+duration = 1.07
+rise = PackedVector2Array(0, 0, 0.05, -0.23, 0.1, -0.11, 0.15, 0.42, 0.2, 0.99, 0.25, 1.39, 0.3, 1.69, 0.35, 1.85, 0.4, 1.85, 0.45, 1.52, 0.5, 0.87, 0.55, -0.04)
+energy_per_hit = 0.0
+super_armor = true
+
+[sub_resource type="Resource" id="plunge_fall"]
+script = ExtResource("2_attack")
+id = &"plunge_fall"
+display_name = "낙하 공격"
+clip = &"plunge_loop"
+duration = 30.0
+energy_per_hit = 0.0
+super_armor = true
+
+[sub_resource type="Resource" id="hit_plunge"]
+script = ExtResource("3_hit")
+time = 0.03
+damage = 2.2
+stagger = 25
+reach = 3.2
+arc = 180
+knockback = 1.2
+hit_stop = 0.08
+shake = 0.5
+
+[sub_resource type="Resource" id="plunge_land"]
+script = ExtResource("2_attack")
+id = &"plunge_land"
+display_name = "낙하 공격 착지"
+clip = &"plunge_end"
+duration = 1.0
+chain_from = 0.55
+move_cancel_from = 0.75
+dodge_cancel_from = 0.25
+turn_until = 0.0
+energy_per_hit = 3.0
+hits = Array[ExtResource("3_hit")]([SubResource("hit_plunge")])
+
+[resource]
+script = ExtResource("1_kit")
+id = &"pogranichnik"
+display_name = "포그라니치니크"
+max_health = 1200.0
+attack_power = 100.0
+basic_chain = Array[ExtResource("2_attack")]([SubResource("attack_1"), SubResource("attack_2"), SubResource("attack_3"), SubResource("attack_4"), SubResource("attack_5")])
+dash_attack = SubResource("dash_attack")
+finisher = SubResource("finisher")
+battle_skill = SubResource("battle_skill")
+ultimate = SubResource("ultimate")
+plunge_start = SubResource("plunge_start")
+plunge_fall = SubResource("plunge_fall")
+plunge_land = SubResource("plunge_land")

@@ -3,6 +3,7 @@
     python3 tools/extract_character_fx.py "!File/Endministrator_Extras" F assets/characters/endministrator_f/endministrator_f_fx.zip
     python3 tools/extract_character_fx.py "!File/Endministrator_Extras" M assets/characters/endministrator_m/endministrator_m_fx.zip
     python3 tools/extract_character_fx.py "!File/Akekuri_Assets" Akekuri assets/characters/akekuri/akekuri_fx.zip
+    python3 tools/extract_character_fx.py "!File/Chen_Arclight_Pogranichnik_Assets" chr_0005_chen assets/characters/chen_qianyu/chen_qianyu_fx.zip
 
 원본 꾸러미(사용자가 사이트에서 추출해 준 것)에는 동작마다 언제 어떤 소리·보이스·이펙트가 나는지(animation_events.json)와
 그 파일들(assets/audio_wav, characters/*/effects)이 들어 있다. 게임 이름(attack_1 등)은 tools/extract_character.py의
@@ -22,7 +23,8 @@ from extract_character import CHARACTERS, LOOPING, ROLES, TRIM_OVERRIDES, TRIMS 
 
 LANGUAGES = ["KR", "JP", "EN", "CN"]
 # 원본 꾸러미의 캐릭터 폴더 이름(characters/<이름>) → 동작 이름의 캐릭터 앞부분
-WHO = {"F": "endminf", "M": "endminm", "Akekuri": "karin"}
+WHO = {"F": "endminf", "M": "endminm", "Akekuri": "karin", "chr_0005_chen": "chen", "chr_0007_ikut": "ikut",
+       "chr_0029_pograni": "pograni"}
 
 # 원작 자료에 이펙트가 없는 동작은 비슷한 동작의 원작 이펙트를 타격 시각에 맞춰 빌려 쓴다(게임에서 정한 것).
 # 캐릭터 → 동작 → [(빌려 올 동작, 그 동작의 타격 시각, 이 동작의 타격 시각), ...]. 타격 시각은 data/characters/*/kit.tres.
@@ -40,8 +42,15 @@ def main(extras, who, target):
     char = WHO[who]
     body = CHARACTERS[char]
     events = json.load(open(os.path.join(extras, "characters", who, "animation_events.json"), encoding="utf-8"))
-    catalog = json.load(open(os.path.join(extras, "characters", who, "effect_catalog.json"), encoding="utf-8"))
+    # 꾸러미마다 이름이 조금 다르다: 이펙트 목록(effect_catalog.json 또는 object_catalog.json), 소리 폴더
+    # (assets/audio_wav 또는 audio/wav), 파티클 설정 키(particle_data 또는 particles).
+    catalog_path = os.path.join(extras, "characters", who, "effect_catalog.json")
+    if not os.path.isfile(catalog_path):
+        catalog_path = os.path.join(extras, "characters", who, "object_catalog.json")
+    catalog = json.load(open(catalog_path, encoding="utf-8"))
     audio_dir = os.path.join(extras, "assets", "audio_wav")
+    if not os.path.isdir(audio_dir):
+        audio_dir = os.path.join(extras, "audio", "wav")
     trims = dict(TRIMS)
     trims.update(TRIM_OVERRIDES.get(char, {}))
 
@@ -111,7 +120,7 @@ def main(extras, who, target):
                 continue
             effect_files[os.path.basename(source)] = source
             # 파티클 설정(유니티 파티클 시스템을 옮겨 적은 JSON)도 함께 넣는다. 게임이 이것으로 파티클을 만든다.
-            particles = info.get("particle_data")
+            particles = info.get("particle_data") or info.get("particles")
             particle_file = None
             if particles and os.path.isfile(os.path.join(extras, particles)):
                 particle_file = os.path.basename(particles)

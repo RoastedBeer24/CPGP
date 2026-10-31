@@ -13,6 +13,9 @@
 | 아케쿠리 소리·보이스·이펙트 꾸러미 | `assets/characters/akekuri/akekuri_fx.zip` (**저장소에 없음**) | 같은 파일 | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `tools/extract_character_fx.py "!File/Akekuri_Assets" Akekuri ...` |
 | 무기 O.B.J. 엣지 오브 라이트 (wpn_sword_0019) | `assets/weapons/edge_of_lightness.glb` (**저장소에 없음**) | 같은 파일 (`weapons/OBJ_Edge_of_Lightness.glb`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 아케쿠리의 무기. 오른손(wep_R)에 쥔다 |
 | 본 크러셔 적 모델 (eny_0029_lbmob, 0033_lbhunt, 0018_lbtough, 0068_lbtough2, 0051_rodin) | `assets/enemies/*.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Bonekrusher_Complete_Assets.zip`, studio.warfarin.wiki에서 추출) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `tools/extract_enemy.py`로 쓰는 동작만 뽑는다. 원본은 `!File/Bonekrusher_Assets/` |
+| 진천우·아크라이트·포그라니치니크 모델 (chr_0005_chen, chr_0007_ikut, chr_0029_pograni) | `assets/characters/{chen_qianyu,arclight,pogranichnik}/*.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Chen_Arclight_Pogranichnik_Complete_Assets.zip`, studio.warfarin.wiki에서 추출) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 원본은 `!File/Chen_Arclight_Pogranichnik_Assets/` |
+| 세 캐릭터 소리·보이스·이펙트 꾸러미 | `assets/characters/<이름>/<이름>_fx.zip` (**저장소에 없음**) | 같은 파일 | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `tools/extract_character_fx.py "!File/Chen_Arclight_Pogranichnik_Assets" chr_0005_chen ...` |
+| 무기 숭배의 시선·십이문·끝없는 방랑 (wpn_sword_0015, 0018, 0016) | `assets/weapons/{aspirant,twelve_questions,never_rest}.glb` (**저장소에 없음**) | 같은 파일 (`weapons/`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 세 캐릭터의 전용 무기. 오른손(wep_R)에 쥔다 |
 | 캐릭터 고르기 아이콘 (공식 초상화) | `assets/characters/<이름>/<이름>_icon.png` (**저장소에 없음**) | 사용자가 직접 준 그림 (2026-10-31, 원본은 `!File/Portraits/`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `python tools/make_icons.py`로 얼굴 부분을 256px로 자른다(Pillow 필요) |
 
 ## 저장소에 없는 에셋
@@ -29,6 +32,8 @@
 | 아케쿠리 모델·꾸러미 | `assets/characters/akekuri/akekuri.glb`, `akekuri_fx.zip` | `characters/akekuri.glb`, `characters/akekuri_fx.zip` |
 | 아케쿠리 무기 | `assets/weapons/edge_of_lightness.glb` | `weapons/edge_of_lightness.glb` |
 | 캐릭터 고르기 아이콘 | `assets/characters/<이름>/<이름>_icon.png` | `characters/<이름>_icon.png` |
+| 진천우·아크라이트·포그라니치니크 | `assets/characters/<이름>/<이름>.glb`, `<이름>_fx.zip` | `characters/<이름>.glb`, `characters/<이름>_fx.zip` |
+| 세 캐릭터 무기 | `assets/weapons/{aspirant,twelve_questions,never_rest}.glb` | `weapons/<이름>.glb` |
 | 적 모델 (본 크러셔) | `assets/enemies/<이름>.glb` (lbmob, lbhunt, lbtough, lbtough_elite, rodin) | `Crossfield.exe`가 있는 폴더의 `enemies/<이름>.glb` |
 
 - **애니메이션이 든 원본(`*_Animated.glb`, 약 450MB)에서** 게임에 쓰는 동작(이동·멈추기, 점프·착지, 공격 5단계, 대시 공격, 처형, 낙하 공격, 스킬, 궁극기, 회피, 맞음, 쓰러짐, 쉬는 자세와 특수 대기, 무기 꺼내기·거두기, 캐릭터 화면 동작) 49개만 골라 가벼운 파일(여 약 45MB, 남 약 57MB)을 만들어 넣습니다. 고르는 동작 목록은 도구 안의 `ROLES`에 있고, 여·남은 원본 이름을 보고 알아서 고릅니다.

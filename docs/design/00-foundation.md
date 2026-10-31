@@ -112,7 +112,7 @@ M3에서 1~3과 마지막 보스까지 만들었습니다: 로비 → 방 다섯
 | M2 적 모델 | 검수 대기 ([review/m2.md](../dev/review/m2.md)) | 본 크러셔 다섯 종(약탈자, 저격수, 처형자, 처형자 · 정예, 로댄)의 모델과 동작. 다음: 적 소리(로댄), 다른 종류 늘리기 |
 | M3 한 판 | 검수 대기 ([review/m3.md](../dev/review/m3.md)) | 로비(캐릭터 화면), 방 다섯 개(배치 둘 + 보스 방), 보상 12종 고르기, 중간 보스·최종 보스(격노), 원작 무기(타르 11)·소리·보이스, 검기, 카메라 확대·축소 |
 | M4 거점과 영구 성장 | 예정 | 거점, 재화, 영구 강화 |
-| M5 캐릭터 추가 | 진행 중 | 아케쿠리(검수 대기, [review/akekuri.md](../dev/review/akekuri.md)), 캐릭터 화면 아이콘 고르기·무기 고르기(검수 대기, [review/fp_loadout.md](../dev/review/fp_loadout.md)), 진천우·아크라이트·포그라니치니크(사용자가 추출해 줌, 작업 예정) |
+| M5 캐릭터 추가 | 진행 중 | 아케쿠리(검수 대기, [review/akekuri.md](../dev/review/akekuri.md)), 캐릭터 화면 아이콘 고르기·무기 고르기(검수 대기, [review/fp_loadout.md](../dev/review/fp_loadout.md)), 진천우·아크라이트·포그라니치니크(검수 대기, [review/new_characters.md](../dev/review/new_characters.md)) |
 | M6 다듬기 | 예정 | 원작 이펙트(전용 셰이더 옮기기), 음악, 수치 조정 |
 
 ---

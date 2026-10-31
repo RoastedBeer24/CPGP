@@ -1,0 +1,81 @@
+[gd_resource type="Resource" script_class="CharacterAppearance" format=3]
+
+[ext_resource type="Script" path="res://src/player/character_appearance.gd" id="1_appearance"]
+
+[resource]
+script = ExtResource("1_appearance")
+model_path = "res://assets/characters/pogranichnik/pogranichnik.glb"
+external_model_file = "characters/pogranichnik.glb"
+headgear_meshes = Array[StringName]([])
+cloth_chains = PackedStringArray()
+ribbon_chains = PackedStringArray()
+face_materials = Array[StringName]([&"M_actor_pograni_face_01", &"M_actor_pograni_brow_01", &"M_actor_pograni_iris_01"])
+shade_materials = Dictionary[StringName, float]({
+&"M_hairshadow_common_05": 1.0
+})
+hidden_meshes = Array[StringName]([&"S_actor_pograni_eyeshadow_01_lod0"])
+toon_ramps = Dictionary[StringName, String]({
+&"M_actor_pograni_body_01": "T_actor_common_body_01_RD",
+&"M_actor_pograni_brow_01": "T_actor_common_face_01_RD",
+&"M_actor_pograni_cloth_01": "T_actor_common_cloth_04_RD",
+&"M_actor_pograni_cloth_02": "T_actor_common_cloth_04_RD",
+&"M_actor_pograni_cloth_03": "T_actor_common_cloth_04_RD",
+&"M_actor_pograni_cloth_04": "T_actor_common_cloth_04_RD",
+&"M_wpn_misc_0035_02": "T_actor_common_cloth_04_RD",
+&"M_actor_pograni_face_01": "T_actor_common_face_01_RD",
+&"M_actor_pograni_hair_01": "T_actor_common_hair_01_RD",
+&"M_actor_pograni_hair_02": "T_actor_common_hair_01_RD",
+&"M_actor_pograni_hairt_01": "T_actor_common_hair_01_RD",
+&"M_actor_pograni_iris_01": "T_actor_common_face_01_RD"
+})
+normal_maps = Dictionary[StringName, String]({
+&"M_actor_pograni_cloth_01": "T_actor_pograni_cloth_01_N",
+&"M_actor_pograni_cloth_02": "T_actor_pograni_cloth_02_N",
+&"M_wpn_misc_0035_02": "T_wpn_misc_0035_01_N"
+})
+emission_masks = Dictionary[StringName, String]({})
+outline_widths = Dictionary[StringName, float]({
+&"M_actor_pograni_body_01": 1.0,
+&"M_actor_pograni_cloth_01": 1.0,
+&"M_actor_pograni_cloth_02": 1.0,
+&"M_actor_pograni_cloth_04": 1.0,
+&"M_wpn_misc_0035_02": 1.0,
+&"M_actor_pograni_face_01": 0.6,
+&"M_actor_pograni_hair_01": 1.0
+})
+gloss_materials = Dictionary[StringName, float]({
+&"M_actor_pograni_hair_01": 0.35
+})
+face_shadow_map = "T_actor_common_male_face_04_SDF"
+face_shadow_materials = Array[StringName]([&"M_actor_pograni_face_01"])
+depth_biases = Dictionary[StringName, float]({
+&"M_actor_pograni_brow_01": 0.035
+})
+fx_path = "res://assets/characters/pogranichnik/pogranichnik_fx.zip"
+fx_external_file = "characters/pogranichnik_fx.zip"
+icon_path = "res://assets/characters/pogranichnik/pogranichnik_icon.png"
+icon_external_file = "characters/pogranichnik_icon.png"
+weapon_back_mount = &"GEN_wep_M_0_拖我改武器位置旋转_预览武器prefab挂这"
+weapon_menu_mount = &"wep_R"
+weapon_timelines = Dictionary[StringName, PackedFloat32Array]({
+&"attack_1": PackedFloat32Array(0, 2),
+&"attack_2": PackedFloat32Array(0, 2),
+&"attack_3": PackedFloat32Array(0, 2),
+&"attack_4": PackedFloat32Array(0, 2),
+&"attack_5": PackedFloat32Array(0, 2),
+&"battle_idle": PackedFloat32Array(0, 2),
+&"dash_attack": PackedFloat32Array(0, 2),
+&"dodge_b": PackedFloat32Array(0, 0, 0.5, 2),
+&"dodge_f": PackedFloat32Array(0, 0, 0.5, 2),
+&"draw": PackedFloat32Array(0, 1, 0.82, 2),
+&"finisher": PackedFloat32Array(0, 0, 2.9333, 2),
+&"plunge_end": PackedFloat32Array(0, 2),
+&"plunge_loop": PackedFloat32Array(0, 2),
+&"plunge_start": PackedFloat32Array(0, 2),
+&"sheathe": PackedFloat32Array(0, 2, 0.7, 0),
+&"skill": PackedFloat32Array(0, 0, 4.7667, 2),
+&"ui_to_weapon": PackedFloat32Array(0, 0, 0.5998, 3),
+&"ui_weapon": PackedFloat32Array(0, 3),
+&"ui_weapon_out": PackedFloat32Array(0, 3, 3.5674, 0),
+&"ultimate": PackedFloat32Array(0, 0, 2.5, 2)
+})

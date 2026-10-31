@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3]
+
+[ext_resource type="Script" path="res://src/player/character_data.gd" id="1_character"]
+
+[resource]
+script = ExtResource("1_character")
+id = &"chen_qianyu"
+display_name = "진천우"
+title = "엔드필드 공업 · 근위"
+description = "검 한 자루로 하늘을 가르는 검객. 기본 공격 파비하 5연속으로 몰아치고, 배틀 스킬 귀궁우로 크게 베어 올리며, 궁극기 예풍상으로 앞쪽을 칼바람처럼 일곱 번 벤다."
+appearance_path = "res://data/characters/chen_qianyu/appearance.tres"
+kit_path = "res://data/characters/chen_qianyu/kit.tres"
+weapon_type = &"sword"
+default_weapon = &"aspirant"
