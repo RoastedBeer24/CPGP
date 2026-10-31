@@ -9,6 +9,9 @@ extends Node
 var player: Player
 ## true면 로비에서 제자리 공격만 되풀이한다. 카메라는 캐릭터 뒤에 둔다.
 var combo_only := false
+## true면 로비에서 원을 그리며 달리고(반은 질주), 카메라는 자유 시점으로 한쪽에서 비춘다(--autoplay=run, 옷자락 확인용).
+var run_only := false
+var _run_time := 0.0
 
 var _intent := PlayerIntent.new()
 var _cooldown := 0.0
@@ -34,6 +37,9 @@ func _physics_process(delta: float) -> void:
 	_intent.move = Vector2.ZERO
 	if combo_only:
 		_combo(delta)
+		return
+	if run_only:
+		_run(delta)
 		return
 	var session := player.get_parent().get_parent() as Session
 	if session != null:
@@ -72,6 +78,18 @@ func _physics_process(delta: float) -> void:
 	else:
 		_intent.attack_pressed = true
 	_cooldown = 0.25
+
+
+func _run(delta: float) -> void:
+	_run_time += delta
+	if player.camera_mode != Player.CameraMode.FREE:
+		player.set_camera_mode(Player.CameraMode.FREE, false)
+		player.camera_distance = 3.2
+	player.camera_pitch = deg_to_rad(-6.0)
+	# 카메라는 그대로 두고 가는 방향을 천천히 돌려 원을 그린다. 한 바퀴의 반은 질주한다.
+	var angle := _run_time * 0.7
+	_intent.move = Vector2(cos(angle), sin(angle))
+	_intent.sprint_held = fmod(_run_time, 9.0) > 4.5
 
 
 func _combo(delta: float) -> void:

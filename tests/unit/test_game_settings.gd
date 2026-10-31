@@ -113,12 +113,13 @@ func test_rebinding_keeps_mouse_buttons() -> void:
 		if event is InputEventMouseButton:
 			mouse_events += 1
 	assert_eq(mouse_events, 1, "공격은 마우스 왼쪽 그대로")
-	assert_true(_action_has_key(InputActions.DODGE, KEY_SHIFT), "회피는 Shift와")
+	assert_false(_action_has_key(InputActions.DODGE, KEY_SHIFT), "Shift는 회피가 아니다(달리려고 누르면 회피가 먼저 나갔다)")
+	assert_true(_action_has_key(InputActions.SPRINT, KEY_SHIFT), "Shift는 질주")
 	var right_click := false
 	for event in InputMap.action_get_events(InputActions.DODGE):
 		var mouse := event as InputEventMouseButton
 		right_click = right_click or (mouse != null and mouse.button_index == MOUSE_BUTTON_RIGHT)
-	assert_true(right_click, "마우스 오른쪽 (엔드필드 PC판 기본값)")
+	assert_true(right_click, "회피는 마우스 오른쪽")
 
 
 func test_settings_menu_rebinds_and_swaps_conflicting_key() -> void:

@@ -99,3 +99,33 @@ func _add_box(parent: Node3D, center: Vector3, size: Vector3) -> StaticBody3D:
 func _frames(count: int) -> void:
 	for i in count:
 		await tree.physics_frame
+
+
+func test_free_view_key_is_held_by_default_and_toggles_by_setting() -> void:
+	player.free_view_key(true)
+	assert_eq(player.camera_mode, Player.CameraMode.FREE, "누르고 있으면 자유 시점")
+	player.free_view_key(false)
+	assert_eq(player.camera_mode, Player.CameraMode.THIRD_PERSON, "떼면 기본 시점으로")
+	GameSettings.free_view_toggle = true
+	player.free_view_key(true)
+	player.free_view_key(false)
+	assert_eq(player.camera_mode, Player.CameraMode.FREE, "설정을 바꾸면 눌러서 켜고")
+	player.free_view_key(true)
+	assert_eq(player.camera_mode, Player.CameraMode.THIRD_PERSON, "다시 눌러서 끈다")
+	GameSettings.reset_to_defaults()
+
+
+func test_camera_shot_plays_then_returns() -> void:
+	# 캐릭터 앞 2m, 높이 1.5m에서 캐릭터 쪽(모델의 -Z)을 보는 컷 0.5초, 끝나면 0.3초 동안 원래 카메라로
+	var frames: Array = []
+	for i in 31:
+		frames.append_array([0.0, 1.5, 2.0, 0.0, 0.0, 0.0, 1.0, 25.0])
+	player.play_camera_shot({"duration": 0.5, "easeOut": 0.3, "follow": [true, true], "rate": 60.0, "frames": frames})
+	assert_true(player.cinematic)
+	await _frames(15)
+	var expected := player.body.model_root().global_transform * Vector3(0.0, 1.5, 2.0)
+	assert_true(player.camera.global_position.distance_to(expected) < 0.05, "컷의 카메라 자리에서 비춘다")
+	assert_almost_eq(player.camera.fov, 25.0, 0.5, "컷의 시야각")
+	await _frames(60)
+	assert_false(player.cinematic, "컷이 끝나면 원래 카메라로 돌아온다")
+	assert_almost_eq(player.camera_length(), player.config.camera_distance, 0.1)

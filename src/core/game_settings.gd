@@ -38,7 +38,7 @@ const BASE_MOUSE_SENSITIVITY := 0.0025
 ## 입력 코드: 양수는 물리 키 코드, 음수는 -(마우스 버튼 번호)다.
 const REBINDABLE_ACTIONS: Array[StringName] = [
 	Actions.MOVE_FORWARD, Actions.MOVE_BACK, Actions.MOVE_LEFT, Actions.MOVE_RIGHT,
-	Actions.JUMP, Actions.ATTACK, Actions.DODGE, Actions.SKILL, Actions.ULTIMATE,
+	Actions.JUMP, Actions.ATTACK, Actions.DODGE, Actions.SPRINT, Actions.SKILL, Actions.ULTIMATE,
 	Actions.LOCK_ON, Actions.INTERACT, Actions.TOGGLE_VISOR, Actions.TOGGLE_VIEW, Actions.FREE_VIEW,
 	Actions.CHARACTER_MENU, Actions.START_RUN,
 ]
@@ -49,7 +49,8 @@ const ACTION_LABELS := {
 	Actions.MOVE_RIGHT: "오른쪽",
 	Actions.JUMP: "점프",
 	Actions.ATTACK: "공격",
-	Actions.DODGE: "회피 (누르고 있으면 질주)",
+	Actions.DODGE: "회피",
+	Actions.SPRINT: "질주 (누르고 있기)",
 	Actions.SKILL: "배틀 스킬 (길게: 궁극기)",
 	Actions.ULTIMATE: "궁극기",
 	Actions.LOCK_ON: "대상 고정",
@@ -107,6 +108,8 @@ static var auto_update := true
 static var visor_on := true
 ## 기본 시점이 1인칭인지 (false면 3인칭)
 static var first_person := false
+## 자유 시점 키: false면 누르고 있는 동안만(기본), true면 눌러서 켜고 끈다.
+static var free_view_toggle := false
 ## 에셋 키: 비공개 에셋 저장소(캐릭터 모델)를 읽는 GitHub 토큰. 비어 있으면 에셋을 받지 않는다(AssetUpdater).
 static var asset_key := ""
 
@@ -131,6 +134,7 @@ static func reset_to_defaults() -> void:
 	auto_update = true
 	visor_on = true
 	first_person = false
+	free_view_toggle = false
 	asset_key = ""
 
 
@@ -198,6 +202,7 @@ static func load_settings() -> void:
 	auto_update = bool(config.get_value("game", "auto_update", auto_update))
 	visor_on = bool(config.get_value("game", "visor_on", visor_on))
 	first_person = bool(config.get_value("game", "first_person", first_person))
+	free_view_toggle = bool(config.get_value("controls", "free_view_toggle", free_view_toggle))
 	asset_key = str(config.get_value("game", "asset_key", asset_key)).strip_edges()
 
 
@@ -222,6 +227,7 @@ static func save() -> Error:
 	config.set_value("controls", "mouse_sensitivity", mouse_sensitivity)
 	config.set_value("controls", "invert_y", invert_y)
 	config.set_value("controls", "fov", fov)
+	config.set_value("controls", "free_view_toggle", free_view_toggle)
 	for action: StringName in key_overrides:
 		config.set_value("keys", String(action), key_overrides[action])
 	config.set_value("game", "character_id", String(character_id))

@@ -106,9 +106,15 @@ const CLOTH_GRAVITY := 2.0
 const CLOTH_RADIUS := 0.03
 const CLOTH_TAIL := 0.12
 ## 옷자락이 뚫지 않을 팔다리와 골반의 두께(m)
-const THIGH_RADIUS := 0.08
-const CALF_RADIUS := 0.06
+const THIGH_RADIUS := 0.1
+const CALF_RADIUS := 0.075
 const HIPS_RADIUS := 0.13
+## 달릴 때 옷자락이 받는 바람: 속도(m/s)마다 뒤쪽으로 기우는 정도. 옷자락 물리는 몸 기준으로 계산해서 달려도
+## 저절로 뒤로 날리지 않는다. 그대로 두면 아래로 늘어진 외투 자락에 뒤로 차는 다리가 파고든다(사용자 지적).
+const CLOTH_WIND := 0.45
+## 달릴 때 옷자락이 원래 자세로 돌아가려는 힘을 이만큼까지 줄인다(바람에 잘 날리게). 이 속도(m/s)에서 가장 많이 준다.
+const CLOTH_RUN_STIFFNESS := 0.5
+const CLOTH_RUN_SPEED := 6.0
 ## 한 프레임에 이보다 멀리 움직이면 옷자락 물리를 처음부터 다시 한다(m, 순간이동)
 const TELEPORT_DISTANCE := 2.0
 const RIBBON_STIFFNESS := 5.0
@@ -185,6 +191,9 @@ var _hidden_bones: Array[int] = []
 # 옷자락 물리와, 옷자락이 뚫지 않을 땅
 var _cloth: SpringBoneSimulator3D
 var _cloth_ground: SpringBoneCollisionPlane3D
+## 사슬마다 처음 정한 처짐(중력) 세기. 달릴 때 바람만큼 키운다.
+var _cloth_gravity: Array[float] = []
+var _cloth_stiffness: Array[float] = []
 var _last_position := Vector3.ZERO
 var _sword: Node3D
 ## 무기 자리(WeaponPlace → 붙일 노드), 지금 무기가 있는 자리(사라지는 중이면 사라지기 전 자리), 나타난 정도(0~1)
@@ -706,6 +715,8 @@ func _setup_cloth() -> void:
 		_cloth.set_stiffness(i, setting[2])
 		_cloth.set_drag(i, setting[3])
 		_cloth.set_gravity(i, setting[4])
+		_cloth_gravity.append(setting[4])
+		_cloth_stiffness.append(setting[2])
 		_cloth.set_radius(i, setting[5])
 		_cloth.set_enable_all_child_collisions(i, setting[6])
 
@@ -722,12 +733,18 @@ func _is_chain(root: int, end: int) -> bool:
 
 
 ## 옷자락 물리는 뼈대 기준으로 계산하므로, 세상의 아래 방향을 뼈대 기준으로 바꿔 넣는다.
+## 달리면 가는 반대쪽으로 바람을 넣어(중력을 뒤로 기울여) 외투 자락이 뒤로 날려 다리에서 떨어지게 한다.
 func _update_cloth_gravity() -> void:
 	if _cloth == null:
 		return
-	var down := (_skeleton.global_basis.orthonormalized().inverse() * Vector3.DOWN).normalized()
+	var velocity := global_basis.orthonormalized() * (_move_dir * _speed)
+	var pull := Vector3.DOWN - Vector3(velocity.x, 0.0, velocity.z) * CLOTH_WIND
+	var down := (_skeleton.global_basis.orthonormalized().inverse() * pull.normalized()).normalized()
+	var loosen := lerpf(1.0, CLOTH_RUN_STIFFNESS, clampf(_speed / CLOTH_RUN_SPEED, 0.0, 1.0))
 	for i in _cloth.setting_count:
 		_cloth.set_gravity_direction(i, down)
+		_cloth.set_gravity(i, _cloth_gravity[i] * pull.length())
+		_cloth.set_stiffness(i, _cloth_stiffness[i] * loosen)
 
 ## 팔다리 한 마디(role에서 child_role까지)를 감싸는 원기둥. 옷자락이 이것을 뚫지 않는다.
 func _add_limb_collision(role: StringName, child_role: StringName, radius: float) -> void:

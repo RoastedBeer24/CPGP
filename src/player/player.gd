@@ -112,6 +112,8 @@ var camera_pitch := deg_to_rad(-12.0)
 var camera_distance := 4.2
 ## 지금 카메라 방식
 var camera_mode := CameraMode.THIRD_PERSON
+## 원작 연출 카메라 컷(궁극기)을 트는 중인지. 조종하는 피어의 화면에서만 튼다.
+var cinematic := false
 ## 대상 고정 중인 적. 없으면 null.
 var lock_target: Enemy
 ## 테스트에서 입력을 직접 넣을 때 쓴다. 설정되어 있으면 장치 입력 대신 이것을 읽는다.
@@ -167,6 +169,10 @@ var _pivot_ready := false
 var _blocked_time := 0.0
 ## 싸우는 중 물러나는 정도(0~1)
 var _combat_view := 0.0
+## 트는 중인 연출 카메라 컷(CharacterFx.camera_shots)과 지난 시간, 컷이 시작될 때의 캐릭터 모델 변환
+var _shot: Dictionary = {}
+var _shot_time := 0.0
+var _shot_origin := Transform3D.IDENTITY
 var _probe := SphereShape3D.new()
 var _was_alive := true
 ## 호스트에서: 쓰러진 이 플레이어를 일으킨 정도(초)
@@ -217,13 +223,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority() or not use_device_input or input_blocked:
 		return
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		# 누르고 있는 자유 시점 중에 메뉴가 열려 마우스가 풀리면 키를 뗀 것을 못 받을 수 있어 바로 끝낸다.
+		if camera_mode == CameraMode.FREE and not GameSettings.free_view_toggle:
+			set_camera_mode(_base_camera)
 		return
 	if event.is_action_pressed(InputActions.TOGGLE_VIEW) and not event.is_echo():
 		toggle_first_person()
 		get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed(InputActions.FREE_VIEW) and not event.is_echo():
-		toggle_free_view()
+	if event.is_action(InputActions.FREE_VIEW) and not event.is_echo():
+		free_view_key(event.is_pressed())
 		get_viewport().set_input_as_handled()
 		return
 	var motion := event as InputEventMouseMotion
@@ -254,6 +263,18 @@ func zoom(steps: int) -> void:
 ## 기본 시점을 1인칭 ↔ 3인칭으로 바꾼다. 자유 시점이었으면 자유 시점을 끄고 바꾼다. 다음에 켜도 기억한다.
 func toggle_first_person() -> void:
 	set_camera_mode(CameraMode.THIRD_PERSON if _base_camera == CameraMode.FIRST_PERSON else CameraMode.FIRST_PERSON)
+
+
+## 자유 시점 키를 눌렀다(pressed)·뗐다. 기본은 누르고 있는 동안만 자유 시점이고,
+## 설정(GameSettings.free_view_toggle)에서 눌러서 켜고 끄기로 바꿀 수 있다.
+func free_view_key(pressed: bool) -> void:
+	if GameSettings.free_view_toggle:
+		if pressed:
+			toggle_free_view()
+	elif pressed:
+		set_camera_mode(CameraMode.FREE)
+	elif camera_mode == CameraMode.FREE:
+		set_camera_mode(_base_camera)
 
 
 ## 자유 시점을 켜거나 끈다(끄면 기본 시점으로 돌아간다).
@@ -442,7 +463,10 @@ func _process_free(delta: float, intent: PlayerIntent) -> void:
 	if not on_floor:
 		velocity.y -= config.gravity * delta
 	var wish := _wish_direction(intent)
-	if _sprinting and (not intent.dodge_held or wish == Vector3.ZERO):
+	# 질주: 질주 키(Shift)를 누르고 있으면 회피 없이 바로, 회피한 뒤 회피 키를 계속 누르고 있어도 질주한다.
+	if intent.sprint_held and wish != Vector3.ZERO and on_floor:
+		_sprinting = true
+	elif _sprinting and (not (intent.sprint_held or intent.dodge_held) or wish == Vector3.ZERO):
 		_sprinting = false
 	var speed := config.sprint_speed if _sprinting else config.run_speed
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z)
@@ -557,6 +581,11 @@ func _start_action(attack: AttackData, target: Enemy, intent: PlayerIntent) -> v
 	aim.y = 0.0
 	if aim.length() > 0.05:
 		_face(aim)
+	# 궁극기: 원작 연출 카메라 컷(얼굴 클로즈업 → 뒤 높은 곳에서 넓게)을 내 화면에서 튼다.
+	if attack == kit.ultimate and body.fx != null:
+		var shots := body.fx.camera_shots(&"ultimate")
+		if not shots.is_empty():
+			play_camera_shot(shots[0])
 	action_started.emit(attack)
 
 
@@ -741,7 +770,7 @@ func _process_dodge(delta: float, intent: PlayerIntent) -> void:
 	_dodge_cooldown = config.dodge_cooldown
 	state = State.GROUND if is_on_floor() else State.AIR
 	var wish := _wish_direction(intent)
-	_sprinting = intent.dodge_held and wish != Vector3.ZERO and not dodge_back
+	_sprinting = (intent.dodge_held or intent.sprint_held) and wish != Vector3.ZERO and not dodge_back
 	var keep := config.sprint_speed if _sprinting else config.run_speed
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z).limit_length(keep)
 	velocity.x = horizontal.x
@@ -1133,6 +1162,69 @@ func _update_camera(delta: float) -> void:
 	if inside != _camera_inside:
 		_camera_inside = inside
 		_apply_view()
+	if cinematic and delta > 0.0:
+		_apply_shot(delta)
+
+
+## 원작 연출 카메라 컷을 튼다. 컷은 캐릭터 모델 기준(glTF 좌표, +Z가 캐릭터 앞) 카메라 위치·회전·시야각을
+## 초당 rate장 담고 있다. 컷이 끝나면 easeOut초 동안 원래 카메라로 섞어 돌아온다. 컷이 끝나면 캐릭터 뒤에서
+## 앞을 보는 카메라로 이어지도록 카메라 방향을 캐릭터가 보는 쪽으로 맞춰 둔다.
+func play_camera_shot(shot: Dictionary) -> void:
+	if not is_multiplayer_authority() or (shot.get("frames", []) as Array).size() < 8:
+		return
+	_shot = shot
+	_shot_time = 0.0
+	_shot_origin = body.model_root().global_transform
+	camera_yaw = rotation.y
+	cinematic = true
+	_apply_view()
+
+
+func _apply_shot(delta: float) -> void:
+	_shot_time += delta
+	var duration := float(_shot.get("duration", 0.0))
+	var ease_out := maxf(float(_shot.get("easeOut", 0.0)), 0.001)
+	var weight := 1.0
+	if _shot_time > duration:
+		weight = 1.0 - smoothstep(0.0, 1.0, (_shot_time - duration) / ease_out)
+	if weight <= 0.0 or not is_alive():
+		cinematic = false
+		_apply_view()
+		return
+	var view := _shot_view(minf(_shot_time, duration))
+	# 원래 카메라(중심 + 팔 길이)와 컷의 카메라를 섞는다. 컷 동안은 1, 끝나면 easeOut 동안 0으로.
+	# 카메라 팔은 그대로 두고 카메라만 옮긴다. 팔 길이를 바꾸면 물리 프레임에 한 번 늦게 반영되어, 컷이 끝나는
+	# 순간 카메라가 한 프레임 캐릭터 몸속으로 튀었다. 팔은 다음 물리 프레임에 카메라를 제자리로 돌려놓는다.
+	var normal := camera_rig.global_transform * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, _arm_length))
+	camera.global_transform = normal.interpolate_with(view[0], weight)
+	camera.fov = lerpf(GameSettings.fov, float(view[1]), weight)
+
+
+## 컷의 t초 카메라: [세상 변환, 시야각]. follow가 꺼진 쪽(위치·방향)은 컷이 시작될 때의 캐릭터를 기준으로 한다.
+func _shot_view(t: float) -> Array:
+	var frames: Array = _shot.get("frames", [])
+	var count := frames.size() / 8
+	var at := clampf(t * float(_shot.get("rate", 60.0)), 0.0, count - 1.0)
+	var i := int(at)
+	var j := mini(i + 1, count - 1)
+	var w := at - i
+	var position := _shot_position(frames, i).lerp(_shot_position(frames, j), w)
+	var turn := _shot_rotation(frames, i).slerp(_shot_rotation(frames, j), w)
+	var fov := lerpf(float(frames[i * 8 + 7]), float(frames[j * 8 + 7]), w)
+	var follow: Array = _shot.get("follow", [true, true])
+	var model := body.model_root().global_transform
+	var at_position := model if follow.size() < 1 or bool(follow[0]) else _shot_origin
+	var at_rotation := model if follow.size() < 2 or bool(follow[1]) else _shot_origin
+	return [Transform3D(at_rotation.basis.orthonormalized() * Basis(turn), at_position * position), fov]
+
+
+static func _shot_position(frames: Array, index: int) -> Vector3:
+	return Vector3(float(frames[index * 8]), float(frames[index * 8 + 1]), float(frames[index * 8 + 2]))
+
+
+static func _shot_rotation(frames: Array, index: int) -> Quaternion:
+	var q := Quaternion(float(frames[index * 8 + 3]), float(frames[index * 8 + 4]), float(frames[index * 8 + 5]), float(frames[index * 8 + 6]))
+	return q.normalized() if q.length_squared() > 0.0 else Quaternion.IDENTITY
 
 
 ## 카메라 중심에서 뒤로 distance만큼 갈 때 벽·바닥(world 레이어)에 막히지 않는 거리
@@ -1156,6 +1248,8 @@ func camera_length() -> float:
 
 
 func _update_fov(delta: float) -> void:
+	if cinematic:
+		return
 	var target := GameSettings.fov
 	if _sprinting:
 		target += config.sprint_fov_bonus
@@ -1166,7 +1260,7 @@ func _update_fov(delta: float) -> void:
 ## 머리에 붙었으면 몸 전체를 그림자만 남긴다.
 func _apply_view() -> void:
 	var mine := is_multiplayer_authority()
-	body.set_first_person(mine and camera_mode == CameraMode.FIRST_PERSON and not showcase)
+	body.set_first_person(mine and camera_mode == CameraMode.FIRST_PERSON and not showcase and not cinematic)
 	if mine and _camera_inside:
 		body.set_view_mode(PlayerBody.ViewMode.SHADOW_ONLY)
 	else:

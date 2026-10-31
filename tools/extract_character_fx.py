@@ -131,7 +131,12 @@ def main(extras, who, target):
                 roles.setdefault(role, {"length": 0.0, "loop": False, "sounds": [], "voices": [], "effects": []})
                 roles[role]["effects"].append(copied)
 
-    manifest = {"character": char, "languages": LANGUAGES, "roles": roles}
+    # 원작 연출 카메라: 궁극기 컷(캐릭터 모델 기준 위치·회전·시야각, 초당 60장)과 캐릭터 화면용 자세들
+    camera_path = os.path.join(extras, "characters", who, "metadata", "camera.json")
+    camera = json.load(open(camera_path, encoding="utf-8")) if os.path.isfile(camera_path) else {}
+
+    manifest = {"character": char, "languages": LANGUAGES, "roles": roles,
+                "camera": camera.get("shots", {}), "camera_poses": camera.get("pages", {}).get("poses", {})}
     os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("fx.json", json.dumps(manifest, ensure_ascii=False, separators=(",", ":")))

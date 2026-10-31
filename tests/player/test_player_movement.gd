@@ -93,6 +93,18 @@ func test_holding_dodge_after_dodge_sprints() -> void:
 	assert_almost_eq(player.horizontal_speed(), player.config.run_speed, 0.1)
 
 
+func test_sprint_key_sprints_without_dodging() -> void:
+	intent.move = Vector2(0, 1)
+	intent.sprint_held = true
+	await _frames(40)
+	assert_true(player.is_sprinting(), "질주 키를 누르고 있으면 질주")
+	assert_eq(player.dodge_count, 0, "회피는 나가지 않는다")
+	assert_almost_eq(player.horizontal_speed(), player.config.sprint_speed, 0.1)
+	intent.sprint_held = false
+	await _frames(30)
+	assert_false(player.is_sprinting(), "떼면 달리기")
+
+
 func test_zoom_is_clamped_in_free_view() -> void:
 	player.toggle_free_view()
 	for i in 40:

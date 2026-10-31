@@ -112,7 +112,7 @@ func _ready() -> void:
 	ultimate_bar = _bar(Vector2(0, 8), ENERGY_COLOR)
 	skill_box.add_child(ultimate_bar)
 	var hint := _label(15, Color(1, 1, 1, 0.65))
-	hint.text = "클릭 공격 · Shift 회피 · 휠 클릭 대상 고정\nV 1인칭/3인칭 · ` 자유 시점(휠 확대)"
+	hint.text = "클릭 공격 · 오른쪽 클릭 회피 · Shift 질주 · 휠 클릭 대상 고정\nV 1인칭/3인칭 · ` 누르고 있으면 자유 시점(휠 확대)"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	skill_box.add_child(hint)
 

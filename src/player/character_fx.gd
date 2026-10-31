@@ -25,6 +25,8 @@ static var _loaded: Dictionary[String, Dictionary] = {}
 var _source := ""
 var _roles: Dictionary = {}
 var _streams: Dictionary = {}
+## 원작 연출 카메라 컷: 이름(궁극기 "ultimate") → 컷 목록
+var _cameras: Dictionary = {}
 ## 아직 나지 않은 소리: [시각, 종류("sound"/"voice"), 정보]
 var _pending: Array[Array] = []
 var _clock := 0.0
@@ -48,6 +50,7 @@ func setup(zip_path: String) -> bool:
 	_source = zip_path
 	_roles = _loaded[zip_path]["roles"]
 	_streams = _loaded[zip_path]["streams"]
+	_cameras = _loaded[zip_path].get("camera", {})
 	_voice = _make_player(&"Voice")
 	for role: String in _roles:
 		for effect: Dictionary in (_roles[role] as Dictionary).get("effects", []):
@@ -61,6 +64,13 @@ func has_sounds() -> bool:
 
 func has_role(role: StringName) -> bool:
 	return _roles.has(String(role))
+
+
+## 원작 연출 카메라 컷 목록(궁극기 등). 컷마다 at(시작 초), duration, easeOut(원래 카메라로 돌아가는 초),
+## follow([위치, 방향]을 캐릭터를 따라 바꾸는지), rate(초당 장 수), frames([x, y, z, qx, qy, qz, qw, 시야각]을 이어 붙임,
+## 캐릭터 모델 기준·glTF 좌표)가 있다. 없으면 빈 배열.
+func camera_shots(name: StringName) -> Array:
+	return _cameras.get(String(name), [])
 
 
 ## 동작에 원작 이펙트가 있는지 (있으면 몸이 임시 검기를 그리지 않는다)
@@ -205,10 +215,11 @@ static func _read_package(zip_path: String) -> Dictionary:
 		return {}
 	var manifest: Dictionary = json.data
 	var streams := {}
+	var cameras: Dictionary = manifest.get("camera", {})
 	for entry in reader.get_files():
 		if entry.begins_with("audio/") and entry.ends_with(".wav"):
 			var stream := AudioStreamWAV.load_from_buffer(reader.read_file(entry))
 			if stream != null:
 				streams[entry.get_file()] = stream
 	reader.close()
-	return {"roles": manifest.get("roles", {}), "streams": streams}
+	return {"roles": manifest.get("roles", {}), "streams": streams, "camera": cameras}

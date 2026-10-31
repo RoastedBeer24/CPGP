@@ -228,6 +228,8 @@ func _build_controls(rows: VBoxContainer) -> void:
 		func(on: bool) -> void: GameSettings.invert_y = on)
 	_add_slider(rows, "시야각 (FOV)", GameSettings.fov, 50.0, 100.0, 1.0, "%d°",
 		func(value: float) -> void: GameSettings.fov = value)
+	_add_check(rows, "자유 시점을 눌러서 켜고 끄기 (끄면 누르고 있는 동안만)", GameSettings.free_view_toggle,
+		func(on: bool) -> void: GameSettings.free_view_toggle = on)
 
 	var header := Label.new()
 	header.text = "키 설정"
