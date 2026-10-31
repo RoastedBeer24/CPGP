@@ -71,12 +71,14 @@ func test_rewards_raise_damage_and_health() -> void:
 func test_character_can_be_changed_in_lobby() -> void:
 	var session := _solo()
 	var before := session.get_local_player()
+	before.rotation.y = 1.2
 	session.request_character(&"endministrator_m")
 	await physics_frames(2)
 	var after := session.get_local_player()
 	assert_ne(after, before, "새 캐릭터로 다시 나타난다")
 	assert_eq(after.character_id, &"endministrator_m")
 	assert_eq(after.kit.id, &"endministrator_m")
+	assert_almost_eq(after.rotation.y, 1.2, 0.01, "같은 방향을 본다(캐릭터 화면 카메라가 그대로 앞에 있게)")
 
 
 func test_coop_character_change_and_no_joining_during_run() -> void:

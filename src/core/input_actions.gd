@@ -1,8 +1,9 @@
 extends Node
 ## 게임 입력 동작을 등록한다. 기본 키 배치는 아크나이츠: 엔드필드 PC판을 따른다.
-##   왼쪽 클릭 공격, 오른쪽 클릭 회피, Shift 질주(누르고 있기), 1 배틀 스킬(길게 누르면 궁극기),
+##   왼쪽 클릭 공격, Shift 짧게 회피·누르고 있으면 질주, 1 배틀 스킬(길게 누르면 궁극기),
 ##   가운데 클릭 대상 고정, Space 점프. V 1인칭·3인칭, ` 자유 시점.
-##   Shift를 회피와 함께 쓰면 달리려고 누를 때 회피가 먼저 나가서(사용자 지적) 질주만 맡긴다.
+##   Shift는 뗄 때 회피한다(누른 시간으로 회피와 질주를 가른다, Player.dodge_key). 누르자마자 회피하면 달리려고
+##   누를 때 회피가 먼저 나갔다(사용자 지적).
 ## 키 재설정(설정 메뉴)은 이 기본값 위에 덮어쓴다(GameSettings.key_overrides).
 
 const MOVE_FORWARD := &"move_forward"
@@ -11,10 +12,8 @@ const MOVE_LEFT := &"move_left"
 const MOVE_RIGHT := &"move_right"
 const JUMP := &"jump"
 const ATTACK := &"attack"
-## 회피. 회피한 뒤에도 누르고 있으면 질주한다.
+## 짧게 눌렀다 떼면 회피, 오래 누르고 있으면 질주
 const DODGE := &"dodge"
-## 질주(누르고 있는 동안). 회피 없이 바로 달린다.
-const SPRINT := &"sprint"
 ## 배틀 스킬. 궁극기 에너지가 차 있으면 길게 눌러 궁극기를 쓴다.
 const SKILL := &"skill"
 ## 궁극기만 따로 쓰는 키. 엔드필드에는 없지만 캐릭터가 한 명이라 하나 더 둔다.
@@ -39,7 +38,7 @@ const DEFAULT_KEYS := {
 	MOVE_LEFT: [KEY_A],
 	MOVE_RIGHT: [KEY_D],
 	JUMP: [KEY_SPACE],
-	SPRINT: [KEY_SHIFT],
+	DODGE: [KEY_SHIFT],
 	SKILL: [KEY_1],
 	ULTIMATE: [KEY_Q],
 	INTERACT: [KEY_F],
@@ -55,7 +54,6 @@ const DEFAULT_KEYS := {
 
 const DEFAULT_MOUSE_BUTTONS := {
 	ATTACK: [MOUSE_BUTTON_LEFT],
-	DODGE: [MOUSE_BUTTON_RIGHT],
 	LOCK_ON: [MOUSE_BUTTON_MIDDLE],
 }
 

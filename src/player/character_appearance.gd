@@ -120,8 +120,6 @@ static var _runtime_images: Dictionary[String, Dictionary] = {}
 @export var hidden_bones: Array[StringName] = [&"faceLfHighlightJoint", &"faceRtHighlightJoint"]
 ## 눈 뼈(왼쪽·오른쪽): 1인칭 카메라를 두 눈 사이에 둔다. 없으면 정해진 눈 높이를 쓴다.
 @export var eye_bones: Array[StringName] = [&"eyeLfJoint", &"eyeRtJoint"]
-## 1인칭에서 숨길 머리 메시: 이름에 이 낱말이 든 메시(얼굴, 눈썹, 눈 그림자, 눈동자, 머리카락)와 머리 장비(바이저)
-@export var head_mesh_keywords: PackedStringArray = ["face", "eyebrow", "eyeshadow", "iris", "hair"]
 
 @export_group("소리")
 ## 원작 소리·보이스 꾸러미(zip, tools/extract_character_fx.py): 프로젝트 안 경로와 실행 파일 옆 경로

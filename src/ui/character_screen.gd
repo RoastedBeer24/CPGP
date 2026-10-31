@@ -1,10 +1,10 @@
 class_name CharacterScreen
 extends Control
-## 로비의 캐릭터 화면(C). 카메라가 내 캐릭터를 앞에서 비추고, 오른쪽에 소개와 기술이 나온다.
-## 캐릭터는 원작의 캐릭터 화면 동작으로 걸어 들어와 선다. 캐릭터를 누르면 반응하고, 무기 보기(W)를 누르면
-## 왼손에 무기를 꺼내 보여 준다.
+## 로비의 캐릭터 화면(C). 카메라가 원작 캐릭터 화면의 구도로 내 캐릭터를 비추고(Player.showcase), 오른쪽에
+## 소개와 기술이 나온다. 캐릭터는 원작의 캐릭터 화면 동작으로 걸어 들어와 선다. 캐릭터를 누르면 반응하고,
+## 무기 보기(W)를 누르면 왼손에 무기를 꺼내 보여 준다(카메라도 원작의 무기 보기 구도로 옮겨 간다).
 ## ◀ ▶(또는 A·D)로 캐릭터를 바꾸면 그 자리에서 새 캐릭터로 다시 나타난다(코옵에서도 모두에게 보인다).
-## 휠로 가까이·멀리, 마우스 오른쪽 버튼을 끌거나 Q·E로 캐릭터 둘레를 돈다.
+## 휠로 얼굴 앞까지 다가가거나 물러나고, 마우스 오른쪽 버튼을 끌거나 Q·E로 캐릭터 둘레를 돈다.
 
 signal closed
 
@@ -92,6 +92,7 @@ func open_screen() -> void:
 		return
 	visible = true
 	player.input_blocked = true
+	player.face_camera()
 	player.showcase = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_refresh()
@@ -147,10 +148,16 @@ func _process(delta: float) -> void:
 	var player := _player()
 	if player == null:
 		return
-	# 캐릭터를 바꾸면 새 플레이어로 다시 스폰된다. 새 플레이어에도 캐릭터 화면 상태를 입힌다.
+	# 캐릭터를 바꾸면 새 플레이어로 다시 스폰된다(같은 자리, 같은 방향). 새 플레이어에도 캐릭터 화면 상태를 입히고
+	# 카메라는 바로 원작 구도에 둔다.
 	if not player.showcase:
 		player.input_blocked = true
 		player.showcase = true
+		player.snap_showcase_camera()
+	# 원작 구도는 캐릭터가 화면 가운데다. 소개 칸 왼쪽 빈 곳의 가운데에 보이게 옮긴다.
+	var width := get_viewport_rect().size.x
+	if width > 0.0:
+		player.showcase_screen_shift = (_panel.get_global_rect().position.x * 0.5 - width * 0.5) / width
 	var turn := 0.0
 	if Input.is_physical_key_pressed(KEY_Q):
 		turn -= 1.0

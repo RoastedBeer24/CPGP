@@ -7,10 +7,9 @@ extends RefCounted
 var move := Vector2.ZERO
 var jump_pressed := false
 var attack_pressed := false
+## 회피한다. 키보드에서는 회피 키(Shift)를 짧게 눌렀다 뗐을 때다(Player.dodge_key).
 var dodge_pressed := false
-## 회피 키를 누르고 있는지. 회피한 뒤에도 누르고 있으면 질주한다.
-var dodge_held := false
-## 질주 키(Shift)를 누르고 있는지. 회피 없이 바로 질주한다.
+## 질주한다(누르고 있는 동안). 키보드에서는 회피 키(Shift)를 오래 누르고 있을 때다(Player.dodge_key).
 var sprint_held := false
 var skill_pressed := false
 var skill_held := false
@@ -28,9 +27,7 @@ static func from_device() -> PlayerIntent:
 	)
 	intent.jump_pressed = Input.is_action_just_pressed(InputActions.JUMP)
 	intent.attack_pressed = Input.is_action_just_pressed(InputActions.ATTACK)
-	intent.dodge_pressed = Input.is_action_just_pressed(InputActions.DODGE)
-	intent.dodge_held = Input.is_action_pressed(InputActions.DODGE)
-	intent.sprint_held = Input.is_action_pressed(InputActions.SPRINT)
+	# 회피와 질주는 회피 키를 누른 시간으로 가르므로 플레이어가 키 이벤트를 보고 넣는다(Player.dodge_key).
 	intent.skill_pressed = Input.is_action_just_pressed(InputActions.SKILL)
 	intent.skill_held = Input.is_action_pressed(InputActions.SKILL)
 	intent.ultimate_pressed = Input.is_action_just_pressed(InputActions.ULTIMATE)
@@ -46,7 +43,6 @@ func copy() -> PlayerIntent:
 	other.jump_pressed = jump_pressed
 	other.attack_pressed = attack_pressed
 	other.dodge_pressed = dodge_pressed
-	other.dodge_held = dodge_held
 	other.sprint_held = sprint_held
 	other.skill_pressed = skill_pressed
 	other.skill_held = skill_held

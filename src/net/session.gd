@@ -218,9 +218,10 @@ func change_character(peer_id: int, chosen: StringName) -> void:
 	if old == null or old.character_id == Characters.find(chosen).id:
 		return
 	var at := old.global_position
+	var yaw := old.rotation.y
 	players.remove_child(old)
 	old.free()
-	var player := spawner.spawn({"peer_id": peer_id, "position": at, "character": String(chosen)}) as Player
+	var player := spawner.spawn({"peer_id": peer_id, "position": at, "yaw": yaw, "character": String(chosen)}) as Player
 	player_spawned.emit(player)
 
 
@@ -261,6 +262,7 @@ func _spawn_player(data: Variant) -> Node:
 	player.get_node("Health").set_multiplayer_authority(1)
 	player.get_node("HealthSync").set_multiplayer_authority(1)
 	player.position = info["position"]
+	player.rotation.y = float(info.get("yaw", 0.0))
 	player.character_id = Characters.find(StringName(str(info.get("character", "")))).id
 	player.use_device_input = use_device_input
 	return player

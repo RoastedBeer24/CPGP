@@ -79,17 +79,31 @@ func test_dodge_without_input_steps_back() -> void:
 	assert_true(moved.dot(Vector3.BACK) > 1.5, "몸 뒤쪽(+Z)으로: %s" % moved)
 
 
-func test_holding_dodge_after_dodge_sprints() -> void:
+func test_short_dodge_key_tap_dodges_on_release() -> void:
 	await _frames(5)
 	intent.move = Vector2(0, 1)
-	intent.dodge_pressed = true
-	intent.dodge_held = true
-	await _frames(60)
-	assert_true(player.is_sprinting(), "회피 키를 누르고 있으면 질주")
+	player.dodge_key(true)
+	await _frames(4)
+	assert_eq(player.dodge_count, 0, "누르는 동안은 아직 회피하지 않는다")
+	player.dodge_key(false)
+	await _frames(2)
+	assert_eq(player.dodge_count, 1, "짧게 눌렀다 떼면 회피")
+	assert_eq(player.state, Player.State.DODGE)
+	await _frames(40)
+	assert_false(player.is_sprinting(), "회피 뒤에 키를 누르고 있지 않으면 달리기")
+
+
+func test_holding_dodge_key_sprints_without_dodging() -> void:
+	await _frames(5)
+	intent.move = Vector2(0, 1)
+	player.dodge_key(true)
+	await _frames(40)
+	assert_true(player.is_sprinting(), "오래 누르고 있으면 질주")
 	assert_almost_eq(player.horizontal_speed(), player.config.sprint_speed, 0.1)
-	intent.dodge_held = false
+	player.dodge_key(false)
 	await _frames(30)
-	assert_false(player.is_sprinting(), "놓으면 다시 달리기")
+	assert_eq(player.dodge_count, 0, "질주하려고 누른 키로는 회피하지 않는다")
+	assert_false(player.is_sprinting(), "떼면 다시 달리기")
 	assert_almost_eq(player.horizontal_speed(), player.config.run_speed, 0.1)
 
 

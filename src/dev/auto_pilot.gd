@@ -82,7 +82,8 @@ func _physics_process(delta: float) -> void:
 
 func _run(delta: float) -> void:
 	_run_time += delta
-	if player.camera_mode != Player.CameraMode.FREE:
+	# 1인칭으로 켰으면 1인칭 그대로 확인한다.
+	if player.camera_mode == Player.CameraMode.THIRD_PERSON:
 		player.set_camera_mode(Player.CameraMode.FREE, false)
 		player.camera_distance = 3.2
 	player.camera_pitch = deg_to_rad(-6.0)

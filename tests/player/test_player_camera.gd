@@ -34,13 +34,40 @@ func test_first_person_puts_camera_at_the_eyes() -> void:
 	await _frames(90)
 	assert_eq(player.camera_mode, Player.CameraMode.FIRST_PERSON)
 	assert_true(player.camera_length() < 0.05, "1인칭은 카메라 팔이 없다: %s" % player.camera_length())
-	assert_true(player.camera.global_position.distance_to(player.body.eye_position()) < 0.1, "눈 위치에서 본다")
-	assert_true(player.body.first_person(), "내 머리를 숨긴다")
+	assert_true(player.camera.global_position.distance_to(player.body.first_person_eye()) < 0.05, "눈 위치에서 본다")
+	assert_true(player.body.first_person(), "내 몸을 숨기고 팔만 보인다")
+	if player.body.has_model:
+		assert_true(player.body.arm_mesh_count() > 0, "팔 메시를 만든다")
 	player.toggle_first_person()
 	await _frames(120)
 	assert_eq(player.camera_mode, Player.CameraMode.THIRD_PERSON)
 	assert_false(player.body.first_person())
 	assert_almost_eq(player.camera_length(), player.config.camera_distance, 0.1, "3인칭으로 돌아간다")
+
+
+func test_first_person_camera_keeps_up_when_running() -> void:
+	# 예전에는 눈을 늦게 따라가서 달리면 카메라가 머리 뒤로 처져 목이 보였다.
+	player.toggle_first_person()
+	intent.move = Vector2(0, 1)
+	await _frames(60)
+	var eye := player.body.first_person_eye()
+	var gap := Vector2(player.camera.global_position.x - eye.x, player.camera.global_position.z - eye.z).length()
+	assert_true(gap < 0.03, "달려도 카메라가 눈에서 떨어지지 않는다: %s" % gap)
+
+
+func test_first_person_body_faces_where_you_look() -> void:
+	player.toggle_first_person()
+	player.look(Vector2(PI * 0.5, 0.0))
+	await _frames(5)
+	assert_true(player.facing().dot(Vector3.RIGHT) > 0.99, "몸이 카메라가 보는 쪽을 본다: %s" % player.facing())
+	# 옆으로 가며 공격해도 가는 쪽이 아니라 보는 쪽으로 공격한다(팔과 칼이 화면 앞에 있다).
+	intent.move = Vector2(-1, 0)
+	await _frames(10)
+	assert_true(player.facing().dot(Vector3.RIGHT) > 0.99, "옆으로 가도 보는 쪽을 본다: %s" % player.facing())
+	intent.attack_pressed = true
+	await _frames(3)
+	assert_not_null(player.current_action(), "공격한다")
+	assert_true(player.facing().dot(Vector3.RIGHT) > 0.99, "보는 쪽으로 공격한다: %s" % player.facing())
 
 
 func test_free_view_zooms_close_to_the_face() -> void:
@@ -113,6 +140,36 @@ func test_free_view_key_is_held_by_default_and_toggles_by_setting() -> void:
 	player.free_view_key(true)
 	assert_eq(player.camera_mode, Player.CameraMode.THIRD_PERSON, "다시 눌러서 끈다")
 	GameSettings.reset_to_defaults()
+
+
+func test_character_screen_uses_original_camera_poses() -> void:
+	# 원작 캐릭터 화면 카메라 자리: 캐릭터 앞 3.5m 높이 1m(시야각 20도), 무기 보기는 앞 2m 높이 0.5m(45도)
+	var fx := CharacterFx.new()
+	player.body.add_child(fx)
+	player.body.fx = fx
+	fx.set_camera_poses({
+		"overview": [0.0, 1.0, 3.5, 0.0, 0.0, 0.0, 1.0, 20.0],
+		"weapon": [0.0, 0.5, 2.0, 0.0, 0.0, 0.0, 1.0, 45.0],
+	})
+	player.showcase = true
+	await _frames(60)
+	var model := player.body.model_root().global_transform
+	assert_true(player.camera.global_position.distance_to(model * Vector3(0.0, 1.0, 3.5)) < 0.05, "원작 구도 자리에서 비춘다")
+	assert_almost_eq(player.camera.fov, 20.0, 0.5, "원작 구도의 시야각")
+	assert_true(player.camera.global_basis.z.dot(model.basis.z.normalized()) > 0.99, "캐릭터 쪽을 본다")
+	player.showcase_weapon = true
+	await _frames(60)
+	assert_true(player.camera.global_position.distance_to(model * Vector3(0.0, 0.5, 2.0)) < 0.05, "무기 보기 구도")
+	assert_almost_eq(player.camera.fov, 45.0, 0.5)
+	player.showcase_weapon = false
+	for i in 8:
+		player.zoom(-1)
+	await _frames(90)
+	var eye := player.body.eye_position()
+	assert_almost_eq(player.camera.global_position.distance_to(eye), Player.SHOWCASE_FACE_DISTANCE, 0.05, "휠로 얼굴 앞까지 다가간다")
+	player.showcase = false
+	await _frames(60)
+	assert_almost_eq(player.camera.fov, GameSettings.fov, 0.5, "닫으면 원래 카메라로")
 
 
 func test_camera_shot_plays_then_returns() -> void:

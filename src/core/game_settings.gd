@@ -38,7 +38,7 @@ const BASE_MOUSE_SENSITIVITY := 0.0025
 ## 입력 코드: 양수는 물리 키 코드, 음수는 -(마우스 버튼 번호)다.
 const REBINDABLE_ACTIONS: Array[StringName] = [
 	Actions.MOVE_FORWARD, Actions.MOVE_BACK, Actions.MOVE_LEFT, Actions.MOVE_RIGHT,
-	Actions.JUMP, Actions.ATTACK, Actions.DODGE, Actions.SPRINT, Actions.SKILL, Actions.ULTIMATE,
+	Actions.JUMP, Actions.ATTACK, Actions.DODGE, Actions.SKILL, Actions.ULTIMATE,
 	Actions.LOCK_ON, Actions.INTERACT, Actions.TOGGLE_VISOR, Actions.TOGGLE_VIEW, Actions.FREE_VIEW,
 	Actions.CHARACTER_MENU, Actions.START_RUN,
 ]
@@ -49,8 +49,7 @@ const ACTION_LABELS := {
 	Actions.MOVE_RIGHT: "오른쪽",
 	Actions.JUMP: "점프",
 	Actions.ATTACK: "공격",
-	Actions.DODGE: "회피",
-	Actions.SPRINT: "질주 (누르고 있기)",
+	Actions.DODGE: "회피 (짧게) · 질주 (누르고 있기)",
 	Actions.SKILL: "배틀 스킬 (길게: 궁극기)",
 	Actions.ULTIMATE: "궁극기",
 	Actions.LOCK_ON: "대상 고정",

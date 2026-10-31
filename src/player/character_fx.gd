@@ -27,6 +27,8 @@ var _roles: Dictionary = {}
 var _streams: Dictionary = {}
 ## 원작 연출 카메라 컷: 이름(궁극기 "ultimate") → 컷 목록
 var _cameras: Dictionary = {}
+## 원작 캐릭터 화면의 카메라 자리: 이름("overview", "weapon" 등) → [x, y, z, qx, qy, qz, qw, 시야각]
+var _camera_poses: Dictionary = {}
 ## 아직 나지 않은 소리: [시각, 종류("sound"/"voice"), 정보]
 var _pending: Array[Array] = []
 var _clock := 0.0
@@ -51,6 +53,7 @@ func setup(zip_path: String) -> bool:
 	_roles = _loaded[zip_path]["roles"]
 	_streams = _loaded[zip_path]["streams"]
 	_cameras = _loaded[zip_path].get("camera", {})
+	_camera_poses = _loaded[zip_path].get("camera_poses", {})
 	_voice = _make_player(&"Voice")
 	for role: String in _roles:
 		for effect: Dictionary in (_roles[role] as Dictionary).get("effects", []):
@@ -71,6 +74,17 @@ func has_role(role: StringName) -> bool:
 ## 캐릭터 모델 기준·glTF 좌표)가 있다. 없으면 빈 배열.
 func camera_shots(name: StringName) -> Array:
 	return _cameras.get(String(name), [])
+
+
+## 원작 캐릭터 화면의 카메라 자리: [x, y, z, qx, qy, qz, qw, 시야각] (캐릭터 모델 기준·glTF 좌표, 카메라는 -Z를 본다).
+## "overview"(첫 화면), "weapon"(무기 보기), "equip", "skill"이 있다. 없으면 빈 배열.
+func camera_pose(name: StringName) -> Array:
+	return _camera_poses.get(String(name), [])
+
+
+## 캐릭터 화면 카메라 자리를 넣는다 (테스트용)
+func set_camera_poses(poses: Dictionary) -> void:
+	_camera_poses = poses
 
 
 ## 동작에 원작 이펙트가 있는지 (있으면 몸이 임시 검기를 그리지 않는다)
@@ -222,4 +236,4 @@ static func _read_package(zip_path: String) -> Dictionary:
 			if stream != null:
 				streams[entry.get_file()] = stream
 	reader.close()
-	return {"roles": manifest.get("roles", {}), "streams": streams, "camera": cameras}
+	return {"roles": manifest.get("roles", {}), "streams": streams, "camera": cameras, "camera_poses": manifest.get("camera_poses", {})}

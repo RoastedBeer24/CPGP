@@ -10,12 +10,17 @@ uniform float width = 0.0012;
 uniform float darkness = 0.3;
 uniform float alpha_scissor = 0.0;
 
+#include "res://src/player/near_fade.gdshaderinc"
+
 void vertex() {
 	float distance = length((MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
 	VERTEX += normalize(NORMAL) * width * clamp(distance, 0.5, 8.0);
 }
 
 void fragment() {
+	if (near_faded(VERTEX, FRAGCOORD.xy)) {
+		discard;
+	}
 	vec4 color = texture(albedo_texture, UV);
 	ALBEDO = color.rgb * darkness;
 	ALPHA = color.a;

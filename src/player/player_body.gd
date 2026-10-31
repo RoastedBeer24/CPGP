@@ -36,6 +36,10 @@ const CHARACTER_LIGHT_ENERGY := 0.4
 const OUTLINE_WIDTH := 0.0012
 const FACE_FLATNESS := 0.85
 const EMISSION_ENERGY := 2.0
+## 1인칭 팔: 카메라에서 ARM_NEAR_FADE_TO(m)보다 가까우면 점점이 지우기 시작해 ARM_NEAR_FADE_FROM에서 다 지운다.
+## 어깨 쪽 위팔과 얼굴 앞을 스치는 소매가 화면을 덮지 않는다.
+const ARM_NEAR_FADE_FROM := 0.1
+const ARM_NEAR_FADE_TO := 0.22
 
 ## 몸 기준 앞(-Z)과 오른쪽(+X)
 const FORWARD := Vector3(0, 0, -1)
@@ -179,11 +183,12 @@ var _headgear: Array[GeometryInstance3D] = []
 var _headgear_on := true
 # 얼굴 메시(얼굴, 눈썹, 눈동자)와, 머리 뼈 공간에서 얼굴 정면·오른쪽 방향
 var _face_meshes: Array[GeometryInstance3D] = []
-## 1인칭에서 숨기는 머리 메시(얼굴, 눈, 눈썹, 머리카락, 바이저)와, 1인칭인지
-var _head_meshes: Array[GeometryInstance3D] = []
+## 1인칭인지와, 1인칭에서 보이는 팔(메시마다 위팔부터 손끝까지만 남긴 사본, 처음 1인칭이 될 때 만든다)
 var _first_person := false
-## 눈 뼈(왼쪽·오른쪽). 1인칭 카메라 위치를 정한다.
+var _arm_meshes: Array[MeshInstance3D] = []
+## 눈 뼈(왼쪽·오른쪽)와 처음 자세의 두 눈 가운데(몸 기준). 1인칭 카메라 위치를 정한다.
 var _eye_bones: Array[int] = []
+var _rest_eye := Vector3.ZERO
 var _face_axis := Vector3.ZERO
 var _face_right_axis := Vector3.ZERO
 ## 숨기는 뼈(눈 하이라이트)
@@ -275,25 +280,27 @@ func _ready() -> void:
 func set_view_mode(mode: ViewMode) -> void:
 	view_mode = mode
 	visible = mode != ViewMode.HIDDEN
-	for node: Node in find_children("*", "GeometryInstance3D", true, false):
-		# 원작 이펙트와 검기는 그림자가 없는 빛이라 숨기지 않는다.
-		if node is FxSystem or node is WeaponTrail:
-			continue
-		_apply_shadow_mode(node as GeometryInstance3D)
-	_apply_head_visibility()
+	_apply_visibility()
 
-## 1인칭: 내 머리(얼굴, 눈, 눈썹, 머리카락, 바이저)만 그림자로 남기고 숨긴다. 몸·팔·칼은 보인다.
+## 1인칭: 내 몸은 그림자만 남기고, 팔(위팔부터 손끝까지)과 손에 든 무기만 보인다. 머리·목·후드·옷깃이 카메라
+## 앞을 가리지 않고, 공격 동작이 몸을 크게 돌려도 휘두르는 팔과 칼만 보인다.
 func set_first_person(enabled: bool) -> void:
 	if enabled == _first_person:
 		return
 	_first_person = enabled
-	_apply_head_visibility()
+	if enabled and _arm_meshes.is_empty() and _skeleton != null:
+		_build_arm_meshes()
+	_apply_visibility()
 
-## 1인칭인지 (내 화면에서 머리를 숨기는지)
+## 1인칭인지 (내 화면에서 몸을 숨기고 팔만 보이는지)
 func first_person() -> bool:
 	return _first_person
 
-## 눈 위치(세상 좌표). 1인칭 카메라와, 자유 시점에서 얼굴을 가까이 볼 때의 중심이다.
+## 1인칭에서 보이는 팔 메시 수 (테스트용)
+func arm_mesh_count() -> int:
+	return _arm_meshes.size()
+
+## 눈 위치(세상 좌표, 지금 동작의 자세). 자유 시점에서 얼굴을 가까이 볼 때의 중심이다.
 ## 모델이 없으면 몸 위 눈 높이(캡슐 몸).
 func eye_position() -> Vector3:
 	if _skeleton == null or _eye_bones.is_empty():
@@ -304,13 +311,33 @@ func eye_position() -> Vector3:
 		middle += _skeleton.get_bone_global_pose(index).origin
 	return _skeleton.global_transform * (middle / _eye_bones.size())
 
+## 1인칭 카메라 자리(세상 좌표): 처음 자세의 두 눈 가운데를 몸 방향으로 돌린 곳. 높이만 지금 동작의 눈 높이를
+## 따른다(공격하며 몸을 낮추거나 뛰어오르면 시선도 따라간다). 동작이 머리를 앞뒤·좌우로 흔드는 것은 따르지 않는다.
+func first_person_eye() -> Vector3:
+	if _skeleton == null or _eye_bones.is_empty():
+		return eye_position()
+	var point := global_transform * Vector3(_rest_eye.x, 0.0, _rest_eye.z)
+	point.y = eye_position().y
+	return point
 
-func _apply_head_visibility() -> void:
-	for mesh in _head_meshes:
-		if _first_person:
-			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+
+## 보이는 방식(view_mode)과 1인칭에 맞춰 메시마다 그릴지, 그림자만 남길지 정한다.
+func _apply_visibility() -> void:
+	for node: Node in find_children("*", "GeometryInstance3D", true, false):
+		# 원작 이펙트와 검기는 그림자가 없는 빛이라 숨기지 않는다.
+		if node is FxSystem or node is WeaponTrail:
+			continue
+		var geometry := node as GeometryInstance3D
+		if _arm_meshes.has(geometry):
+			geometry.visible = _first_person
+		elif _first_person and not _held_weapon_part(geometry):
+			geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 		else:
-			_apply_shadow_mode(mesh)
+			_apply_shadow_mode(geometry)
+
+## 손에 든 무기의 메시인지 (등에 멘 무기는 1인칭 카메라 뒤에 떠 보이므로 아니다)
+func _held_weapon_part(geometry: GeometryInstance3D) -> bool:
+	return _sword != null and _weapon_place != WeaponPlace.BACK and (_sword == geometry or _sword.is_ancestor_of(geometry))
 
 ## 뼈의 몸 기준 위치. 모델이 없거나 뼈 이름이 없으면 Vector3.ZERO.
 ## 애니메이션 위에 덧입힌 자세(IK)는 그리는 프레임에만 남으므로 여기서는 애니메이션 자세가 나온다.
@@ -490,15 +517,6 @@ func _load_model(scene: PackedScene) -> void:
 		var mesh := _model.find_child(String(mesh_name), true, false) as GeometryInstance3D
 		if mesh != null:
 			_headgear.append(mesh)
-	for node: Node in _model.find_children("*", "GeometryInstance3D", true, false):
-		var lowered := String(node.name).to_lower()
-		for keyword in appearance.head_mesh_keywords:
-			if lowered.contains(keyword):
-				_head_meshes.append(node as GeometryInstance3D)
-				break
-	for mesh in _headgear:
-		if not _head_meshes.has(mesh):
-			_head_meshes.append(mesh)
 
 	var skeletons := _model.find_children("*", "Skeleton3D", true, false)
 	if skeletons.is_empty():
@@ -549,6 +567,11 @@ func _load_model(scene: PackedScene) -> void:
 		var index := _skeleton.find_bone(bone_name)
 		if index >= 0:
 			_eye_bones.append(index)
+	if not _eye_bones.is_empty():
+		var middle := Vector3.ZERO
+		for index in _eye_bones:
+			middle += _skeleton.get_bone_global_rest(index).origin
+		_rest_eye = _body_from_skeleton * (middle / _eye_bones.size())
 	_setup_materials()
 	_setup_animation()
 	_setup_cloth()
@@ -638,6 +661,119 @@ static func _all_surfaces_have_material(mesh_instance: MeshInstance3D) -> bool:
 		if mesh_instance.get_active_material(i) == null:
 			return false
 	return true
+
+
+## 1인칭에서 보일 팔을 만든다: 모델의 메시마다 위팔·아래팔·손(과 거기 매달린 소매·장갑) 뼈를 따르는 삼각형만
+## 남긴 사본. 외투 메시 하나에 몸 전체가 들어 있어 메시째로는 고를 수 없다. 사본은 원래 메시와 같은 뼈대·스킨으로
+## 움직이고, 그림자는 원래 몸이 드리우므로 드리우지 않는다. 재질은 카메라에 아주 가까운 곳을 점점이 지운다.
+func _build_arm_meshes() -> void:
+	var arm_bones: Dictionary[int, bool] = {}
+	for bone in _skeleton.get_bone_count():
+		var step := bone
+		while step >= 0:
+			if step == _bone[&"upper_arm_l"] or step == _bone[&"upper_arm_r"]:
+				arm_bones[bone] = true
+				break
+			step = _skeleton.get_bone_parent(step)
+	for node: Node in _model.find_children("*", "MeshInstance3D", true, false):
+		var source := node as MeshInstance3D
+		if source.visible and source.mesh is ArrayMesh:
+			var copy := _arm_copy(source, arm_bones)
+			if copy != null:
+				_arm_meshes.append(copy)
+
+
+## 메시에서 팔 뼈를 따르는 삼각형만 남긴 사본(원래 메시 옆에 붙인다). 팔이 없는 메시면 null.
+## 정점 세 개가 모두 팔 뼈를 절반 넘게 따르는 삼각형만 남긴다(어깨 이음매에서 잘린다).
+func _arm_copy(source: MeshInstance3D, arm_bones: Dictionary[int, bool]) -> MeshInstance3D:
+	var mesh := source.mesh as ArrayMesh
+	# 정점이 가진 뼈 번호는 스킨의 연결 번호다. 연결마다 팔 뼈인지 미리 정한다.
+	var bind_is_arm: Array[bool] = []
+	if source.skin != null:
+		for i in source.skin.get_bind_count():
+			var bone := source.skin.get_bind_bone(i)
+			var bind_name := source.skin.get_bind_name(i)
+			if not bind_name.is_empty():
+				bone = _skeleton.find_bone(bind_name)
+			bind_is_arm.append(arm_bones.has(bone))
+	else:
+		for bone in _skeleton.get_bone_count():
+			bind_is_arm.append(arm_bones.has(bone))
+	var arms := ArrayMesh.new()
+	var materials: Array[Material] = []
+	for surface in mesh.get_surface_count():
+		var material := source.get_active_material(surface)
+		if material == null or mesh.surface_get_primitive_type(surface) != Mesh.PRIMITIVE_TRIANGLES:
+			continue
+		var arrays := mesh.surface_get_arrays(surface)
+		var bones := PackedInt32Array()
+		var raw_bones: Variant = arrays[Mesh.ARRAY_BONES]
+		if raw_bones is PackedInt32Array:
+			bones = raw_bones
+		elif raw_bones is PackedFloat32Array:
+			for value: float in raw_bones as PackedFloat32Array:
+				bones.append(int(value))
+		if bones.is_empty() or not (arrays[Mesh.ARRAY_WEIGHTS] is PackedFloat32Array) or not (arrays[Mesh.ARRAY_INDEX] is PackedInt32Array):
+			continue
+		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		var format := mesh.surface_get_format(surface)
+		var per := 8 if format & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS else 4
+		var on_arm := PackedByteArray()
+		on_arm.resize(weights.size() / per)
+		for vertex in on_arm.size():
+			var amount := 0.0
+			for k in per:
+				var bind := bones[vertex * per + k]
+				if bind < bind_is_arm.size() and bind_is_arm[bind]:
+					amount += weights[vertex * per + k]
+			on_arm[vertex] = 1 if amount >= 0.5 else 0
+		var kept := PackedInt32Array()
+		for t in range(0, indices.size() - 2, 3):
+			if on_arm[indices[t]] and on_arm[indices[t + 1]] and on_arm[indices[t + 2]]:
+				kept.append(indices[t])
+				kept.append(indices[t + 1])
+				kept.append(indices[t + 2])
+		if kept.is_empty():
+			continue
+		arrays[Mesh.ARRAY_INDEX] = kept
+		# 정점 형식 중 배열만 봐서는 모르는 것(뼈 8개, 추가 UV 형식)은 그대로 넘긴다.
+		var custom_formats := ((1 << (Mesh.ARRAY_FORMAT_CUSTOM_BITS * 4)) - 1) << Mesh.ARRAY_FORMAT_CUSTOM_BASE
+		arms.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, format & (Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS | custom_formats))
+		materials.append(_near_faded(material))
+	if arms.get_surface_count() == 0:
+		return null
+	var copy := MeshInstance3D.new()
+	copy.name = "%sArms" % source.name
+	copy.mesh = arms
+	copy.skin = source.skin
+	# 뼈대 경로는 메시 기준이다. 같은 부모 아래에 붙이므로 그대로 쓴다.
+	copy.skeleton = source.skeleton
+	copy.transform = source.transform
+	copy.layers = source.layers
+	copy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	copy.visible = false
+	source.add_sibling(copy)
+	for i in materials.size():
+		_set_material(copy, i, materials[i])
+	return copy
+
+
+## 카메라에 아주 가까운 곳(ARM_NEAR_FADE_FROM~TO)을 점점이 지우는 재질 사본 (1인칭 팔)
+static func _near_faded(material: Material) -> Material:
+	var faded := material.duplicate() as Material
+	var shader := faded as ShaderMaterial
+	var base := faded as BaseMaterial3D
+	if shader != null:
+		shader.set_shader_parameter(&"near_fade_from", ARM_NEAR_FADE_FROM)
+		shader.set_shader_parameter(&"near_fade_to", ARM_NEAR_FADE_TO)
+	elif base != null:
+		base.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_DITHER
+		base.distance_fade_min_distance = ARM_NEAR_FADE_FROM
+		base.distance_fade_max_distance = ARM_NEAR_FADE_TO
+	if faded.next_pass != null:
+		faded.next_pass = _near_faded(faded.next_pass)
+	return faded
 
 
 ## 아래 색에 곱해 그림자만 지우는 재질 (눈 흰자 위, 앞머리 그림자)
@@ -1418,6 +1554,8 @@ func _update_weapon(delta: float) -> void:
 			_sword.reparent(_weapon_anchors[wanted], false)
 			_sword.transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * appearance.weapon_scale), Vector3.ZERO)
 			_weapon_place = wanted as WeaponPlace
+			if _first_person:
+				_apply_visibility()
 		_weapon_reveal = move_toward(_weapon_reveal, 1.0, delta / (MENU_APPEAR_TIME if menu else WEAPON_APPEAR_TIME))
 	else:
 		_weapon_reveal = move_toward(_weapon_reveal, 0.0, delta / (MENU_VANISH_TIME if menu else WEAPON_VANISH_TIME))

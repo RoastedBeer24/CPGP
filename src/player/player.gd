@@ -61,6 +61,14 @@ const CAMERA_INSIDE_DISTANCE := 0.35
 const FREE_INSIDE_DISTANCE := 0.1
 ## 휠 한 칸에 카메라 거리가 바뀌는 배율. 가까울수록 조금씩, 멀수록 크게 바뀐다.
 const ZOOM_FACTOR := 1.15
+## 1인칭에서 자동으로 고르는 공격 대상: 카메라가 보는 쪽에서 이 각도(도) 안의 적만
+const FIRST_PERSON_TARGET_ANGLE := 45.0
+## 캐릭터 화면: 원작 카메라 자리로 옮겨 가거나 돌아오는 시간(초), 휠로 다가간 끝의 얼굴과의 거리(m),
+## 휠로 물러난 끝에 원작 자리에서 더 물러나는 거리(m), 휠 한 칸에 다가가는 정도(showcase_zoom)
+const SHOWCASE_BLEND_TIME := 0.6
+const SHOWCASE_FACE_DISTANCE := 0.9
+const SHOWCASE_BACK_DISTANCE := 3.0
+const SHOWCASE_ZOOM_STEP := 0.125
 ## 카메라 방식: 기본 시점(3인칭·1인칭, V로 바꾼다)과 자유 시점(`로 켜고 끈다, 휠로 확대·축소)
 enum CameraMode { THIRD_PERSON, FIRST_PERSON, FREE }
 
@@ -120,18 +128,25 @@ var lock_target: Enemy
 var intent_override: PlayerIntent
 ## true면 키보드·마우스 입력을 받지 않는다(보상 고르기, 캐릭터 화면이 열렸을 때).
 var input_blocked := false
-## 캐릭터 화면: 카메라가 캐릭터를 앞에서 비춘다. showcase_yaw만큼 둘레를 돈다.
+## 캐릭터 화면: 카메라가 원작 캐릭터 화면의 구도로 캐릭터를 앞에서 비춘다. showcase_yaw만큼 둘레를 돈다.
 var showcase := false:
 	set(value):
 		if value == showcase:
 			return
 		showcase = value
 		if value:
-			# 캐릭터 화면은 지금 보이는 거리에서 시작해 휠로 얼굴까지 당길 수 있다.
+			# 원작 구도가 없을 때는 지금 보이는 거리에서 시작해 휠로 얼굴까지 당길 수 있다.
 			camera_distance = clampf(maxf(_arm_length, config.camera_distance), config.camera_min_distance, config.camera_max_distance)
+			showcase_zoom = 0.0
+			showcase_yaw = 0.0
 		if is_node_ready():
 			_apply_view()
 var showcase_yaw := 0.0
+## 캐릭터 화면에서 휠로 다가간 정도: 0이 원작 구도, 1이면 얼굴 바로 앞, -1이면 뒤로 물러나 온몸이 보인다.
+var showcase_zoom := 0.0
+## 캐릭터 화면 첫 구도에서 캐릭터를 화면 폭의 몇 배만큼 옆으로 옮겨 보일지(-면 왼쪽). 소개 칸에 가리지 않게
+## CharacterScreen이 정한다. 카메라 방향은 그대로 두고 옆으로만 옮긴다.
+var showcase_screen_shift := 0.0
 ## 캐릭터 화면에서 무기를 보는 중인지(캐릭터가 왼손에 무기를 들고 보여 준다), 캐릭터를 누른 횟수(누를 때마다 반응한다)
 var showcase_weapon := false
 var showcase_pokes := 0
@@ -153,6 +168,10 @@ var _sprinting := false
 var _hurt_left := 0.0
 var _hit_stop := 0.0
 var _skill_hold := -1.0
+## 회피 키(Shift): 누르고 있는지, 누른 시간(초, 실제 시간), 짧게 눌렀다 떼서 회피할 차례인지
+var _dodge_key_down := false
+var _dodge_key_hold := 0.0
+var _dodge_key_tapped := false
 var _combat_left := 0.0
 var _time_since_floor := 0.0
 var _jump_buffer := 0.0
@@ -161,9 +180,10 @@ var _shake_time := 0.0
 var _camera_inside := false
 ## 자유 시점을 끄면 돌아갈 기본 시점
 var _base_camera := CameraMode.THIRD_PERSON
-## 지금 카메라 거리(벽에 막혀 당긴 것 포함)와 카메라 중심(부드럽게 따라간다)
+## 지금 카메라 거리(벽에 막혀 당긴 것 포함)와 카메라 중심(부드럽게 따라간다), 1인칭·자유 시점에서 몸에서 중심까지
 var _arm_length := 4.2
 var _pivot := Vector3.ZERO
+var _pivot_offset := Vector3.ZERO
 var _pivot_ready := false
 ## 벽에 막혔던 뒤로 남은 시간(초). 그동안은 천천히 되돌린다.
 var _blocked_time := 0.0
@@ -173,6 +193,10 @@ var _combat_view := 0.0
 var _shot: Dictionary = {}
 var _shot_time := 0.0
 var _shot_origin := Transform3D.IDENTITY
+## 캐릭터 화면 카메라가 원작 구도로 옮겨 간 정도(0~1), 무기 보기 구도로 옮겨 간 정도(0~1), 휠로 다가간 정도(부드럽게)
+var _showcase_amount := 0.0
+var _showcase_weapon_amount := 0.0
+var _showcase_dolly := 0.0
 var _probe := SphereShape3D.new()
 var _was_alive := true
 ## 호스트에서: 쓰러진 이 플레이어를 일으킨 정도(초)
@@ -222,6 +246,11 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority() or not use_device_input or input_blocked:
 		return
+	# 회피 키는 다른 행동 키처럼 마우스가 잡혀 있지 않아도 받는다.
+	if event.is_action(InputActions.DODGE) and not event.is_echo():
+		dodge_key(event.is_pressed())
+		get_viewport().set_input_as_handled()
+		return
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		# 누르고 있는 자유 시점 중에 메뉴가 열려 마우스가 풀리면 키를 뗀 것을 못 받을 수 있어 바로 끝낸다.
 		if camera_mode == CameraMode.FREE and not GameSettings.free_view_toggle:
@@ -254,7 +283,11 @@ func look(delta_radians: Vector2) -> void:
 
 
 ## 자유 시점(과 캐릭터 화면)에서 카메라를 당기거나(-) 민다(+). 휠 한 칸이 1이다. 기본 시점에서는 거리가 정해져 있다.
+## 원작 구도의 캐릭터 화면에서는 얼굴 앞으로 다가가거나 뒤로 물러난다(showcase_zoom).
 func zoom(steps: int) -> void:
+	if showcase and _showcase_pose(&"overview").size() >= 8:
+		showcase_zoom = clampf(showcase_zoom - steps * SHOWCASE_ZOOM_STEP, -1.0, 1.0)
+		return
 	if camera_mode != CameraMode.FREE and not showcase:
 		return
 	camera_distance = clampf(camera_distance * pow(ZOOM_FACTOR, steps), config.camera_min_distance, config.camera_max_distance)
@@ -275,6 +308,17 @@ func free_view_key(pressed: bool) -> void:
 		set_camera_mode(CameraMode.FREE)
 	elif camera_mode == CameraMode.FREE:
 		set_camera_mode(_base_camera)
+
+
+## 회피 키(기본 Shift)를 눌렀다(pressed)·뗐다. 짧게(config.dodge_tap_time 안에) 눌렀다 떼면 회피하고,
+## 그보다 오래 누르고 있으면 회피 없이 질주한다. 뗄 때 회피하므로 달리려고 누른 키로 회피가 나가지 않는다.
+func dodge_key(pressed: bool) -> void:
+	if pressed:
+		_dodge_key_down = true
+		_dodge_key_hold = 0.0
+	elif _dodge_key_down:
+		_dodge_key_down = false
+		_dodge_key_tapped = _dodge_key_hold < config.dodge_tap_time
 
 
 ## 자유 시점을 켜거나 끈다(끄면 기본 시점으로 돌아간다).
@@ -463,10 +507,10 @@ func _process_free(delta: float, intent: PlayerIntent) -> void:
 	if not on_floor:
 		velocity.y -= config.gravity * delta
 	var wish := _wish_direction(intent)
-	# 질주: 질주 키(Shift)를 누르고 있으면 회피 없이 바로, 회피한 뒤 회피 키를 계속 누르고 있어도 질주한다.
+	# 질주: 회피 키(Shift)를 오래 누르고 있는 동안. 짧게 눌렀다 떼면 회피다(dodge_key).
 	if intent.sprint_held and wish != Vector3.ZERO and on_floor:
 		_sprinting = true
-	elif _sprinting and (not (intent.sprint_held or intent.dodge_held) or wish == Vector3.ZERO):
+	elif _sprinting and (not intent.sprint_held or wish == Vector3.ZERO):
 		_sprinting = false
 	var speed := config.sprint_speed if _sprinting else config.run_speed
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z)
@@ -476,7 +520,9 @@ func _process_free(delta: float, intent: PlayerIntent) -> void:
 	horizontal = horizontal.move_toward(wish * speed, rate * delta)
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
-	if wish != Vector3.ZERO:
+	if _first_person_aim():
+		rotation.y = camera_yaw
+	elif wish != Vector3.ZERO:
 		_turn_toward(wish, config.turn_speed * delta)
 	if _jump_buffer > 0.0 and (on_floor or _time_since_floor <= config.coyote_time):
 		_jump()
@@ -572,15 +618,21 @@ func _start_action(attack: AttackData, target: Enemy, intent: PlayerIntent) -> v
 	invulnerable = attack.invulnerable_until > 0.0
 	velocity.x = 0.0
 	velocity.z = 0.0
-	# 목표가 있으면 그쪽을, 없으면 입력한 방향을 바로 본다.
+	# 목표가 있으면 그쪽을, 없으면 입력한 방향을 바로 본다. 1인칭은 카메라가 보는 쪽으로 한다.
+	# 처형만은 1인칭에서도 경직된 적 쪽으로 돌고, 시선도 같이 돌린다.
 	var aim := Vector3.ZERO
-	if target != null:
+	var first_person := _first_person_aim()
+	if first_person and not (attack == kit.finisher and target != null):
+		aim = _camera_forward()
+	elif target != null:
 		aim = target.global_position - global_position
 	elif intent != null:
 		aim = _wish_direction(intent)
 	aim.y = 0.0
 	if aim.length() > 0.05:
 		_face(aim)
+		if first_person:
+			camera_yaw = rotation.y
 	# 궁극기: 원작 연출 카메라 컷(얼굴 클로즈업 → 뒤 높은 곳에서 넓게)을 내 화면에서 튼다.
 	if attack == kit.ultimate and body.fx != null:
 		var shots := body.fx.camera_shots(&"ultimate")
@@ -596,8 +648,11 @@ func _process_action(delta: float, intent: PlayerIntent) -> void:
 		velocity.y -= config.gravity * delta
 	else:
 		velocity.y = 0.0
-	# 목표 쪽으로 몸 돌리기 (동작 앞부분만)
-	if _action_time <= attack.turn_until and _action_target != null and is_instance_valid(_action_target):
+	# 목표 쪽으로 몸 돌리기 (동작 앞부분만). 1인칭은 카메라가 보는 쪽을 본다(처형은 시작할 때 돌았다).
+	if _first_person_aim():
+		if attack != kit.finisher:
+			rotation.y = camera_yaw
+	elif _action_time <= attack.turn_until and _action_target != null and is_instance_valid(_action_target):
 		var to_target := _action_target.global_position - global_position
 		to_target.y = 0.0
 		if to_target.length() > 0.1:
@@ -770,7 +825,7 @@ func _process_dodge(delta: float, intent: PlayerIntent) -> void:
 	_dodge_cooldown = config.dodge_cooldown
 	state = State.GROUND if is_on_floor() else State.AIR
 	var wish := _wish_direction(intent)
-	_sprinting = (intent.dodge_held or intent.sprint_held) and wish != Vector3.ZERO and not dodge_back
+	_sprinting = intent.sprint_held and wish != Vector3.ZERO and not dodge_back
 	var keep := config.sprint_speed if _sprinting else config.run_speed
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z).limit_length(keep)
 	velocity.x = horizontal.x
@@ -994,6 +1049,11 @@ func _pick_target(intent: PlayerIntent, max_range: float) -> Enemy:
 		return lock_target
 	var wish := _wish_direction(intent) if intent != null else Vector3.ZERO
 	var preferred := wish.normalized() if wish != Vector3.ZERO else _camera_forward()
+	var max_angle := deg_to_rad(110.0)
+	# 1인칭은 몸을 대상 쪽으로 돌리지 않으므로 보고 있는 적만 고른다.
+	if _first_person_aim():
+		preferred = _camera_forward()
+		max_angle = deg_to_rad(FIRST_PERSON_TARGET_ANGLE)
 	var best: Enemy = null
 	var best_score := INF
 	for node: Node in get_tree().get_nodes_in_group(Enemy.GROUP):
@@ -1006,7 +1066,7 @@ func _pick_target(intent: PlayerIntent, max_range: float) -> Enemy:
 		if distance > max_range + enemy.radius():
 			continue
 		var angle := preferred.angle_to(to_enemy) if distance > 0.01 else 0.0
-		if angle > deg_to_rad(110.0):
+		if angle > max_angle:
 			continue
 		var score := distance + angle * 2.5
 		if score < best_score:
@@ -1048,6 +1108,12 @@ func _camera_forward() -> Vector3:
 	return Vector3(-sin(camera_yaw), 0.0, -cos(camera_yaw))
 
 
+## 1인칭으로 싸우는 중인지. 1인칭에서는 몸이 카메라가 보는 쪽을 보고, 공격도 보는 쪽으로 한다(대상 쪽으로 몸을
+## 돌리지 않는다). 휘두르는 팔과 칼이 늘 화면 앞에 있다.
+func _first_person_aim() -> bool:
+	return camera_mode == CameraMode.FIRST_PERSON and not showcase and not cinematic
+
+
 ## 카메라 기준 이동 입력을 세상 방향으로 바꾼다 (수평, 길이 0~1).
 func _wish_direction(intent: PlayerIntent) -> Vector3:
 	if intent == null or intent.move == Vector2.ZERO:
@@ -1078,13 +1144,32 @@ func set_visor(on: bool) -> void:
 
 
 func _read_intent() -> PlayerIntent:
+	var intent: PlayerIntent
 	if intent_override != null:
-		var copied := intent_override.copy()
+		intent = intent_override.copy()
 		intent_override.consume_edges()
-		return copied
-	if not use_device_input or input_blocked:
-		return PlayerIntent.new()
-	return PlayerIntent.from_device()
+	elif not use_device_input or input_blocked:
+		intent = PlayerIntent.new()
+	else:
+		intent = PlayerIntent.from_device()
+	_read_dodge_key(intent)
+	return intent
+
+
+## 회피 키 상태를 입력에 넣는다: 짧게 눌렀다 뗐으면 회피, 오래 누르고 있으면 질주.
+## 누른 시간은 실제 시간으로 잰다(완벽한 회피의 느린 시간 중에도 같은 길이로 누르면 같게 된다).
+func _read_dodge_key(intent: PlayerIntent) -> void:
+	if input_blocked or (use_device_input and _dodge_key_down and not Input.is_action_pressed(InputActions.DODGE)):
+		# 메뉴가 열린 사이에 뗀 키는 회피도 질주도 아니다.
+		_dodge_key_down = false
+		_dodge_key_tapped = false
+		return
+	if _dodge_key_down:
+		_dodge_key_hold += get_physics_process_delta_time() / maxf(Engine.time_scale, 0.01)
+		intent.sprint_held = intent.sprint_held or _dodge_key_hold >= config.dodge_tap_time
+	if _dodge_key_tapped:
+		_dodge_key_tapped = false
+		intent.dodge_pressed = true
 
 
 # ---- 카메라 ----
@@ -1112,7 +1197,7 @@ func _update_camera(delta: float) -> void:
 	var target_pivot := global_position + Vector3.UP * config.camera_pivot_height
 	if first:
 		target_distance = 0.0
-		target_pivot = body.eye_position()
+		target_pivot = body.first_person_eye()
 	elif free:
 		target_distance = camera_distance
 		var body_center := global_position + Vector3.UP * (1.0 if showcase else config.camera_pivot_height)
@@ -1122,12 +1207,16 @@ func _update_camera(delta: float) -> void:
 		_combat_view = move_toward(_combat_view, 1.0 if in_combat else 0.0, delta * 0.8)
 		target_distance = lerpf(config.camera_distance, config.camera_combat_distance, smoothstep(0.0, 1.0, _combat_view))
 	# 중심을 따라가기: 3인칭은 수평은 바로(달릴 때 뒤처지지 않게), 높이는 부드럽게(계단·점프에서 화면이 덜 흔들리게).
-	# 1인칭과 자유 시점은 동작으로 흔들리는 눈·얼굴을 조금 늦게 따라간다.
+	# 1인칭과 자유 시점은 몸에서 눈·얼굴까지의 거리만 부드럽게 따라간다. 동작으로 흔들리는 머리는 덜 흔들리고,
+	# 몸이 달려가는 것은 바로 따라가서 카메라가 머리 뒤로 처지지 않는다.
+	var offset := target_pivot - global_position
 	if not _pivot_ready or delta <= 0.0:
 		_pivot = target_pivot
+		_pivot_offset = offset
 		_pivot_ready = true
 	elif first or free:
-		_pivot = _pivot.lerp(target_pivot, minf(config.first_person_follow * delta, 1.0))
+		_pivot_offset = _pivot_offset.lerp(offset, minf(config.first_person_follow * delta, 1.0))
+		_pivot = global_position + _pivot_offset
 	else:
 		_pivot = Vector3(target_pivot.x, lerpf(_pivot.y, target_pivot.y, minf(12.0 * delta, 1.0)), target_pivot.z)
 	camera_rig.global_position = _pivot
@@ -1164,6 +1253,8 @@ func _update_camera(delta: float) -> void:
 		_apply_view()
 	if cinematic and delta > 0.0:
 		_apply_shot(delta)
+	elif delta > 0.0:
+		_update_showcase_camera(delta)
 
 
 ## 원작 연출 카메라 컷을 튼다. 컷은 캐릭터 모델 기준(glTF 좌표, +Z가 캐릭터 앞) 카메라 위치·회전·시야각을
@@ -1227,6 +1318,82 @@ static func _shot_rotation(frames: Array, index: int) -> Quaternion:
 	return q.normalized() if q.length_squared() > 0.0 else Quaternion.IDENTITY
 
 
+## 캐릭터 화면 카메라: 원작 캐릭터 화면의 카메라 자리(첫 화면 overview, 무기 보기 weapon)로 부드럽게 옮겨 가
+## 비추고, 화면을 닫으면 원래 카메라로 돌아온다. 자리는 캐릭터 모델 기준(glTF 좌표, +Z가 캐릭터 앞)이다.
+## showcase_yaw만큼 캐릭터 둘레를 돌고, showcase_zoom만큼 얼굴 앞으로 다가가거나 물러난다.
+## 원작 자리가 없으면(소리·이펙트 꾸러미가 없으면) 캐릭터 앞에서 도는 카메라(_update_camera)를 그대로 쓴다.
+func _update_showcase_camera(delta: float) -> void:
+	var overview := _showcase_pose(&"overview")
+	if overview.size() < 8:
+		_showcase_amount = 0.0
+		return
+	_showcase_amount = move_toward(_showcase_amount, 1.0 if showcase else 0.0, delta / SHOWCASE_BLEND_TIME)
+	_showcase_weapon_amount = move_toward(_showcase_weapon_amount, 1.0 if showcase and showcase_weapon else 0.0, delta / SHOWCASE_BLEND_TIME)
+	_showcase_dolly = lerpf(_showcase_dolly, showcase_zoom if showcase else 0.0, minf(8.0 * delta, 1.0))
+	if _showcase_amount <= 0.0:
+		return
+	var pose := _pose_transform(overview)
+	var fov := float(overview[7])
+	var weapon := _showcase_pose(&"weapon")
+	if weapon.size() >= 8 and _showcase_weapon_amount > 0.0:
+		var blend := smoothstep(0.0, 1.0, _showcase_weapon_amount)
+		pose = pose.interpolate_with(_pose_transform(weapon), blend)
+		fov = lerpf(fov, float(weapon[7]), blend)
+	# 캐릭터 둘레 돌기(모델의 위쪽 축), 세상 좌표로
+	pose = Transform3D(Basis(Vector3.UP, showcase_yaw), Vector3.ZERO) * pose
+	var model := body.model_root().global_transform
+	var view := _showcase_dolly_view(Transform3D(model.basis.orthonormalized() * pose.basis, model * pose.origin))
+	# 첫 구도는 캐릭터가 화면 가운데라 오른쪽 소개 칸에 가린다. 카메라를 옆으로만 옮겨 빈 곳 가운데에 보이게 한다.
+	# 무기 보기 구도는 원작이 이미 캐릭터를 왼쪽에 둔다.
+	var shift := showcase_screen_shift * (1.0 - smoothstep(0.0, 1.0, _showcase_weapon_amount))
+	if absf(shift) > 0.0001:
+		var depth := maxf(-view.basis.z.dot(model.origin - view.origin), 0.1)
+		var screen := get_viewport().get_visible_rect().size
+		var half_width := depth * tan(deg_to_rad(fov) * 0.5) * screen.x / maxf(screen.y, 1.0)
+		view.origin -= view.basis.x * shift * 2.0 * half_width
+	var weight := smoothstep(0.0, 1.0, _showcase_amount)
+	var normal := camera_rig.global_transform * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, _arm_length))
+	camera.global_transform = normal.interpolate_with(view, weight)
+	camera.fov = lerpf(GameSettings.fov, fov, weight)
+
+
+## 카메라 쪽으로 돌아선다. 캐릭터 화면을 열 때 부른다: 원작 구도의 카메라가 캐릭터 앞에 서므로, 벽을 보고
+## 섰어도 카메라가 벽에 묻히지 않는다.
+func face_camera() -> void:
+	_face(-_camera_forward())
+
+
+## 캐릭터 화면 카메라를 옮겨 가는 과정 없이 바로 원작 구도에 둔다. 캐릭터를 바꿔 새로 스폰된 플레이어에 쓴다
+## (등 뒤의 카메라에서 앞으로 옮겨 가면 카메라가 몸을 뚫고 지나간다).
+func snap_showcase_camera() -> void:
+	_showcase_amount = 1.0
+	_showcase_weapon_amount = 1.0 if showcase_weapon else 0.0
+
+
+## 휠로 다가간 만큼 얼굴 앞으로 옮기거나(얼굴을 보며 SHOWCASE_FACE_DISTANCE까지), 물러난 만큼 뒤로 뺀다.
+func _showcase_dolly_view(view: Transform3D) -> Transform3D:
+	if _showcase_dolly < 0.0:
+		view.origin += view.basis.z * -_showcase_dolly * SHOWCASE_BACK_DISTANCE
+		return view
+	var eye := body.eye_position()
+	var away := view.origin - eye
+	away.y = 0.0
+	if _showcase_dolly <= 0.001 or away.length() < 0.01:
+		return view
+	var close := Transform3D(Basis.IDENTITY, eye + away.normalized() * SHOWCASE_FACE_DISTANCE).looking_at(eye, Vector3.UP)
+	return view.interpolate_with(close, smoothstep(0.0, 1.0, _showcase_dolly))
+
+
+## 원작 캐릭터 화면 카메라 자리 (CharacterFx.camera_pose). 없으면 빈 배열.
+func _showcase_pose(name: StringName) -> Array:
+	return body.fx.camera_pose(name) if body != null and body.fx != null else []
+
+
+## 카메라 자리 [x, y, z, qx, qy, qz, qw, 시야각]의 변환 (캐릭터 모델 기준)
+static func _pose_transform(pose: Array) -> Transform3D:
+	return Transform3D(Basis(_shot_rotation(pose, 0)), _shot_position(pose, 0))
+
+
 ## 카메라 중심에서 뒤로 distance만큼 갈 때 벽·바닥(world 레이어)에 막히지 않는 거리
 func _camera_clearance(distance: float, fine: bool) -> float:
 	if distance <= 0.01 or not is_inside_tree():
@@ -1248,7 +1415,7 @@ func camera_length() -> float:
 
 
 func _update_fov(delta: float) -> void:
-	if cinematic:
+	if cinematic or _showcase_amount > 0.0:
 		return
 	var target := GameSettings.fov
 	if _sprinting:
@@ -1256,8 +1423,8 @@ func _update_fov(delta: float) -> void:
 	camera.fov = lerpf(camera.fov, target, minf(config.fov_transition_speed * delta, 1.0))
 
 
-## 내 화면에서 내 몸을 어떻게 그릴지: 1인칭이면 머리만 숨기고(팔·칼·몸은 보인다), 3인칭 카메라가 벽에 밀려
-## 머리에 붙었으면 몸 전체를 그림자만 남긴다.
+## 내 화면에서 내 몸을 어떻게 그릴지: 1인칭이면 몸은 그림자만 남기고 팔과 손에 든 칼만 보이고, 3인칭 카메라가
+## 벽에 밀려 머리에 붙었으면 몸 전체를 그림자만 남긴다.
 func _apply_view() -> void:
 	var mine := is_multiplayer_authority()
 	body.set_first_person(mine and camera_mode == CameraMode.FIRST_PERSON and not showcase and not cinematic)

@@ -36,6 +36,8 @@ uniform float gloss_sharpness = 48.0;
 // 떨어진 것은 뚫고 보이지 않는다.
 uniform float depth_bias = 0.0;
 
+#include "res://src/player/near_fade.gdshaderinc"
+
 void vertex() {
 	// POSITION을 쓰면 엔진이 그 재질의 기본 변환을 건너뛰므로, 정점 자체를 카메라 쪽으로 옮긴다.
 	if (depth_bias > 0.0) {
@@ -45,6 +47,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (near_faded(VERTEX, FRAGCOORD.xy)) {
+		discard;
+	}
 	vec4 color = texture(albedo_texture, UV) * albedo_color;
 	ALBEDO = color.rgb;
 	ALPHA = color.a;

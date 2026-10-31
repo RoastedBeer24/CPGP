@@ -37,6 +37,8 @@ extends Resource
 @export var dodge_invulnerable := 0.3
 ## 회피가 끝난 뒤 다시 회피할 수 있을 때까지(초)
 @export var dodge_cooldown := 0.25
+## 회피 키(Shift)를 이보다 짧게(초) 눌렀다 떼면 회피, 더 오래 누르고 있으면 질주
+@export var dodge_tap_time := 0.2
 ## 회피가 끝난 뒤 이 시간(초) 안에 공격하면 대시 공격이 나간다.
 @export var dash_attack_window := 0.35
 
@@ -60,8 +62,9 @@ extends Resource
 @export var camera_return_speed := 3.0
 ## 카메라가 벽을 뚫지 않게 재는 공의 반지름(m). 자유 시점에서 얼굴 가까이 갈 때는 작은 공을 쓴다.
 @export var camera_probe_radius := 0.2
-## 1인칭: 눈 위치를 따라가는 빠르기. 동작으로 머리가 흔들려도 화면이 덜 흔들리게 조금 늦게 따라간다.
-@export var first_person_follow := 20.0
+## 1인칭과 자유 시점: 몸에서 눈·얼굴까지의 거리를 따라가는 빠르기. 동작으로 머리가 흔들려도 화면이 덜 흔들리게
+## 조금 늦게 따라간다(몸이 움직이는 것은 바로 따라간다).
+@export var first_person_follow := 10.0
 ## 자유 시점(과 캐릭터 화면): 휠로 당기고 밀 수 있는 범위(m). 가까이 당기면 카메라 중심이 얼굴로 옮겨 가서
 ## 얼굴을 화면 가득 볼 수 있다.
 @export var camera_min_distance := 0.18
