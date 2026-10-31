@@ -18,3 +18,6 @@
 
 # 파이썬 캐시
 __pycache__/
+
+# 화면 확인 중에만 잠깐 생기는 설정 덮어쓰기 (tools/lib.sh hide_game_window)
+/override.cfg

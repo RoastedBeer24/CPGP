@@ -78,11 +78,14 @@ static func drawable(data: Dictionary, effect: EffectLibrary.Effect) -> bool:
 	if mode not in [0, 1, 4]:
 		return false
 	var materials: Array = renderer.get("materials", [])
-	if materials.is_empty() or materials[0] == null:
-		return false
-	var index := int(materials[0])
-	if index < 0 or index >= effect.materials.size() or not FxMaterial.supported(effect.materials[index]["extras"]):
-		return false
+	var shaders: Array = renderer.get("shaders", [])
+	var screen := not shaders.is_empty() and FxMaterial.screen_effect(str(shaders[0]))
+	if not screen:
+		if materials.is_empty() or materials[0] == null:
+			return false
+		var index := int(materials[0])
+		if index < 0 or index >= effect.materials.size() or not FxMaterial.supported(effect.materials[index]["extras"]):
+			return false
 	if mode == 4:
 		var meshes: Array = renderer.get("meshes", [])
 		if meshes.is_empty() or meshes[0] == null or int(meshes[0]) >= effect.meshes.size() or effect.meshes[int(meshes[0])] == null:

@@ -80,5 +80,5 @@ func _choose(index: int) -> void:
 	if not visible or index >= _offers.size():
 		return
 	visible = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	MouseLock.capture()
 	chosen.emit(_offers[index])

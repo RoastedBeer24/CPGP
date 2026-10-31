@@ -173,6 +173,11 @@ var _headgear: Array[GeometryInstance3D] = []
 var _headgear_on := true
 # 얼굴 메시(얼굴, 눈썹, 눈동자)와, 머리 뼈 공간에서 얼굴 정면·오른쪽 방향
 var _face_meshes: Array[GeometryInstance3D] = []
+## 1인칭에서 숨기는 머리 메시(얼굴, 눈, 눈썹, 머리카락, 바이저)와, 1인칭인지
+var _head_meshes: Array[GeometryInstance3D] = []
+var _first_person := false
+## 눈 뼈(왼쪽·오른쪽). 1인칭 카메라 위치를 정한다.
+var _eye_bones: Array[int] = []
 var _face_axis := Vector3.ZERO
 var _face_right_axis := Vector3.ZERO
 ## 숨기는 뼈(눈 하이라이트)
@@ -262,7 +267,41 @@ func set_view_mode(mode: ViewMode) -> void:
 	view_mode = mode
 	visible = mode != ViewMode.HIDDEN
 	for node: Node in find_children("*", "GeometryInstance3D", true, false):
+		# 원작 이펙트와 검기는 그림자가 없는 빛이라 숨기지 않는다.
+		if node is FxSystem or node is WeaponTrail:
+			continue
 		_apply_shadow_mode(node as GeometryInstance3D)
+	_apply_head_visibility()
+
+## 1인칭: 내 머리(얼굴, 눈, 눈썹, 머리카락, 바이저)만 그림자로 남기고 숨긴다. 몸·팔·칼은 보인다.
+func set_first_person(enabled: bool) -> void:
+	if enabled == _first_person:
+		return
+	_first_person = enabled
+	_apply_head_visibility()
+
+## 1인칭인지 (내 화면에서 머리를 숨기는지)
+func first_person() -> bool:
+	return _first_person
+
+## 눈 위치(세상 좌표). 1인칭 카메라와, 자유 시점에서 얼굴을 가까이 볼 때의 중심이다.
+## 모델이 없으면 몸 위 눈 높이(캡슐 몸).
+func eye_position() -> Vector3:
+	if _skeleton == null or _eye_bones.is_empty():
+		var height := player.config.camera_close_pivot_height if player != null else 1.55
+		return global_position + Vector3.UP * height
+	var middle := Vector3.ZERO
+	for index in _eye_bones:
+		middle += _skeleton.get_bone_global_pose(index).origin
+	return _skeleton.global_transform * (middle / _eye_bones.size())
+
+
+func _apply_head_visibility() -> void:
+	for mesh in _head_meshes:
+		if _first_person:
+			mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		else:
+			_apply_shadow_mode(mesh)
 
 ## 뼈의 몸 기준 위치. 모델이 없거나 뼈 이름이 없으면 Vector3.ZERO.
 ## 애니메이션 위에 덧입힌 자세(IK)는 그리는 프레임에만 남으므로 여기서는 애니메이션 자세가 나온다.
@@ -442,6 +481,15 @@ func _load_model(scene: PackedScene) -> void:
 		var mesh := _model.find_child(String(mesh_name), true, false) as GeometryInstance3D
 		if mesh != null:
 			_headgear.append(mesh)
+	for node: Node in _model.find_children("*", "GeometryInstance3D", true, false):
+		var lowered := String(node.name).to_lower()
+		for keyword in appearance.head_mesh_keywords:
+			if lowered.contains(keyword):
+				_head_meshes.append(node as GeometryInstance3D)
+				break
+	for mesh in _headgear:
+		if not _head_meshes.has(mesh):
+			_head_meshes.append(mesh)
 
 	var skeletons := _model.find_children("*", "Skeleton3D", true, false)
 	if skeletons.is_empty():
@@ -488,6 +536,10 @@ func _load_model(scene: PackedScene) -> void:
 		var index := _skeleton.find_bone(bone_name)
 		if index >= 0:
 			_hidden_bones.append(index)
+	for bone_name in appearance.eye_bones:
+		var index := _skeleton.find_bone(bone_name)
+		if index >= 0:
+			_eye_bones.append(index)
 	_setup_materials()
 	_setup_animation()
 	_setup_cloth()

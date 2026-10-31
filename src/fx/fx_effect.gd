@@ -102,11 +102,17 @@ static func _material(effect: EffectLibrary.Effect, index: int, data: Dictionary
 	if effect.system_materials.has(index):
 		return effect.system_materials[index]
 	var renderer: Dictionary = data.get("renderer", {})
-	var extras: Dictionary = effect.materials[int((renderer.get("materials", [0]) as Array)[0])]["extras"]
-	var streams: Variant = renderer.get("streams", null)
-	var second_uv := typeof(streams) == TYPE_ARRAY and (streams as Array).has(5)
 	var draw := FxSystem.draw_mode(int(renderer.get("mode", 0)), int(renderer.get("align", 0)))
-	var material := FxMaterial.build(extras, effect, renderer, draw, int(renderer.get("mode", 0)) == 4, second_uv)
+	var mesh := int(renderer.get("mode", 0)) == 4
+	var shaders: Array = renderer.get("shaders", [])
+	var material: ShaderMaterial
+	if not shaders.is_empty() and FxMaterial.screen_effect(str(shaders[0])):
+		material = FxMaterial.build_screen_effect(str(shaders[0]), renderer, draw, mesh)
+	else:
+		var extras: Dictionary = effect.materials[int((renderer.get("materials", [0]) as Array)[0])]["extras"]
+		var streams: Variant = renderer.get("streams", null)
+		var second_uv := typeof(streams) == TYPE_ARRAY and (streams as Array).has(5)
+		material = FxMaterial.build(extras, effect, renderer, draw, mesh, second_uv)
 	effect.system_materials[index] = material
 	return material
 

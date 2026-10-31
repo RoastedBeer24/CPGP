@@ -31,11 +31,12 @@
 | M2 적 모델 | 모델 기다림 | 사용자가 적 모델을 추출해 주면 넣는다 |
 | **M3 한 판** | **검수 대기** | 로비(캐릭터 화면 C, 출발 Enter), 방 다섯 개(배치 둘 + 보스 방), 보상 12종, 중간·최종 보스(격노), 원작 무기 타르 11·소리·보이스, 검기, 카메라 확대·축소 (`docs/dev/review/m3.md`) |
 | 원작 동작·무기 자리 | 검수 대기 | 전투 무기는 오른손(wep_R)으로 고침, 싸우는 동작에서만 무기가 나타남(칼날이 차오르고 지워짐), 무기 꺼내기·거두기, 쉬는 자세·특수 대기, 멈추기, 무거운 착지, 가벼운 피격(윗몸), 캐릭터 화면 동작·무기 보기 (`docs/dev/review/motions.md`) |
+| 시점·이펙트 다듬기 | 검수 대기 | 기본 시점(3인칭 고정 거리, V로 1인칭), 자유 시점(`, 얼굴까지 확대), 벽에서 천천히 되돌리기·싸울 때 물러나기, 충격파 고리·화면 왜곡·방사 흐림, 궁극기·대시 공격 이펙트 (`docs/dev/review/camera.md`) |
 | 원작 이펙트 | 검수 대기 | 사이트 자료로 원작 셰이더(VFXBaseV2)와 파티클 시스템을 다시 만듦: 기본 공격·처형·배틀 스킬의 칼빛·빛·연기·불꽃 (`docs/dev/effects.md`, 체크리스트는 `docs/dev/review/motions.md`) |
 | M4 거점·영구 성장 ~ M6 다듬기 | 예정 | 구상서 §6 |
 
 ### 지금 구조
-- `src/player/player.gd`: 3인칭 액션 조작. 카메라(CameraRig, 몸과 따로 돈다), 카메라 기준 이동, 공격 연속·스킬·회피·대상 고정·쓰러짐·동료 일으키기. 동작은 `action_id`/`action_count`, 회피는 `dodge_count`로 동기화
+- `src/player/player.gd`: 3인칭 액션 조작. 카메라(CameraRig, 몸과 따로 돈다. `CameraMode`: 3인칭·1인칭·자유 시점), 카메라 기준 이동, 공격 연속·스킬·회피·대상 고정·쓰러짐·동료 일으키기. 동작은 `action_id`/`action_count`, 회피는 `dodge_count`로 동기화
 - `src/player/player_body.gd`: 모델·만화풍 재질·옷자락·발 IK, 이동 동작 고르기(서 있을 때는 전투 대기·쉬는 자세·캐릭터 화면 대기), 동작 층(공격·스킬·회피·맞음·쓰러짐과 대기 연출), 윗몸만 움찔하는 가벼운 피격, 무기 자리(오른손·등 뒤·왼손)와 나타나고 사라지기(`weapon.gdshader`)
 - `src/combat/`: `KitData`(캐릭터 전투 구성) → `AttackData`(동작 하나: 길이, 이어지는 시각, 내디딤 거리) → `HitData`(타격 하나: 시각, 배율, 경직, 범위, 원석 결정 효과). `Health`, `Hitbox`, `CombatQuery.melee`, `DamageNumber`, `HitSpark`
 - `src/enemies/`: `Enemy`(호스트가 판단: 쫓기 → 예고 → 맞히기 → 쉬기, 움찔·경직·원석 결정), `EnemyBody`(예고 표시, 모델 또는 도형 몸), `EnemyProjectile`, `EnemyData`/`EnemyAttackData`(`data/enemies/*.tres`)
@@ -57,6 +58,7 @@
 tools/test.sh                 # 자동 테스트 전체 (커밋 전에 반드시 통과)
 tools/test.sh combat          # 이름에 combat이 들어간 테스트만
 tools/screenshot.sh "" 330 build/screenshots/fight.png --single --autoplay --no-update   # 싸우는 화면 캡처
+tools/capture.sh build/screenshots/fx 60,90,120 --single --autoplay=combo   # 정한 프레임들만 저장(이펙트·카메라 확인)
 tools/export_windows.sh       # build/Crossfield-windows.zip (+ 옛 이름 CyberUniverse-windows.zip) 생성
 python3 tools/gen_combat_room.py   # 전투 방 씬 셋(방 A·B, 보스 방) 다시 생성
 python3 tools/gen_lobby.py         # 로비 씬 다시 생성
@@ -119,11 +121,18 @@ python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장�
 - **프로젝트 안에 스크립트 사본을 두지 않는다:** `build/`도 프로젝트 안이다. `class_name`이 있는 스크립트를 거기 복사해 두면 전역 클래스가 사본으로 바뀌어 엉뚱하게 돈다. 백업은 프로젝트 밖(임시 폴더)에 둔다.
 - **실행 중에 읽는 소리:** `AudioStreamWAV.load_from_buffer`로 zip 안의 WAV를 읽는다. 이 PC에는 소리 인코더(ffmpeg)가 없어서 WAV 그대로 묶는다. 같은 zip은 플레이어끼리 한 번만 읽는다(`CharacterFx._loaded`).
 - **원작 이펙트:** 이펙트 glb의 노드에는 메시가 없다. 원작은 노드마다 파티클 시스템이 메시·판을 그린다(`assets/data/*.json`). 재질 설정은 glb 재질의 extras(`floats`, `colors`, `vfx`)에 있다. 파티클 JSON은 유니티(왼손) 좌표 그대로라 그릴 때 X를 뒤집는다. 인스턴스 변환 자리에 그리기 정보를 담으므로 MultiMesh의 `custom_aabb`를 직접 줘야 화면 밖으로 잘리지 않는다. 이벤트의 `end`에서 남은 파티클까지 한 번에 지운다(원작과 같다). 원작 강도(최대 100)는 원작 화면에서 하얗게 날아가게 만든 값이라 셰이더에서 밝기를 자른다(`max_brightness`).
+- **카메라 거리:** SpringArm3D의 충돌은 끄고(`collision_mask = 0`) 거리를 직접 정한다(`Player._camera_clearance`). 막히면 바로 당기고 풀리면 천천히 되돌리기 위해서다. 자유 시점은 얼굴을 가까이 보는 것이 목적이라, 카메라가 정말 머리 속(0.1m)에 들어갔을 때만 몸을 숨긴다(3인칭은 0.35m).
+- **1인칭 머리 숨기기:** 머리 뼈를 줄이는 방법은 머리카락 옷자락 물리(머리 뼈 아래 사슬)를 망가뜨릴 수 있어서, 머리 메시(얼굴, 눈썹, 눈동자, 머리카락, 바이저)만 그림자로 남긴다. 카메라 위치는 눈 뼈(`eyeLfJoint`/`eyeRtJoint`) 가운데다.
 - **find_children와 스크립트 클래스:** `find_children(이름, 종류)`의 종류는 엔진 클래스만 알아본다(`FxEffect` 같은 class_name은 안 된다). 종류를 비우고 `is`로 거른다.
 - **사이트 자료:** studio.warfarin.wiki의 데이터 서버(assets.warfarin.wiki)는 Cloudflare가 자동 요청을 막는다(우회하지 않는다). 사용자가 준 추출 꾸러미(`!File/Endministrator_Extras/`)에 같은 자료가 있다: `characters/*/weapon_binding.json`(무기 자리), `animation_events.json`(동작별 소리·이펙트 시각), `effect_catalog.json`, `assets/data/*.json`(파티클). 사이트 스크립트는 글자로만 받아 읽는다(실행하지 않는다).
 - **무기 자리:** 원작 연결 정보(`weapon_binding.json`의 `battle.copies`)상 전투 무기는 오른손 `wep_R`(fight)이고, 무기를 꺼내는 동작의 처음 0.4초는 등 뒤 `GENERATED_wep_M_...`(idle)다. 왼손 `wep_L`은 캐릭터 화면 무기 보기(`mounts`, 메뉴) 자리인데, 이것을 전투에 써서 무기를 왼손에 쥐는 실수를 했다. 동작마다 자리는 `CharacterAppearance.weapon_timelines`(여·남이 시각이 조금 다르다). 이동·대기 동작에는 무기가 없다(원작처럼 싸우는 동작에서만 나타난다).
 - **대기 연출:** 쉬는 자세·무기 꺼내기·멈추기 같은 대기 연출(`PlayerBody.IDLE_CLIPS`)도 동작 층에서 튼다. 움직이면 바로 끊어야 해서 실제 속도(`_raw_speed`)를 본다(이동 동작을 고르는 속도는 부드럽게 따라가서 0.3초쯤 늦다). 섞여 들어오는 동안(0.25초)에도 무기 자리는 그 동작의 것을 따른다(`_action_showing`). 원본 멈추기 동작은 1m쯤 미끄러지므로 제자리로 묶고, 캐릭터 화면에 들어오는 동작(1.6m 앞에서 걸어 들어와 제자리에서 끝남)은 묶지 않는다.
-- **화면 녹화:** `tools/screenshot.sh`(`--write-movie`)로 찍는 동안에는 창이 포커스를 잃어도 일시정지하지 않는다(`Engine.get_write_movie_path()`). 캐릭터 화면의 무기 보기는 `--character-weapon`으로 찍는다.
+- **화면 확인은 조용히:** 사용자는 작업하는 동안 같은 PC로 다른 일을 한다. 게임 창을 화면에 띄우거나 포커스·마우스·소리를 가져가면 방해가 된다(실제로 그랬다). 화면 확인은 `tools/capture.sh`/`tools/screenshot.sh`로만 한다. 이 도구들은 다음처럼 돈다.
+  - override.cfg로 포커스를 뺏지 않는 1x1 창을 띄우고, `main.gd`가 곧바로 화면 밖으로 옮겨 1280x720으로 키운다. 처음부터 화면 밖에 띄우는 설정은 Godot가 화면 안으로 되돌려서 쓸 수 없었다. 최소화로 띄웠다가 되살리면 포커스를 뺏는다.
+  - `--audio-driver Dummy`로 소리를 끈다.
+  - 마우스는 가두지 않는다(`MouseLock`). 가두면 커서가 화면 밖 창으로 끌려간다.
+  - 저장된 창 설정(전체 화면)은 적용하지 않는다(`GameSettings.manage_window`).
+  - 화면 확인 중에는 포커스를 잃어도 일시정지하지 않는다(`main.is_recording()`). 캐릭터 화면의 무기 보기는 `--character-weapon`, 1인칭은 `--first-person`, 얼굴 앞 자유 시점은 `--free-face`로 찍는다.
 - **Python -I:** `-I`는 `PYTHONIOENCODING` 같은 환경 변수를 무시한다. 한자·한글을 콘솔에 찍을 때는 스크립트에서 `sys.stdout.reconfigure(encoding="utf-8")`를 부른다.
 - **도구 쓸 때(Claude 세션):** Bash의 heredoc 안 Python 문자열에 백슬래시(줄바꿈 표시 등)를 쓰면 실행 도구를 거치며 지워진다. 백슬래시가 든 스크립트는 Write로 파일을 만들어 실행하고, 이미 있는 파일은 Edit로 고친다.
 - **에셋 자동 업데이트:** 모델은 비공개 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스 `assets`에만 올린다. 파일 목록은 `tools/publish_assets.py`의 `FILES`. 그 도구는 저장소가 공개면 거부한다. 게임은 설정의 에셋 키(GitHub 토큰)로 받는데, 키는 GitHub API에만 보낸다. 실제 파일은 다른 호스트로 넘겨받으므로 `max_redirects = 0`으로 직접 따라가며 키를 뺀다(`AssetUpdater._download`). 모델의 동작 이름이 바뀌면 옛 게임이 새 모델을 받아 깨질 수 있으니 **게임 푸시와 에셋 올리기를 함께** 한다.

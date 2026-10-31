@@ -7,6 +7,11 @@ extends RefCounted
 ## 조합마다 셰이더를 따로 만든다(본문은 vfx_base.gdshaderinc).
 
 const BODY := "res://src/fx/vfx_base.gdshaderinc"
+## 원작 재질 자료가 비어 있는 화면 이펙트를 비슷하게 만든 셰이더: 화면 왜곡(VFXRefract), 방사 흐림(VFXRadialBlur)
+const REFRACT_BODY := "res://src/fx/vfx_refract.gdshaderinc"
+const BLUR_BODY := "res://src/fx/vfx_blur.gdshaderinc"
+const REFRACT_SHADER := "HGRP/Effect/VFXRefract"
+const BLUR_SHADER := "HGRP/Effect/VFXRadialBlur"
 ## 샘플 슬롯이 맡을 수 있는 역할(순서대로 번호 0~5)
 const ROLE_NAMES: Array[String] = ["_DisturbTex1", "_DisturbTex2", "_WeightTex", "_MaskTex", "_BlendTex", "_DissolveTex"]
 const MAX_SLOTS := 4
@@ -17,15 +22,59 @@ enum Draw { AXES, VIEW, STRETCH }
 static var _shaders: Dictionary[String, Shader] = {}
 
 
-## 그릴 수 있는 재질인지. VFXBaseV2만 그리고, 극좌표·화면 UV처럼 원작 계산을 모르는 기능을 쓰면 건너뛴다.
+## 그릴 수 있는 재질인지. VFXBaseV2만 그리고, 원작 계산을 모르는 기능(정점 밀기 등)을 쓰면 건너뛴다.
+## 극좌표 UV(충격파 고리)는 판 가운데에서 잰 (각도, 거리)로 만든다.
 static func supported(extras: Dictionary) -> bool:
 	if str(extras.get("shader", "")) != "HGRP/Effect/VFXBaseV2":
 		return false
 	var keywords: Array = (extras.get("vfx", {}) as Dictionary).get("keywords", [])
 	for keyword: String in keywords:
-		if not (keyword.begins_with("_SAMPLE_TEX") or keyword in ["_USE_SOFTBLEND", "_USE_FOG"]):
+		if not (keyword.begins_with("_SAMPLE_TEX") or keyword in ["_USE_SOFTBLEND", "_USE_FOG", "_USE_POLARUV", "_USE_SCREENUV"]):
 			return false
 	return _slot_count(keywords) >= 0
+
+
+## 재질 자료 없이 비슷하게 만드는 화면 이펙트의 셰이더 이름인지 (화면 왜곡, 방사 흐림)
+static func screen_effect(shader_name: String) -> bool:
+	return shader_name == REFRACT_SHADER or shader_name == BLUR_SHADER
+
+
+## 화면 왜곡·방사 흐림 재질. 원작 재질 자료가 없어서 세기는 직접 정했고, 파티클 알파를 따른다.
+static func build_screen_effect(shader_name: String, renderer: Dictionary, draw: int, mesh: bool) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	var body := BLUR_BODY if shader_name == BLUR_SHADER else REFRACT_BODY
+	material.shader = _shader_with(body, false, 0, false)
+	material.render_priority = clampi(int(renderer.get("sortingOrder", 0)), Material.RENDER_PRIORITY_MIN, Material.RENDER_PRIORITY_MAX)
+	var pivot := _vector3(renderer.get("pivot", null))
+	if mesh:
+		pivot.x = -pivot.x
+	material.set_shader_parameter(&"draw_mode", draw)
+	material.set_shader_parameter(&"is_mesh", mesh)
+	material.set_shader_parameter(&"pivot", pivot)
+	material.set_shader_parameter(&"min_size", float(renderer.get("minSize", 0.0)))
+	material.set_shader_parameter(&"max_size", float(renderer.get("maxSize", 0.5)))
+	material.set_shader_parameter(&"length_scale", float(renderer.get("lengthScale", 2.0)))
+	material.set_shader_parameter(&"velocity_scale", float(renderer.get("velocityScale", 0.0)))
+	if body == REFRACT_BODY:
+		material.set_shader_parameter(&"noise_texture", _noise())
+	return material
+
+
+static var _noise_texture: NoiseTexture2D
+
+
+## 화면 왜곡에 쓰는 이어지는 잡음 그림
+static func _noise() -> NoiseTexture2D:
+	if _noise_texture == null:
+		var noise := FastNoiseLite.new()
+		noise.frequency = 0.03
+		_noise_texture = NoiseTexture2D.new()
+		_noise_texture.noise = noise
+		_noise_texture.seamless = true
+		_noise_texture.width = 128
+		_noise_texture.height = 128
+		_noise_texture.generate_mipmaps = true
+	return _noise_texture
 
 
 ## 재질 하나를 만든다. renderer는 파티클 시스템의 renderer 설정이다(피벗, 크기 제한 등은 시스템마다 다르다).
@@ -175,7 +224,11 @@ static func _texture(effect: EffectLibrary.Effect, reference: Variant) -> Array:
 
 
 static func _shader(additive: bool, cull: int, always_visible: bool) -> Shader:
-	var key := "%s|%d|%s" % [additive, cull, always_visible]
+	return _shader_with(BODY, additive, cull, always_visible)
+
+
+static func _shader_with(body: String, additive: bool, cull: int, always_visible: bool) -> Shader:
+	var key := "%s|%s|%d|%s" % [body, additive, cull, always_visible]
 	if _shaders.has(key):
 		return _shaders[key]
 	var modes: Array[String] = ["unshaded", "depth_draw_never", "fog_disabled", "shadows_disabled", "skip_vertex_transform"]
@@ -184,7 +237,7 @@ static func _shader(additive: bool, cull: int, always_visible: bool) -> Shader:
 	if always_visible:
 		modes.append("depth_test_disabled")
 	var shader := Shader.new()
-	shader.code = "shader_type spatial;\nrender_mode %s;\n\n#include \"%s\"\n" % [", ".join(modes), BODY]
+	shader.code = "shader_type spatial;\nrender_mode %s;\n\n#include \"%s\"\n" % [", ".join(modes), body]
 	_shaders[key] = shader
 	return shader
 

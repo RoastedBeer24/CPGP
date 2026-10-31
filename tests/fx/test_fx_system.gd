@@ -94,8 +94,12 @@ func test_material_slot_roles_follow_original_settings() -> void:
 	assert_true(material.shader.code.contains("blend_add"), "_BlendMode 1은 더하기")
 	assert_true(material.shader.code.contains("depth_test_disabled"), "_ZTest 8은 항상 보인다")
 	var polar := extras.duplicate(true)
-	(polar["vfx"] as Dictionary)["keywords"] = ["_USE_POLARUV"]
-	assert_false(FxMaterial.supported(polar), "원작 계산을 모르는 극좌표 UV는 건너뛴다")
+	(polar["vfx"] as Dictionary)["keywords"] = ["_USE_POLARUV", "_USE_SCREENUV"]
+	assert_true(FxMaterial.supported(polar), "극좌표 UV(충격파 고리)도 그린다")
+	var unknown := extras.duplicate(true)
+	(unknown["vfx"] as Dictionary)["keywords"] = ["_USE_VERTOFFSET"]
+	assert_false(FxMaterial.supported(unknown), "원작 계산을 모르는 정점 밀기는 건너뛴다")
+	assert_true(FxMaterial.screen_effect("HGRP/Effect/VFXRefract"), "재질 자료가 없는 화면 왜곡은 비슷하게 만든다")
 
 
 func test_original_attack_effect_plays_with_attack() -> void:

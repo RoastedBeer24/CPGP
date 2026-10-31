@@ -93,11 +93,12 @@ func test_holding_dodge_after_dodge_sprints() -> void:
 	assert_almost_eq(player.horizontal_speed(), player.config.run_speed, 0.1)
 
 
-func test_zoom_is_clamped() -> void:
-	for i in 30:
+func test_zoom_is_clamped_in_free_view() -> void:
+	player.toggle_free_view()
+	for i in 40:
 		player.zoom(1)
 	assert_almost_eq(player.camera_distance, player.config.camera_max_distance, 0.001)
-	for i in 30:
+	for i in 60:
 		player.zoom(-1)
 	assert_almost_eq(player.camera_distance, player.config.camera_min_distance, 0.001)
 

@@ -55,10 +55,14 @@ const REVIVE_HEALTH := 0.3
 ## 완벽한 회피의 느린 시간: 배속과 실제 시간(초). 혼자 할 때만 쓴다.
 const SLOW_MOTION_SCALE := 0.3
 const SLOW_MOTION_TIME := 0.4
-## 카메라가 머리에 이보다 가까우면 몸을 숨긴다(머리 속이 화면을 가리지 않게, m).
+## 3인칭에서 카메라가 벽에 밀려 이보다 중심에 가까워지면 몸을 숨긴다(머리 속이 화면을 가리지 않게, m).
+## 자유 시점은 얼굴을 가까이 보는 것이 목적이라 카메라가 정말 머리 속에 들어갔을 때만 숨긴다.
 const CAMERA_INSIDE_DISTANCE := 0.35
+const FREE_INSIDE_DISTANCE := 0.1
 ## 휠 한 칸에 카메라 거리가 바뀌는 배율. 가까울수록 조금씩, 멀수록 크게 바뀐다.
-const ZOOM_FACTOR := 1.12
+const ZOOM_FACTOR := 1.15
+## 카메라 방식: 기본 시점(3인칭·1인칭, V로 바꾼다)과 자유 시점(`로 켜고 끈다, 휠로 확대·축소)
+enum CameraMode { THIRD_PERSON, FIRST_PERSON, FREE }
 
 @export var config: MovementConfig = preload("res://data/player/default_movement.tres")
 ## 비워 두면 고른 캐릭터(character_id)의 전투 구성. 스크립트끼리 서로 참조하는 중에 리소스를 미리 불러오면
@@ -104,7 +108,10 @@ var energy := 0.0
 ## 카메라 방향(라디안). 몸의 방향과 따로 돈다.
 var camera_yaw := 0.0
 var camera_pitch := deg_to_rad(-12.0)
+## 자유 시점(과 캐릭터 화면)의 카메라 거리(m). 기본 시점은 정해진 거리를 쓴다.
 var camera_distance := 4.2
+## 지금 카메라 방식
+var camera_mode := CameraMode.THIRD_PERSON
 ## 대상 고정 중인 적. 없으면 null.
 var lock_target: Enemy
 ## 테스트에서 입력을 직접 넣을 때 쓴다. 설정되어 있으면 장치 입력 대신 이것을 읽는다.
@@ -112,7 +119,16 @@ var intent_override: PlayerIntent
 ## true면 키보드·마우스 입력을 받지 않는다(보상 고르기, 캐릭터 화면이 열렸을 때).
 var input_blocked := false
 ## 캐릭터 화면: 카메라가 캐릭터를 앞에서 비춘다. showcase_yaw만큼 둘레를 돈다.
-var showcase := false
+var showcase := false:
+	set(value):
+		if value == showcase:
+			return
+		showcase = value
+		if value:
+			# 캐릭터 화면은 지금 보이는 거리에서 시작해 휠로 얼굴까지 당길 수 있다.
+			camera_distance = clampf(maxf(_arm_length, config.camera_distance), config.camera_min_distance, config.camera_max_distance)
+		if is_node_ready():
+			_apply_view()
 var showcase_yaw := 0.0
 ## 캐릭터 화면에서 무기를 보는 중인지(캐릭터가 왼손에 무기를 들고 보여 준다), 캐릭터를 누른 횟수(누를 때마다 반응한다)
 var showcase_weapon := false
@@ -141,6 +157,17 @@ var _jump_buffer := 0.0
 var _shake := 0.0
 var _shake_time := 0.0
 var _camera_inside := false
+## 자유 시점을 끄면 돌아갈 기본 시점
+var _base_camera := CameraMode.THIRD_PERSON
+## 지금 카메라 거리(벽에 막혀 당긴 것 포함)와 카메라 중심(부드럽게 따라간다)
+var _arm_length := 4.2
+var _pivot := Vector3.ZERO
+var _pivot_ready := false
+## 벽에 막혔던 뒤로 남은 시간(초). 그동안은 천천히 되돌린다.
+var _blocked_time := 0.0
+## 싸우는 중 물러나는 정도(0~1)
+var _combat_view := 0.0
+var _probe := SphereShape3D.new()
 var _was_alive := true
 ## 호스트에서: 쓰러진 이 플레이어를 일으킨 정도(초)
 var _revive_elapsed := 0.0
@@ -167,15 +194,19 @@ func _ready() -> void:
 	camera.current = local and use_device_input
 	camera.fov = GameSettings.fov
 	camera_distance = config.camera_distance
+	_arm_length = config.camera_distance
 	camera_yaw = rotation.y
 	camera_rig.top_level = true
+	if local and use_device_input and GameSettings.first_person:
+		camera_mode = CameraMode.FIRST_PERSON
+		_base_camera = CameraMode.FIRST_PERSON
 	if local and use_device_input:
 		visor_on = GameSettings.visor_on
 		# 내 화면에서만 캐릭터(나와 동료)를 카메라 쪽에서 약하게 비춘다.
 		camera.add_child(PlayerBody.make_character_light())
-	# 카메라 팔이 내 몸에 걸려 당겨지지 않게 한다.
-	camera_arm.add_excluded_object(get_rid())
-	camera_arm.spring_length = camera_distance
+	# 카메라 팔의 길이는 직접 정한다(_update_camera: 벽에 막히면 바로 당기고 풀리면 천천히 되돌린다).
+	camera_arm.collision_mask = 0
+	camera_arm.spring_length = _arm_length
 	health.died.connect(_on_died)
 	health.revived.connect(_on_revived)
 	_apply_view()
@@ -186,6 +217,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority() or not use_device_input or input_blocked:
 		return
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		return
+	if event.is_action_pressed(InputActions.TOGGLE_VIEW) and not event.is_echo():
+		toggle_first_person()
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed(InputActions.FREE_VIEW) and not event.is_echo():
+		toggle_free_view()
+		get_viewport().set_input_as_handled()
 		return
 	var motion := event as InputEventMouseMotion
 	if motion != null:
@@ -205,9 +244,37 @@ func look(delta_radians: Vector2) -> void:
 	camera_pitch = clampf(camera_pitch - delta_radians.y, deg_to_rad(config.camera_min_pitch), deg_to_rad(config.camera_max_pitch))
 
 
-## 카메라를 당기거나(-) 민다(+). 휠 한 칸이 1이다.
+## 자유 시점(과 캐릭터 화면)에서 카메라를 당기거나(-) 민다(+). 휠 한 칸이 1이다. 기본 시점에서는 거리가 정해져 있다.
 func zoom(steps: int) -> void:
+	if camera_mode != CameraMode.FREE and not showcase:
+		return
 	camera_distance = clampf(camera_distance * pow(ZOOM_FACTOR, steps), config.camera_min_distance, config.camera_max_distance)
+
+
+## 기본 시점을 1인칭 ↔ 3인칭으로 바꾼다. 자유 시점이었으면 자유 시점을 끄고 바꾼다. 다음에 켜도 기억한다.
+func toggle_first_person() -> void:
+	set_camera_mode(CameraMode.THIRD_PERSON if _base_camera == CameraMode.FIRST_PERSON else CameraMode.FIRST_PERSON)
+
+
+## 자유 시점을 켜거나 끈다(끄면 기본 시점으로 돌아간다).
+func toggle_free_view() -> void:
+	set_camera_mode(_base_camera if camera_mode == CameraMode.FREE else CameraMode.FREE)
+
+
+## 카메라 방식을 바꾼다. remember면 기본 시점(1인칭·3인칭)을 설정에 저장한다(화면 확인용 시작 옵션은 저장하지 않는다).
+func set_camera_mode(mode: CameraMode, remember := true) -> void:
+	if mode == camera_mode:
+		return
+	if mode == CameraMode.FREE:
+		# 지금 보이는 거리에서 시작한다.
+		camera_distance = clampf(maxf(_arm_length, config.camera_distance), config.camera_min_distance, config.camera_max_distance)
+	else:
+		_base_camera = mode
+		if remember and use_device_input and is_multiplayer_authority():
+			GameSettings.first_person = mode == CameraMode.FIRST_PERSON
+			GameSettings.save()
+	camera_mode = mode
+	_apply_view()
 
 
 ## 몸이 보는 방향 (수평, 길이 1)
@@ -1006,14 +1073,54 @@ func _update_camera(delta: float) -> void:
 			var wanted := atan2(-to_target.x, -to_target.z)
 			camera_yaw = lerp_angle(camera_yaw, wanted, minf(config.lock_on_turn_speed * delta, 1.0))
 			camera_pitch = lerpf(camera_pitch, deg_to_rad(-14.0), minf(2.0 * delta, 1.0))
-	# 가까이 당길수록 카메라 중심을 얼굴 높이로 올려서 캐릭터를 가까이서 볼 수 있게 한다.
-	var closeness := clampf(1.0 - (camera_arm.spring_length - config.camera_min_distance) / maxf(config.camera_close_distance - config.camera_min_distance, 0.01), 0.0, 1.0)
-	var pivot_height := lerpf(config.camera_pivot_height, config.camera_close_pivot_height, closeness)
-	if showcase:
-		pivot_height = lerpf(1.0, config.camera_close_pivot_height, closeness)
-	camera_rig.global_position = global_position + Vector3.UP * pivot_height
+	var free := camera_mode == CameraMode.FREE or showcase
+	var first := camera_mode == CameraMode.FIRST_PERSON and not showcase
+	# 방식마다 카메라 중심과 거리:
+	#   1인칭: 눈 위치, 거리 0
+	#   자유 시점·캐릭터 화면: 멀면 몸 가운데, 가까이 당길수록 얼굴(눈)로 옮겨 간다. 휠로 정한 거리
+	#   3인칭: 어깨 높이, 정해진 거리. 싸우는 중에는 조금 물러나 주변 적이 보이게 한다.
+	var target_distance := config.camera_distance
+	var target_pivot := global_position + Vector3.UP * config.camera_pivot_height
+	if first:
+		target_distance = 0.0
+		target_pivot = body.eye_position()
+	elif free:
+		target_distance = camera_distance
+		var body_center := global_position + Vector3.UP * (1.0 if showcase else config.camera_pivot_height)
+		var face := clampf((config.camera_body_distance - camera_distance) / maxf(config.camera_body_distance - config.camera_face_distance, 0.01), 0.0, 1.0)
+		target_pivot = body_center.lerp(body.eye_position(), smoothstep(0.0, 1.0, face))
+	else:
+		_combat_view = move_toward(_combat_view, 1.0 if in_combat else 0.0, delta * 0.8)
+		target_distance = lerpf(config.camera_distance, config.camera_combat_distance, smoothstep(0.0, 1.0, _combat_view))
+	# 중심을 따라가기: 3인칭은 수평은 바로(달릴 때 뒤처지지 않게), 높이는 부드럽게(계단·점프에서 화면이 덜 흔들리게).
+	# 1인칭과 자유 시점은 동작으로 흔들리는 눈·얼굴을 조금 늦게 따라간다.
+	if not _pivot_ready or delta <= 0.0:
+		_pivot = target_pivot
+		_pivot_ready = true
+	elif first or free:
+		_pivot = _pivot.lerp(target_pivot, minf(config.first_person_follow * delta, 1.0))
+	else:
+		_pivot = Vector3(target_pivot.x, lerpf(_pivot.y, target_pivot.y, minf(12.0 * delta, 1.0)), target_pivot.z)
+	camera_rig.global_position = _pivot
 	camera_rig.global_basis = Basis.from_euler(Vector3(camera_pitch, camera_yaw, 0.0))
-	camera_arm.spring_length = lerpf(camera_arm.spring_length, camera_distance, minf(delta * 10.0, 1.0)) if delta > 0.0 else camera_distance
+	# 거리: 벽·바닥·기둥에 막히면 바로 당기고, 막힌 것이 풀리면 천천히 되돌린다(덜컹이지 않게).
+	# 방식을 바꿀 때(1인칭 ↔ 3인칭 등)는 부드럽게 옮겨 간다.
+	var allowed := _camera_clearance(target_distance, free)
+	var wanted_length := minf(target_distance, allowed)
+	if allowed < target_distance - 0.05:
+		_blocked_time = 0.6
+	_blocked_time = maxf(_blocked_time - delta, 0.0)
+	if delta <= 0.0:
+		_arm_length = wanted_length
+	elif wanted_length < _arm_length:
+		_arm_length = minf(lerpf(_arm_length, wanted_length, minf(25.0 * delta, 1.0)), allowed)
+	elif _blocked_time > 0.0:
+		_arm_length = move_toward(_arm_length, wanted_length, config.camera_return_speed * delta)
+	else:
+		_arm_length = lerpf(_arm_length, wanted_length, minf(8.0 * delta, 1.0))
+	camera_arm.spring_length = _arm_length
+	# 가까이 볼 때는 앞쪽 자르는 거리를 줄여 얼굴·칼이 잘리지 않게 한다.
+	camera.near = 0.02 if first or _arm_length < 0.8 else 0.05
 	# 흔들림: 세게 맞힐수록 크게, 빠르게 잦아든다.
 	_shake = move_toward(_shake, 0.0, delta * 2.5)
 	_shake_time += delta * 40.0
@@ -1021,11 +1128,31 @@ func _update_camera(delta: float) -> void:
 	var amount := _shake * _shake * 0.12
 	camera.h_offset = sin(_shake_time * 1.3) * amount
 	camera.v_offset = cos(_shake_time * 1.7) * amount
-	# 카메라가 벽에 밀려 머리에 붙으면 몸을 숨긴다.
-	var inside := camera.global_position.distance_to(camera_rig.global_position) < CAMERA_INSIDE_DISTANCE
+	# 카메라가 벽에 밀려 머리에 붙으면 몸을 숨긴다(자유 시점은 정말 머리 속에 들어갔을 때만).
+	var inside := not first and _arm_length < (FREE_INSIDE_DISTANCE if free else CAMERA_INSIDE_DISTANCE)
 	if inside != _camera_inside:
 		_camera_inside = inside
 		_apply_view()
+
+
+## 카메라 중심에서 뒤로 distance만큼 갈 때 벽·바닥(world 레이어)에 막히지 않는 거리
+func _camera_clearance(distance: float, fine: bool) -> float:
+	if distance <= 0.01 or not is_inside_tree():
+		return distance
+	_probe.radius = 0.06 if fine and distance < 1.5 else config.camera_probe_radius
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = _probe
+	query.transform = Transform3D(Basis.IDENTITY, _pivot)
+	query.motion = camera_rig.global_basis.z * distance
+	query.collision_mask = 1
+	query.exclude = [get_rid()]
+	var result := get_world_3d().direct_space_state.cast_motion(query)
+	return distance * result[0]
+
+
+## 카메라의 지금 거리(m, 벽에 막혀 당긴 것 포함). 테스트와 디버그용.
+func camera_length() -> float:
+	return _arm_length
 
 
 func _update_fov(delta: float) -> void:
@@ -1035,9 +1162,12 @@ func _update_fov(delta: float) -> void:
 	camera.fov = lerpf(camera.fov, target, minf(config.fov_transition_speed * delta, 1.0))
 
 
-## 카메라가 머리에 붙었으면 내 몸을 그림자만 남긴다.
+## 내 화면에서 내 몸을 어떻게 그릴지: 1인칭이면 머리만 숨기고(팔·칼·몸은 보인다), 3인칭 카메라가 벽에 밀려
+## 머리에 붙었으면 몸 전체를 그림자만 남긴다.
 func _apply_view() -> void:
-	if is_multiplayer_authority() and _camera_inside:
+	var mine := is_multiplayer_authority()
+	body.set_first_person(mine and camera_mode == CameraMode.FIRST_PERSON and not showcase)
+	if mine and _camera_inside:
 		body.set_view_mode(PlayerBody.ViewMode.SHADOW_ONLY)
 	else:
 		body.set_view_mode(PlayerBody.ViewMode.VISIBLE)

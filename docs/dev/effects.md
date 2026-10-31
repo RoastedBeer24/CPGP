@@ -20,7 +20,9 @@
 | `fx_system.gd` | 파티클 시스템 하나를 CPU로 계산해 MultiMesh로 그린다 |
 | `fx_curve.gd` | 파티클 설정의 곡선(허밋)·색 변화 계산 |
 | `fx_material.gd` | 원작 재질 설정(VFXBaseV2)을 셰이더 재질로 바꾼다. 섞기·뒷면·깊이 조합마다 셰이더를 만든다 |
+| `vfx_particle.gdshaderinc` | 파티클 정점 단계(그리기 정보 → 정점). 아래 셋이 함께 쓴다 |
 | `vfx_base.gdshaderinc` | 원작 이펙트 셰이더(VFXBaseV2)를 다시 만든 것 |
+| `vfx_refract.gdshaderinc`, `vfx_blur.gdshaderinc` | 재질 자료가 비어 있는 화면 왜곡(VFXRefract)·방사 흐림(VFXRadialBlur)을 비슷하게 만든 것 |
 
 ## 놓는 법 (이벤트)
 - 붙일 뼈(`mount`)가 없으면 **캐릭터 모델의 원점(발밑)** 에 둔다. 원작 이벤트의 `path`는 원작 동작의 뿌리 이동(앞으로
@@ -51,13 +53,20 @@
 UV는 가중치·흐르는 속도·회전·타일링을 원작 순서대로 적용한다. 녹이기는 커스텀 데이터 z로 가장자리부터 사라진다.
 섞기는 `_BlendMode` 0이면 알파, 1이면 더하기다. `_ZTest` 8은 다른 물체에 가려지지 않는다.
 
-## 못 그리는 것 (사이트도 그리지 않음)
-- 화면 왜곡(VFXRefract), 디더 알파(VFXDitherAlpha), 방사 흐림(VFXRadialBlur): 재질 자료가 비어 있다.
-- 극좌표 UV 충격파 고리 5개(`_USE_POLARUV`): 원작 계산을 모른다.
-- 궁극기·대시 공격에는 원작 이펙트 자료가 없어서 임시 검기(`weapon_trail.gd`)를 그대로 쓴다.
+## 사이트가 그리지 않는 것을 채운 방법
+- **극좌표 UV 충격파 고리**(`_USE_POLARUV`): 판의 가운데에서 잰 (각도, 거리)를 UV 가중치 z로 섞는다. 띠 그림이 고리가 되고,
+  커스텀 데이터로 밀면 고리가 퍼진다.
+- **화면 왜곡**(VFXRefract): 재질 자료가 비어 있어 직접 만들었다. 파티클 메시가 덮은 자리의 화면을 잡음 그림만큼 비튼다.
+- **방사 흐림**(VFXRadialBlur): 재질 자료가 비어 있어 직접 만들었다. 판이 덮은 자리의 화면을 판 가운데 쪽으로 겹쳐 읽는다.
+- **궁극기·대시 공격:** 원작 자료에 이펙트가 없어서 다른 동작의 원작 이펙트를 타격 시각에 맞춰 빌려 쓴다
+  (`tools/extract_character_fx.py`의 `BORROWED`).
+
+## 못 그리는 것
+- 디더 알파(VFXDitherAlpha, 칼빛 뒤의 어두운 층 등 7개): 재질 자료가 비어 있고 어떻게 보여야 하는지 알 수 없다.
 
 ## 화면 확인
 ```bash
-godot --path . --fixed-fps 60 --resolution 1280x720 -- --single --autoplay=combo --capture=60,90,120 --capture-dir=build/screenshots/fx
+tools/capture.sh build/screenshots/fx 60,90,120 --single --autoplay=combo
 ```
-`--autoplay=combo`는 로비에서 제자리 연속 공격만 되풀이하고, `--capture`는 그 프레임들을 PNG로 저장하고 끝낸다.
+`--autoplay=combo`는 로비에서 정해진 순서(기본 공격 5연속 → 회피 뒤 대시 공격 → 배틀 스킬 → 궁극기)를 되풀이하고,
+`tools/capture.sh`는 그 프레임들만 PNG로 저장한다. 창은 화면 밖에 뜨고 소리·포커스·마우스를 가져가지 않는다.

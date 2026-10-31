@@ -1,7 +1,7 @@
 extends Node
 ## 게임 입력 동작을 등록한다. 기본 키 배치는 아크나이츠: 엔드필드 PC판을 따른다.
 ##   왼쪽 클릭 공격, 오른쪽 클릭·Shift 회피(누르고 있으면 질주), 1 배틀 스킬(길게 누르면 궁극기),
-##   가운데 클릭 대상 고정, Space 점프.
+##   가운데 클릭 대상 고정, Space 점프. V 1인칭·3인칭, ` 자유 시점.
 ## 키 재설정(설정 메뉴)은 이 기본값 위에 덮어쓴다(GameSettings.key_overrides).
 
 const MOVE_FORWARD := &"move_forward"
@@ -20,6 +20,10 @@ const LOCK_ON := &"lock_on"
 ## 쓰러진 동료 곁에서 누르고 있으면 일으킨다.
 const INTERACT := &"interact"
 const TOGGLE_VISOR := &"toggle_visor"
+## 기본 시점을 1인칭·3인칭으로 바꾼다.
+const TOGGLE_VIEW := &"toggle_view"
+## 자유 시점을 켜고 끈다(휠로 얼굴까지 가까이 당기거나 멀리 밀 수 있다).
+const FREE_VIEW := &"free_view"
 ## 로비: 캐릭터 화면 열기, 작전 출발(방장)
 const CHARACTER_MENU := &"character_menu"
 const START_RUN := &"start_run"
@@ -38,6 +42,8 @@ const DEFAULT_KEYS := {
 	INTERACT: [KEY_F],
 	# 머리 장비(바이저)를 벗거나 쓴다. 엔드필드에는 없는 키라 비어 있는 H(Head)를 쓴다.
 	TOGGLE_VISOR: [KEY_H],
+	TOGGLE_VIEW: [KEY_V],
+	FREE_VIEW: [KEY_QUOTELEFT],
 	CHARACTER_MENU: [KEY_C],
 	START_RUN: [KEY_ENTER],
 	PAUSE: [KEY_ESCAPE],

@@ -21,6 +21,13 @@ from extract_character import CHARACTERS, LOOPING, ROLES, TRIM_OVERRIDES, TRIMS 
 
 LANGUAGES = ["KR", "JP", "EN", "CN"]
 
+# 원작 자료에 이펙트가 없는 동작은 비슷한 동작의 원작 이펙트를 타격 시각에 맞춰 빌려 쓴다(게임에서 정한 것).
+# 캐릭터 → 동작 → [(빌려 올 동작, 그 동작의 타격 시각, 이 동작의 타격 시각), ...]. 타격 시각은 data/characters/*/kit.tres.
+BORROWED = {
+    "endminf": {"dash_attack": [("attack_5", 0.5, 0.53)], "ultimate": [("skill", 0.26, 1.47), ("finisher", 0.92, 3.02)]},
+    "endminm": {"dash_attack": [("attack_5", 0.5, 0.55)], "ultimate": [("skill", 0.3, 2.12), ("finisher", 0.97, 2.33)]},
+}
+
 
 def wav_name(m4a):
     return os.path.splitext(m4a)[0] + ".wav"
@@ -113,6 +120,16 @@ def main(extras, who, target):
                             "grounded": event.get("grounded", False)})
         if sounds or voices or effects:
             roles[role] = {"length": end, "loop": role in LOOPING, "sounds": sounds, "voices": voices, "effects": effects}
+
+    for role, sources in BORROWED.get(char, {}).items():
+        for source, source_hit, hit in sources:
+            shift = hit - source_hit
+            for effect in roles.get(source, {}).get("effects", []):
+                copied = dict(effect)
+                copied["start"] = round(float(effect["start"]) + shift, 4)
+                copied["end"] = round(float(effect["end"]) + shift, 4)
+                roles.setdefault(role, {"length": 0.0, "loop": False, "sounds": [], "voices": [], "effects": []})
+                roles[role]["effects"].append(copied)
 
     manifest = {"character": char, "languages": LANGUAGES, "roles": roles}
     os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)

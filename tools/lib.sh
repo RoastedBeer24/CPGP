@@ -81,3 +81,24 @@ make_zip() {
   joined="$(IFS=,; echo "${paths[*]}")"
   powershell -NoProfile -Command "Compress-Archive -Force -Path $joined -DestinationPath '$(cygpath -w "$zip")'"
 }
+
+# 화면 확인용으로 게임 창을 띄울 때 쓰는 사람을 방해하지 않게 한다: 창이 포커스를 뺏지 않게 한다.
+# 프로젝트 폴더에 override.cfg(Godot가 켤 때 읽어 프로젝트 설정을 덮어쓴다)를 잠깐 만든다. 끝나면 꼭 지워야 하므로
+# 부르는 스크립트가 trap으로 restore_game_window를 부른다. 창은 게임이 켜지자마자 화면 밖으로 옮기고(main.gd),
+# 저장된 창 설정(전체 화면 등)은 적용하지 않는다. 소리는 --audio-driver Dummy로 끄고, 마우스는 가두지 않는다(MouseLock).
+hide_game_window() {
+  local file="$ROOT/override.cfg"
+  if [[ -e "$file" ]]; then
+    echo "override.cfg가 이미 있습니다(다른 화면 확인이 도는 중이거나 지난번에 남은 것). 확인한 뒤 지우세요." >&2
+    exit 1
+  fi
+  {
+    echo "[display]"
+    echo ""
+    echo "window/size/no_focus=true"
+  } > "$file"
+}
+
+restore_game_window() {
+  rm -f "$ROOT/override.cfg"
+}

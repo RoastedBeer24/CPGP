@@ -39,7 +39,8 @@ const BASE_MOUSE_SENSITIVITY := 0.0025
 const REBINDABLE_ACTIONS: Array[StringName] = [
 	Actions.MOVE_FORWARD, Actions.MOVE_BACK, Actions.MOVE_LEFT, Actions.MOVE_RIGHT,
 	Actions.JUMP, Actions.ATTACK, Actions.DODGE, Actions.SKILL, Actions.ULTIMATE,
-	Actions.LOCK_ON, Actions.INTERACT, Actions.TOGGLE_VISOR, Actions.CHARACTER_MENU, Actions.START_RUN,
+	Actions.LOCK_ON, Actions.INTERACT, Actions.TOGGLE_VISOR, Actions.TOGGLE_VIEW, Actions.FREE_VIEW,
+	Actions.CHARACTER_MENU, Actions.START_RUN,
 ]
 const ACTION_LABELS := {
 	Actions.MOVE_FORWARD: "앞으로",
@@ -54,6 +55,8 @@ const ACTION_LABELS := {
 	Actions.LOCK_ON: "대상 고정",
 	Actions.INTERACT: "동료 일으키기 (누르고 있기)",
 	Actions.TOGGLE_VISOR: "바이저 쓰기 / 벗기",
+	Actions.TOGGLE_VIEW: "1인칭 / 3인칭",
+	Actions.FREE_VIEW: "자유 시점 (휠로 확대·축소)",
 	Actions.CHARACTER_MENU: "캐릭터 화면 (로비)",
 	Actions.START_RUN: "작전 출발 (로비, 방장)",
 }
@@ -64,6 +67,8 @@ const LEGACY_DATA_DIR := "CyberUniverse"
 
 ## 저장 위치. 테스트는 사용자의 실제 설정을 건드리지 않도록 다른 파일로 바꾼다.
 static var path := DEFAULT_PATH
+## false면 창 모드·크기 설정을 적용하지 않는다. 화면 확인용으로 켰을 때(main.gd) 창을 화면 밖에 두려고 끈다.
+static var manage_window := true
 
 # ---- 소리 (0~1) ----
 static var volumes: Dictionary[StringName, float] = {}
@@ -100,6 +105,8 @@ static var voice_language := "KR"
 static var auto_update := true
 ## 캐릭터가 머리 장비(바이저)를 쓰고 있는지. 코옵에서도 남에게 그대로 보인다.
 static var visor_on := true
+## 기본 시점이 1인칭인지 (false면 3인칭)
+static var first_person := false
 ## 에셋 키: 비공개 에셋 저장소(캐릭터 모델)를 읽는 GitHub 토큰. 비어 있으면 에셋을 받지 않는다(AssetUpdater).
 static var asset_key := ""
 
@@ -123,6 +130,7 @@ static func reset_to_defaults() -> void:
 	voice_language = "KR"
 	auto_update = true
 	visor_on = true
+	first_person = false
 	asset_key = ""
 
 
@@ -189,6 +197,7 @@ static func load_settings() -> void:
 		voice_language = "KR"
 	auto_update = bool(config.get_value("game", "auto_update", auto_update))
 	visor_on = bool(config.get_value("game", "visor_on", visor_on))
+	first_person = bool(config.get_value("game", "first_person", first_person))
 	asset_key = str(config.get_value("game", "asset_key", asset_key)).strip_edges()
 
 
@@ -219,6 +228,7 @@ static func save() -> Error:
 	config.set_value("game", "voice_language", voice_language)
 	config.set_value("game", "auto_update", auto_update)
 	config.set_value("game", "visor_on", visor_on)
+	config.set_value("game", "first_person", first_person)
 	config.set_value("game", "asset_key", asset_key)
 	return config.save(path)
 
@@ -248,8 +258,8 @@ static func apply_display(root: Window) -> void:
 	root.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if render_scale < 1.0 else Viewport.SCALING_3D_MODE_BILINEAR
 	root.scaling_3d_scale = render_scale
 	apply_brightness(root)
-	# 화면이 없는 실행(테스트, 서버)에서는 창을 다루지 않는다.
-	if DisplayServer.get_name() == "headless":
+	# 화면이 없는 실행(테스트, 서버)과 화면 확인용 실행에서는 창을 다루지 않는다(전체 화면으로 바꾸지 않는다).
+	if DisplayServer.get_name() == "headless" or not manage_window:
 		return
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED)
 	match window_mode:

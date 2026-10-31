@@ -106,7 +106,7 @@ func close_screen() -> void:
 		player.input_blocked = false
 		player.showcase = false
 		player.showcase_weapon = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	MouseLock.capture()
 	closed.emit()
 
 

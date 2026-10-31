@@ -11,6 +11,7 @@ extends Node
 ##   godot --path . -- --single --character-screen   # 로비에서 캐릭터 화면을 연 채로 시작 (화면 확인용)
 ##   godot --path . -- --single --character-weapon   # 캐릭터 화면에서 무기 보기를 켠 채로 시작 (화면 확인용)
 ##   --capture=700,720,740 --capture-dir=폴더    # 그 프레임들의 화면을 PNG로 저장하고 끝냄 (화면 확인용, FrameCapture)
+##   --first-person / --free-face                # 1인칭으로, 또는 자유 시점으로 얼굴 앞에서 시작 (화면 확인용, 저장 안 함)
 ##   --no-update                                 # 자동 업데이트를 하지 않음
 ##   --update-url=http://127.0.0.1:8000/latest   # 업데이트 확인 주소 바꾸기 (시험용)
 ##
@@ -50,7 +51,10 @@ func _ready() -> void:
 	if GameSettings.path == GameSettings.DEFAULT_PATH:
 		GameSettings.copy_legacy_settings(GameSettings.legacy_path(), GameSettings.path)
 	GameSettings.load_settings()
+	GameSettings.manage_window = not is_recording()
 	GameSettings.apply_all(get_tree().root)
+	if is_recording():
+		_hide_window()
 	settings_menu = SettingsMenu.new()
 	settings_menu.name = "SettingsMenu"
 	settings_menu.closed.connect(_on_settings_closed)
@@ -75,9 +79,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _notification(what: int) -> void:
 	# 창이 포커스를 잃으면 마우스를 풀어 준다.
-	# 자동 조종과 화면 녹화(--write-movie, tools/screenshot.sh)는 화면 확인용이라 창이 포커스를 잃어도 멈추지 않는다.
-	var recording := not Engine.get_write_movie_path().is_empty() or has_node("FrameCapture")
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and session != null and not pause_menu.visible and not autoplay and not recording:
+	# 자동 조종과 화면 확인(--write-movie, --capture)은 창이 포커스를 잃어도 멈추지 않는다.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and session != null and not pause_menu.visible and not autoplay and not is_recording():
 		open_pause_menu()
 	# 창을 닫을 때 받아 둔 업데이트가 있으면 설치한다.
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
@@ -145,7 +148,7 @@ func _on_settings_closed() -> void:
 func resume() -> void:
 	pause_menu.close()
 	get_tree().paused = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	MouseLock.capture()
 
 
 func leave_session() -> void:
@@ -156,7 +159,7 @@ func _on_session_started() -> void:
 	menu.hide()
 	hud.session = session
 	hud.show()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	MouseLock.capture()
 
 
 func _on_player_spawned(player: Player) -> void:
@@ -166,6 +169,14 @@ func _on_player_spawned(player: Player) -> void:
 		hud.character_screen.open_screen.call_deferred()
 		if args.has("--character-weapon"):
 			hud.character_screen.toggle_weapon.call_deferred()
+	if args.has("--first-person") and player.is_multiplayer_authority():
+		player.set_camera_mode(Player.CameraMode.FIRST_PERSON, false)
+	if args.has("--free-face") and player.is_multiplayer_authority():
+		# 자유 시점으로 얼굴 앞 0.25m에서 본다.
+		player.set_camera_mode(Player.CameraMode.FREE, false)
+		player.camera_distance = 0.25
+		player.camera_yaw = player.rotation.y + PI
+		player.camera_pitch = 0.0
 	if autoplay and player.is_multiplayer_authority():
 		var pilot := AutoPilot.new()
 		pilot.name = "AutoPilot"
@@ -238,6 +249,27 @@ func _install_pending_update(relaunch: bool) -> void:
 		updater.apply(relaunch)
 
 
+## 화면 확인용으로 도는 중인지 (tools/screenshot.sh의 --write-movie, tools/capture.sh의 --capture)
+func is_recording() -> bool:
+	if not Engine.get_write_movie_path().is_empty():
+		return true
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--capture="):
+			return true
+	return false
+
+
+## 화면 확인용으로 켰을 때: PC를 쓰고 있는 사람을 방해하지 않게 창을 화면 밖으로 옮긴다. tools/capture.sh는 창을
+## 1x1 크기로, 포커스를 뺏지 않게(override.cfg) 띄우므로 여기서 화면 밖으로 옮긴 뒤 찍을 크기로 키운다.
+## 창을 처음부터 화면 밖에 띄우는 설정은 Godot가 화면 안으로 되돌려서 쓸 수 없었다.
+func _hide_window() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	DisplayServer.window_set_position(Vector2i(-20000, -20000))
+	if Engine.get_write_movie_path().is_empty():
+		DisplayServer.window_set_size(Vector2i(1280, 720))
+
+
 func _apply_command_line() -> void:
 	var args := OS.get_cmdline_user_args()
 	autoplay = args.has("--autoplay") or args.has("--autoplay=combo")
@@ -245,6 +277,8 @@ func _apply_command_line() -> void:
 	if capture != null:
 		capture.name = "FrameCapture"
 		add_child(capture)
+	# 화면 확인 중에는 마우스를 가두지 않는다(창이 화면 밖에 있어 커서가 끌려간다).
+	MouseLock.disabled = is_recording()
 	for arg in args:
 		if arg.begins_with("--character="):
 			command_line_character = StringName(arg.trim_prefix("--character="))

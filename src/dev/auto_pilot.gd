@@ -3,7 +3,8 @@ extends Node
 ## 개발용 자동 조종(명령줄 --autoplay). 화면을 찍어 확인할 때 내 플레이어가 저절로 싸운다.
 ## 로비에서는 잠시 뒤 작전을 출발하고(방장일 때), 보상은 첫 번째 것을 고른다.
 ## 가까운 적에게 달려가 공격하고, SP가 차면 배틀 스킬, 에너지가 차면 궁극기를 쓰고, 근처 적이 예고하면 회피한다.
-## --autoplay=combo면 로비에 남아 제자리에서 기본 공격 연속과 배틀 스킬만 되풀이한다(원작 이펙트 확인용).
+## --autoplay=combo면 로비에 남아 제자리에서 정해진 순서(기본 공격 5연속 → 회피 뒤 대시 공격 → 배틀 스킬 → 궁극기)를
+## 되풀이한다(원작 이펙트 확인용). 스킬과 궁극기는 SP·에너지를 채워서 쓴다.
 
 var player: Player
 ## true면 로비에서 제자리 공격만 되풀이한다. 카메라는 캐릭터 뒤에 둔다.
@@ -12,6 +13,13 @@ var combo_only := false
 var _intent := PlayerIntent.new()
 var _cooldown := 0.0
 var _lobby_time := 0.0
+var _combo_time := 0.0
+var _combo_step := 0
+## 확인용 순서: [시각(초), 할 일]. 끝나면 처음부터 되풀이한다.
+const COMBO_STEPS := [
+	[0.0, "attack"], [0.3, "attack"], [0.6, "attack"], [0.95, "attack"], [1.35, "attack"],
+	[3.0, "dodge"], [3.25, "attack"], [4.8, "skill"], [6.4, "ultimate"], [11.0, "loop"],
+]
 
 
 func _ready() -> void:
@@ -68,13 +76,24 @@ func _physics_process(delta: float) -> void:
 
 func _combo(delta: float) -> void:
 	player.camera_yaw = lerp_angle(player.camera_yaw, player.rotation.y, minf(delta * 4.0, 1.0))
-	if _cooldown > 0.0:
-		return
-	if player.sp >= player.kit.max_sp and player.current_action() == null:
-		_intent.skill_pressed = true
-	else:
-		_intent.attack_pressed = true
-	_cooldown = 0.25
+	_combo_time += delta
+	while _combo_step < COMBO_STEPS.size() and _combo_time >= float(COMBO_STEPS[_combo_step][0]):
+		match str(COMBO_STEPS[_combo_step][1]):
+			"attack":
+				_intent.attack_pressed = true
+			"dodge":
+				_intent.move = Vector2(0, 1)
+				_intent.dodge_pressed = true
+			"skill":
+				player.sp = player.kit.max_sp
+				_intent.skill_pressed = true
+			"ultimate":
+				player.energy = player.kit.max_energy
+				_intent.ultimate_pressed = true
+			"loop":
+				_combo_time = 0.0
+				_combo_step = -1
+		_combo_step += 1
 
 
 func _nearest_enemy() -> Enemy:

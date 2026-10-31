@@ -100,6 +100,9 @@ tools/screenshot.sh                                   # 메인 씬
 tools/screenshot.sh res://src/boot/main.tscn 30 build/screenshots/boot.png
 tools/screenshot.sh "" 30 build/screenshots/game.png --single   # 4번째 인자부터는 게임 옵션
 tools/screenshot.sh "" 330 build/screenshots/fight.png --single --autoplay --no-update   # 싸우는 화면
+tools/capture.sh build/screenshots/fx 60,90,120 --single --autoplay=combo   # 정한 프레임들만 저장 (이펙트 확인)
+tools/capture.sh build/screenshots/cam 120 --single --free-face             # 자유 시점으로 얼굴 앞 (또는 --first-person)
 ```
-- 가상 화면(Xvfb)에서 씬을 정해진 프레임 수만큼 실행하고, 마지막 프레임을 PNG로 저장합니다.
+- 씬을 정해진 프레임 수만큼 실행하고 PNG로 저장합니다. 화면이 없는 리눅스에서는 가상 화면(Xvfb)을 씁니다.
+- **PC를 쓰는 사람을 방해하지 않습니다:** 창은 아주 작게 떴다가 곧바로 화면 밖으로 옮겨지고(포커스를 뺏지 않음), 소리를 내지 않고, 마우스를 가두지 않고, 저장된 창 설정(전체 화면 등)을 적용하지 않습니다. 그래서 화면 확인은 이 두 도구로만 하고 `godot`를 창 모드로 직접 띄우지 않습니다.
 - GPU가 없는 환경에서는 OpenGL(Compatibility) 렌더러로 대체됩니다. 배치와 UI는 확인할 수 있지만, 조명과 후처리는 실제 PC 화면과 다를 수 있습니다.
