@@ -59,6 +59,8 @@ func _run() -> void:
 	GameSettings.path = "user://test_settings.cfg"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(GameSettings.path))
 	GameSettings.reset_to_defaults()
+	# 메인 장면을 띄우는 테스트마다 배경에서 모든 모델을 미리 읽으면 느리고 흔들린다. 미리 읽기 자체는 따로 시험한다.
+	AssetPreloader.enabled = false
 	var args := OS.get_cmdline_user_args()
 	var test_filter := args[0] if args.size() > 0 else ""
 

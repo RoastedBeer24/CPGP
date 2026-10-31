@@ -71,9 +71,11 @@ func test_props_follow_original_binding() -> void:
 	intent.skill_pressed = false
 	assert_eq(player.current_action(), player.kit.battle_skill, "배틀 스킬")
 	assert_eq(player.body.prop_place(0), 2, "배틀 스킬 동안 왼손에 소품을 든다")
+	assert_almost_eq(player.body.prop_reveal(0), 1.0, 0.001, "칼처럼 차올라 다 보인다")
 	assert_eq(player.body.weapon_place(), HIDDEN, "칼은 거둔다")
 	await _frames(int(player.kit.battle_skill.duration * 60.0) + 40)
 	assert_eq(player.body.prop_place(0), 0, "스킬이 끝나면 소품을 거둔다")
+	assert_almost_eq(player.body.prop_reveal(0), 0.0, 0.001, "끝부터 지워졌다")
 	player.queue_free()
 	await _frames(1)
 	if not await _spawn_with_model(&"chen_qianyu") or player.body.prop_count() < 2:
@@ -81,6 +83,10 @@ func test_props_follow_original_binding() -> void:
 	await _frames(10)
 	assert_eq(player.body.prop_place(0), 1, "진천우는 평소 소품을 몸에 단다")
 	assert_eq(player.body.prop_place(1), 1)
+	assert_almost_eq(player.body.prop_reveal(0), 1.0, 0.001, "처음부터 보인다")
+	var timelines: Dictionary = player.body._props[0]["timelines"]
+	if timelines.has("relax"):
+		assert_eq(PlayerBody._timeline_place(timelines["relax"], 0.0), 0, "쉬는 자세에서는 소품을 숨긴다(원작 캐릭터 화면 자료)")
 
 
 func test_noticing_enemy_puts_player_in_combat() -> void:

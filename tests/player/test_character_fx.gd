@@ -29,13 +29,13 @@ func before_each() -> void:
 		packer.write_file(_wav_bytes())
 		packer.close_file()
 	packer.close()
-	CharacterFx._loaded.clear()
+	CharacterFx._packages.clear()
 	fx = CharacterFx.new()
 	add_child_autofree(fx)
 
 
 func after_each() -> void:
-	CharacterFx._loaded.clear()
+	CharacterFx._packages.clear()
 	DirAccess.remove_absolute(zip_path)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(WORK_DIR))
 
@@ -50,6 +50,19 @@ func test_sounds_and_voice_play_on_time() -> void:
 	await _frames(8)
 	assert_true(fx._voice.playing, "0.1초에 보이스")
 	assert_eq(fx._voice.bus, &"Voice")
+
+
+func test_package_is_read_once_and_can_be_preloaded() -> void:
+	# 게임을 켜면 배경 스레드(AssetPreloader)가 꾸러미를 미리 읽고, 플레이어는 그것을 그대로 쓴다.
+	var thread := Thread.new()
+	thread.start(CharacterFx.preload_package.bind(zip_path, func() -> bool: return true))
+	thread.wait_to_finish()
+	var package := CharacterFx.load_package(zip_path)
+	assert_true(package.has("streams"), "미리 읽어 둔다")
+	assert_eq((package["streams"] as Dictionary).size(), 2, "소리 두 개")
+	assert_true(is_same(CharacterFx.load_package(zip_path), package), "다시 읽지 않는다")
+	assert_true(fx.setup(zip_path))
+	assert_true(is_same(fx._streams, package["streams"]), "플레이어는 미리 읽은 소리를 쓴다")
 
 
 func test_next_action_drops_pending_sounds() -> void:

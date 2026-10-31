@@ -7,8 +7,9 @@ script = ExtResource("1_appearance")
 model_path = "res://assets/characters/chen_qianyu/chen_qianyu.glb"
 external_model_file = "characters/chen_qianyu.glb"
 headgear_meshes = Array[StringName]([])
-cloth_chains = PackedStringArray()
+cloth_chains = PackedStringArray("clotch_qunzi_a_01_jnt_L:clotch_qunzi_a_03_jnt_L", "clotch_qunzi_a_01_jnt_R:clotch_qunzi_a_03_jnt_R", "clotch_qunzi_b_01_jnt_M:clotch_qunzi_b_03_jnt_M", "clotch_qunzi_c_01_jnt_L:clotch_qunzi_c_03_jnt_L", "clotch_qunzi_c_01_jnt_R:clotch_qunzi_c_03_jnt_R", "clotch_qunzi_d_01_jnt_L:clotch_qunzi_d_03_jnt_L", "clotch_qunzi_d_01_jnt_R:clotch_qunzi_d_03_jnt_R", "clotch_qunzi_e_01_jnt_M:clotch_qunzi_e_03_jnt_M")
 ribbon_chains = PackedStringArray()
+spring_chains = PackedStringArray("tail1_M:tail12_M")
 face_materials = Array[StringName]([&"M_actor_chen_face_01", &"M_actor_chen_brow_01", &"M_actor_chen_iris_01"])
 shade_materials = Dictionary[StringName, float]({
 &"M_hairshadow_common_03": 1.0

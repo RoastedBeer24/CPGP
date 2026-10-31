@@ -18,11 +18,12 @@ extends Resource
 @export var attack_bonus := 0.0
 
 
-## 무기 모델 장면. 프로젝트 안 파일이 없으면 실행 파일 옆 파일을 실행 중에 읽는다. 둘 다 없으면 null.
+## 무기 모델 장면. 프로젝트 안 파일이 없으면 실행 파일 옆 파일(구운 장면 또는 glTF)을 실행 중에 읽는다.
+## 둘 다 없으면 null. 배경 스레드(AssetPreloader)에서도 부른다.
 func load_scene() -> PackedScene:
 	if not model_path.is_empty() and ResourceLoader.exists(model_path):
-		return load(model_path) as PackedScene
+		return CharacterAppearance.project_resource(model_path) as PackedScene
 	var file := CharacterAppearance.executable_relative(external_file)
-	if file.is_empty() or not FileAccess.file_exists(file):
+	if file.is_empty():
 		return null
-	return CharacterAppearance.load_gltf_file(file)
+	return CharacterAppearance.load_model_file(file)

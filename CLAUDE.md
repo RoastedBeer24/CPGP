@@ -36,6 +36,7 @@
 | 아케쿠리 추가 (M5 일부) | 검수 대기 | 원작 아케쿠리(chr_0019_karin) 모델·동작 47개·무기(엣지 오브 라이트)·소리·보이스·이펙트·카메라, 기본 공격 4연속·배틀 스킬·궁극기(동료 SP 회복 `rally_sp`)·처형·낙하 공격 (`docs/dev/review/akekuri.md`) |
 | 1인칭·무기·캐릭터 고르기 (6차) | 검수 대기 | 1인칭에서 내 몸(머리·목·옷깃을 뺀 사본)과 손이 보이고 시점은 각 캐릭터의 눈동자(내려다보면 고개·윗몸을 숙임, 옆·뒤로 가면 다리만 돌림), 공식 초상화 아이콘으로 캐릭터 고르기, 같은 무기군 안에서 무기 고르기, 무기는 싸우는 동작에서만, 대시 공격 = 원작 연계 스킬, 아케쿠리 꼬리·귀 물리, 1인칭 이펙트 흐림 (`docs/dev/review/fp_loadout.md`) |
 | 진천우·아크라이트·포그라니치니크 (M5) | 검수 대기 | 원작 chr_0005_chen·chr_0007_ikut·chr_0029_pograni의 모델·동작 49개·전용 한손검(숭배의 시선, 십이문, 끝없는 방랑)·소리·보이스·이펙트·궁극기 카메라. 전투 구성은 `tools/draft_kit.py`가 원작 동작을 재서 만든 초안. 이름은 '첸'이 아니라 진천우 (`docs/dev/review/new_characters.md`) |
+| 렉·적 움직임·소품 (8차) | 검수 대기 | 모델을 BC7 텍스처의 Godot 장면(.scn)으로 구워 올림(그래픽 메모리 약 4분의 1, 읽기 1초 → 0.2초), 게임을 켜면 배경 스레드가 모델·소리·이펙트·소품을 미리 읽음, 적 공격은 원작 몸 이동·회전 곡선대로(맞는 순간 확 튀지 않음), 소품도 칼처럼 차오르고 지워짐, 진천우 쉬는 자세에서 소품 숨김, 포그라니치니크 외투·진천우 치마 옷자락과 꼬리 물리 (`docs/dev/review/new_characters.md`의 8차 항목) |
 | M4 거점·영구 성장 ~ M6 다듬기 | 예정 | 구상서 §6 |
 
 ### 지금 구조
@@ -51,6 +52,8 @@
 - `src/ui/character_screen.gd`(로비 캐릭터 화면: 아래쪽 초상화 아이콘으로 캐릭터 고르기, 같은 무기군 안에서 무기 고르기), `reward_panel.gd`(보상 고르기), `hud.gd`(보스 체력, 작전 진행)
 - `src/player/characters.gd` + `data/characters/<이름>/`(character, appearance, kit): 고를 수 있는 캐릭터
 - `src/core/roster.gd`: 같은 3D 세계의 플레이어·적 목록
+- `src/core/asset_preloader.gd`(게임을 켜면 배경 스레드가 모델·소리 꾸러미·이펙트·소품을 미리 읽음, `main.gd`가 만든다) + `shared_cache.gd`(여러 스레드가 함께 쓰는 읽기 저장소: 같은 것을 동시에 찾으면 기다렸다 같은 결과를 쓴다) + `gltf_mipmaps.gd`(실행 중에 읽는 glTF 그림에 풀 때 밉맵). 모델 읽기는 `CharacterAppearance.model_entry`(구운 `.scn` 먼저, 없으면 glb)
+- `tools/bake_models.gd`: 모델 glb → 큰 텍스처를 BC7로 압축한 `.scn` (`tools/publish_assets.py`가 올리기 전에 `build/baked/`에 굽는다)
 
 ## 개발 환경
 - **Godot 4.5.1 표준판**(GDScript), Forward+ 렌더러, Jolt Physics
@@ -77,7 +80,7 @@ python tools/make_icons.py   # 공식 초상화(!File/Portraits/)에서 캐릭�
 python3 tools/extract_enemy.py "!File/Bonekrusher_Assets/enemies/eny_0029_lbmob/eny_0029_lbmob_Animated.glb" assets/enemies/lbmob.glb   # 적 모델 (동작은 ENEMIES)
 tools/capture.sh build/screenshots/foe 90,130,170 --single --third-person --spawn-enemy=raider_chief   # 로비에 적을 세워 공격 확인
 python3 tools/measure_attack_clips.py <원본_Animated.glb> attack_01:1.4   # 공격 동작의 타격 시각과 내디딤 거리 재기
-python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장소에 올리기 (게임이 자동으로 받음)
+GODOT=... python3 tools/publish_assets.py   # 모델을 .scn으로 구워 비공개 에셋 저장소에 올리기 (바뀐 파일만, 게임이 자동으로 받음)
 ```
 - 푸시하면 GitHub Actions(`.github/workflows/build.yml`)가 테스트를 돌리고 Windows 실행 파일을 Artifacts로 올린다. 기본 브랜치면 릴리스로도 올리고, 설치된 게임이 자동 업데이트한다. **푸시와 에셋 올리기는 묻지 않고 바로 한다**(사용자 지시, 2026-10-31): 테스트가 통과하면 커밋하고 푸시하며, 모델·소리·이펙트 꾸러미가 바뀌었으면 푸시 전에 `tools/publish_assets.py`로 함께 올린다. 가족이 쓰는 게임이 바로 바뀌므로 테스트를 꼭 통과시키고, CI 결과와 릴리스를 확인한다.
 
@@ -148,7 +151,7 @@ python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장�
   - 화면 확인 중에는 포커스를 잃어도 일시정지하지 않는다(`main.is_recording()`). 캐릭터 화면의 무기 보기는 `--character-weapon`, 1인칭은 `--first-person`, 얼굴 앞 자유 시점은 `--free-face`로 찍는다.
 - **Python -I:** `-I`는 `PYTHONIOENCODING` 같은 환경 변수를 무시한다. 한자·한글을 콘솔에 찍을 때는 스크립트에서 `sys.stdout.reconfigure(encoding="utf-8")`를 부른다.
 - **도구 쓸 때(Claude 세션):** Bash의 heredoc 안 Python 문자열에 백슬래시(줄바꿈 표시 등)를 쓰면 실행 도구를 거치며 지워진다. 백슬래시가 든 스크립트는 Write로 파일을 만들어 실행하고, 이미 있는 파일은 Edit로 고친다.
-- **에셋 자동 업데이트:** 모델은 비공개 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스 `assets`에만 올린다. 파일 목록은 `tools/publish_assets.py`의 `FILES`. 그 도구는 저장소가 공개면 거부한다. 게임은 설정의 에셋 키(GitHub 토큰)로 받는데, 키는 GitHub API에만 보낸다. 실제 파일은 다른 호스트로 넘겨받으므로 `max_redirects = 0`으로 직접 따라가며 키를 뺀다(`AssetUpdater._download`). 모델의 동작 이름이 바뀌면 옛 게임이 새 모델을 받아 깨질 수 있으니 **게임 푸시와 에셋 올리기를 함께** 한다.
+- **에셋 자동 업데이트:** 모델은 비공개 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스 `assets`에만 올린다. 파일 목록은 `tools/publish_assets.py`의 `FILES`(모델은 `BAKED`: glb를 구운 `.scn`만 올린다). 그 도구는 저장소가 공개면 거부한다. 게임은 설정의 에셋 키(GitHub 토큰)로 받는데, 키는 GitHub API에만 보낸다. 실제 파일은 다른 호스트로 넘겨받으므로 `max_redirects = 0`으로 직접 따라가며 키를 뺀다(`AssetUpdater._download`). 모델의 동작 이름이 바뀌면 옛 게임이 새 모델을 받아 깨질 수 있으니 **게임 푸시와 에셋 올리기를 함께** 한다.
 - **1인칭:** 머리 메시만 숨기면 목·후드·옷깃이 카메라 앞을 가린다(외투 메시 하나에 몸 전체가 들어 있다). 머리 뼈를 줄이는 방법은 머리카락 옷자락 물리를 망가뜨린다. 그래서 1인칭은 원래 몸을 그림자만 남기고, 목 아래 뼈와 목 높이에 붙은 팔 밖의 뼈(후드·옷깃·집게)를 따르는 삼각형을 뺀 메시 사본을 그린다(`PlayerBody._build_view_meshes`, 처음 1인칭이 될 때 한 번). 이 모델은 쇄골이 목이 아니라 등뼈(Spine2)에 붙어 있다. 카메라는 그 캐릭터의 두 눈동자 가운데다(눈 뼈 + 눈동자 뼈 `iris_bones`로 잰 깊이, 사용자 지시: 각 캐릭터의 눈에 맞춘다). 눈 자리 그대로 내려다보면 가슴이 발을 가려서, 내려다보면 고개와 윗몸을 숙이고(`_bend_to_look`, 내 화면만) 숙인 자세의 눈을 덧입힐 때 적어 둔다. 몸 기준으로 적어야 한 프레임 늦은 값이 달릴 때 뒤처지지 않는다. 카메라를 눈 앞으로 내미는 방법은 시점이 눈에서 벗어나서 쓰지 않았다. 몸에서 눈까지의 거리만 부드럽게 따라간다(`_pivot_offset`). 1인칭에서는 몸이 카메라 방향을 보고 공격도 보는 쪽으로 한다. 옆·뒤로 가면 골반만 가는 쪽으로 돌리고 등뼈로 되돌리며, 뒤로 가면 이동 동작을 거꾸로 튼다(`_twist_legs`, `Player.strafing`이 동기화되어 원격 몸도).
 - **이펙트와 1인칭:** 이펙트가 카메라 가까이에서 흐려지는 거리는 셰이더 전역 값 `fx_camera_fade`(project.godot의 `shader_globals`)다. 1인칭은 카메라가 이펙트 한가운데(몸)에 있어서 낙하 공격 착지 섬광이 화면을 하얗게 덮었다. `Player._apply_view`가 1인칭이면 더 멀리서부터 흐리게 바꾼다.
 - **꼬리·귀 물리:** 옷자락은 뼈대 기준으로 계산해서(세상 기준이면 돌 때마다 휘날림) 몸이 달리거나 돌아도 관성이 없다. 짧은 꼬리·귀는 그러면 원작 동작의 작은 흔들림만 받아 굳어 있었다(±3mm). `spring_chains`는 따로 세상 기준(`CENTER_FROM_WORLD_ORIGIN`)으로 계산한다(충돌을 쓰지 않아 기준 노드 문제와 상관없다). 원작 이동 동작에는 꼬리·귀·머리카락 움직임이 없고 공격·스킬에는 있다.
@@ -163,6 +166,11 @@ python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장�
 - **근접 판정 각도:** `HitData.arc`는 반각이다. 180도 이상은 둘레 전체로 본다(바로 뒤의 적은 각도가 180을 아주 조금 넘게 계산되어 빠졌다).
 - **회피·질주 키:** Shift 하나로 가른다. 누르자마자 회피하면 달리려고 누를 때 회피가 먼저 나가므로, 뗄 때 짧았으면 회피, 오래 누르고 있으면 질주한다(`Player.dodge_key`, 키 이벤트로 받는다). 테스트는 `dodge_key(true/false)`를 부른다.
 - **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.
+- **내보낸 게임에는 텍스처 압축기가 없다:** 내보내기 템플릿에서 `Image.compress`는 Unavailable(에디터판에만 있음). 실행 중에 읽은 glb 텍스처는 압축되지 않아 모델 전부 약 2GB를 썼다. 그래서 에디터판으로 모델을 구워(`tools/bake_models.gd`, BC7) `.scn`으로 올린다. 템플릿은 프로젝트 밖 `.scn`을 `ResourceLoader.load`로 읽는다(시험함). 파일이 바뀌어도 옛 것을 받지 않게 `CACHE_MODE_IGNORE`로 읽고, 이미지 목록은 뿌리 노드의 메타데이터 `images`에 넣어 둔다(장면을 만들지 않고 `SceneState`로 꺼낸다). 색 띠·얼굴 그림자 지도는 압축 자국이 보여서 압축하지 않는다.
+- **배경 스레드와 렌더링 서버:** 렌더링 서버가 답을 돌려주는 호출(`ImageTexture.get_image()` 등)은 배경 스레드에서 쓰지 않는다. 주 스레드가 다음 프레임을 그릴 때까지 기다리는데, 주 스레드가 그 스레드(`SharedCache`의 같은 키, 끝낼 때의 `wait_to_finish`)를 기다리면 둘 다 멈춘다. 밉맵은 그림을 풀 때 넣는다(`GltfMipmaps`, glTF 확장). 텍스처·메시를 만드는 것은 배경 스레드에서 해도 된다.
+- **Callable과 객체 수명:** 객체의 메서드 Callable(`weapon.load_scene`)은 객체를 붙잡지 않는다. 나중에 부를 일 목록에 넣으면 그사이 자원이 풀려 "null instance" 오류로 스레드가 멈췄다. 람다로 감싸 붙잡는다(`AssetPreloader.jobs_for`). 정적 함수 + `bind(인자)`는 인자를 붙잡는다.
+- **미리 읽기와 테스트:** 테스트 러너는 `AssetPreloader.enabled = false`로 메인 장면의 미리 읽기를 끈다(메인 장면 테스트마다 모든 모델을 읽으면 느리고 흔들린다). 미리 읽기는 화면 확인(`is_recording`) 중에도 하지 않는다. 에셋을 받는 중이면 다 받은 뒤 시작한다(읽는 도중의 파일은 바꿔 넣지 못한다).
+- **적 공격의 몸 이동·회전:** 원작 적 공격 동작은 몸(뿌리 뼈)이 다가서고 크게 돈다(170도 넘게). 동작은 제자리로 묶고 돌림도 빼며(`tools/extract_enemy.py`), 잰 곡선을 `EnemyAttackData.travel`·`turn`에 넣는다. 적은 동작 재생 위치대로 나아가고(`Enemy._attack_move`), 모델은 돌려 그린 뒤 끝나면 천천히 돌아온다(`EnemyBody._update_turn`). 예전에는 맞는 순간 lunge를 한꺼번에 밀어(돌진은 초속 16m) 순간이동처럼 보였고, 돌림이 동작 안에 있어 끝날 때 0.2초 만에 휙 돌아갔다. `lunge`는 이제 맞힌 뒤 구간의 거리다.
 - **적 모델 동작:** 원작 적 동작도 몸(뿌리 뼈)이 앞으로 2~12m 나가고 돈다. `tools/extract_enemy.py`가 모두 제자리로 묶고 적은 게임이 움직인다(이동 속도, `lunge`). 공격 동작은 예고 동안 `clip_from`에서 `clip_hit`(무기가 가장 빠른 순간, `tools/measure_attack_clips.py --weapon=`)까지를 예고 시간에 맞춘 빠르기로 튼다. 예고가 짧다고 앞부분을 건너뛰면, 로댄의 내려찍기(5.5m 뛰어올랐다 내리꽂음)가 이미 공중에서 시작해 보스가 화면 위로 사라졌다. 저격수(lbhunt)는 무기가 빠르게 움직이지 않는 원거리 적이라 쏘는 반동(작은 속도 봉우리)으로 시각을 찾았다. 사수(hvybow)는 이름과 달리 근접이다.
 - **본 크러셔 꾸러미:** 일반 적에는 소리·이펙트 자료가 없고, 로댄·네파리스(1·2형태)에만 소리가 있다. 적 모델은 기본 재질(StandardMaterial3D)로 그려도 읽기 좋다. 덩치 큰 적이 붙으면 카메라가 몸속에 들어가서 카메라 가까운 곳(0.3~0.9m)은 점점이 지운다.
 - **새 꾸러미 형식(진천우·아크라이트·포그라니치니크):** 모델이 `characters/<ID>/<ID>_Animated.glb`, 이펙트 목록이 `object_catalog.json`(파티클 키 `particles`), 소리가 `audio/wav`다. `tools/extract_character_fx.py`는 두 형식을 다 읽는다(캐릭터 폴더 이름 `chr_0005_chen` 등을 `WHO`에 적는다). 기술의 한국어 이름은 `metadata/battle.json`의 `name.KR`, 무기 자리는 `weapon_binding.json`(동작 이름 ↔ 원본 파일은 `metadata/clips.json`).

@@ -276,9 +276,37 @@ func test_runtime_model_is_read_only_once() -> void:
 	var source := ProjectSettings.globalize_path(Characters.find(Characters.DEFAULT_ID).appearance().model_path)
 	if not FileAccess.file_exists(source):
 		return
-	var first := CharacterAppearance.load_gltf_file(source)
+	var first := CharacterAppearance.load_model_file(source)
 	assert_not_null(first)
-	assert_true(CharacterAppearance.load_gltf_file(source) == first, "같은 파일은 다시 읽지 않음")
+	assert_true(CharacterAppearance.load_model_file(source) == first, "같은 파일은 다시 읽지 않음")
+	var images := CharacterAppearance.model_entry(source)[1] as Dictionary
+	assert_true(not images.is_empty(), "이미지 목록(색 띠 등)도 함께 기억한다")
+	for image_name: String in images:
+		var texture := images[image_name] as Texture2D
+		assert_true(texture.get_image().has_mipmaps(), "실행 중에 읽은 텍스처에 밉맵을 넣는다: %s" % image_name)
+		break
+
+
+func test_baked_model_next_to_executable() -> void:
+	# 내보낸 게임은 glb 자리에 구운 장면(.scn, tools/bake_models.gd)이 있으면 그것을 읽는다. 큰 텍스처는 BC7로 압축돼 있다.
+	var baked := ProjectSettings.globalize_path("res://build/baked/characters/%s.scn" % Characters.DEFAULT_ID)
+	if not FileAccess.file_exists(baked):
+		print("    (구운 모델이 없어 건너뜀: python3 tools/publish_assets.py --dry-run)")
+		return
+	var appearance := Characters.find(Characters.DEFAULT_ID).appearance().duplicate() as CharacterAppearance
+	appearance.model_path = ""
+	appearance.external_model_file = baked.get_basename() + ".glb"
+	await _spawn(appearance)
+	assert_true(player.body.has_model, "구운 장면을 몸으로 씀")
+	assert_true(player.body._action_clips.has(&"attack_5"), "동작도 들어 있다")
+	var compressed := 0
+	for image_name: String in appearance._images:
+		var image := (appearance._images[image_name] as Texture2D).get_image()
+		assert_true(image.has_mipmaps(), "밉맵이 있다: %s" % image_name)
+		if image.get_format() == Image.FORMAT_BPTC_RGBA:
+			compressed += 1
+	assert_true(compressed >= 3, "큰 텍스처는 압축돼 있다 (%d개)" % compressed)
+	assert_not_null(appearance.texture(appearance.face_shadow_map), "재질이 쓰지 않는 그림(얼굴 그림자 지도)도 찾는다")
 
 
 func _spawn(appearance: CharacterAppearance, character_id: StringName = Characters.DEFAULT_ID) -> void:

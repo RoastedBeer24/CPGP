@@ -20,11 +20,25 @@ const ENRAGED_TINT := Color(1.0, 0.25, 0.15, 0.22)
 ## 모델: 카메라에서 이 거리(m) 안은 점점이 지운다(FROM에서 다 지우고 TO부터 다 보인다)
 const CAMERA_FADE_FROM := 0.3
 const CAMERA_FADE_TO := 0.9
+## 모델: 공격 동작의 몸 돌림(EnemyAttackData.turn)을 따라가는 가장 빠른 빠르기와, 공격이 끝난 뒤 원래 방향으로
+## 돌아오는 빠르기(라디안/초)
+const TURN_FOLLOW_SPEED := 25.0
+const TURN_BACK_SPEED := 6.0
+## 원격 피어: 동기화로 띄엄띄엄 바뀌는 적의 자리를 보이는 몸이 부드럽게 따라가는 시간(초). 이보다 많이(m) 바뀌면
+## 따라가지 않고 바로 옮긴다(되살아나기 등).
+const SMOOTH_TIME := 0.06
+const SMOOTH_MAX_JUMP := 3.0
 
 var enemy: Enemy
 var has_model := false
 
 var _rig: Node3D
+## 모델과, 공격 동작을 따라 지금 더 돌려 그리는 각도(라디안)
+var _model: Node3D
+var _turn := 0.0
+## 원격 피어: 지난 프레임의 적 자리와, 보이는 몸을 그 자리에서 비켜 그리는 만큼(세상 기준)
+var _smooth_from := Vector3.INF
+var _smooth_offset := Vector3.ZERO
 var _materials: Array[StandardMaterial3D] = []
 var _eye_material: StandardMaterial3D
 var _telegraph: Node3D
@@ -88,6 +102,7 @@ func telegraph_progress() -> float:
 func _process(delta: float) -> void:
 	if enemy == null:
 		return
+	_smooth(delta)
 	var moved := global_position - _last_position
 	moved.y = 0.0
 	_last_position = global_position
@@ -116,6 +131,20 @@ func _process(delta: float) -> void:
 		_update_sounds()
 	else:
 		_animate_placeholder(delta)
+
+
+## 원격 피어: 적의 자리는 동기화 패킷이 올 때마다 띄엄띄엄 바뀐다(어떤 프레임은 두 번, 어떤 프레임은 0번). 보이는 몸은
+## 바뀐 만큼 거꾸로 비켜 두었다가 짧게 줄여 부드럽게 따라가게 한다. 판단하는 호스트는 그대로 그린다.
+func _smooth(delta: float) -> void:
+	if multiplayer.is_server():
+		return
+	var at := enemy.global_position
+	if _smooth_from != Vector3.INF:
+		var jump := at - _smooth_from
+		_smooth_offset = _smooth_offset - jump if jump.length() < SMOOTH_MAX_JUMP else Vector3.ZERO
+	_smooth_from = at
+	_smooth_offset *= exp(-delta / SMOOTH_TIME)
+	position = enemy.global_basis.inverse() * _smooth_offset
 
 
 # ---- 공격 예고 ----
@@ -196,18 +225,22 @@ static func _telegraph_mesh(attack: EnemyAttackData, scale_value: float) -> Arra
 
 # ---- 모델 ----
 
+## 적 모델 장면: 프로젝트 안(res://assets/) 파일, 없으면 실행 파일 옆 파일(구운 장면 또는 glTF). 없으면 null.
+## 배경 스레드(AssetPreloader)에서도 부른다.
+static func load_model_scene(data: EnemyData) -> PackedScene:
+	if data.model_file.is_empty():
+		return null
+	var project_path := "res://assets/" + data.model_file
+	if ResourceLoader.exists(project_path):
+		return CharacterAppearance.project_resource(project_path) as PackedScene
+	return CharacterAppearance.load_model_file(OS.get_executable_path().get_base_dir().path_join(data.model_file))
+
+
 func _load_model() -> bool:
 	var data := enemy.data
 	if data.model_file.is_empty():
 		return false
-	var scene: PackedScene = null
-	var project_path := "res://assets/" + data.model_file
-	if ResourceLoader.exists(project_path):
-		scene = load(project_path) as PackedScene
-	else:
-		var external := OS.get_executable_path().get_base_dir().path_join(data.model_file)
-		if FileAccess.file_exists(external):
-			scene = CharacterAppearance.load_gltf_file(external)
+	var scene := EnemyBody.load_model_scene(data)
 	if scene == null:
 		return false
 	var model := scene.instantiate() as Node3D
@@ -216,6 +249,7 @@ func _load_model() -> bool:
 	# glTF 모델은 보통 +Z를 앞으로 본다. 적의 앞은 -Z라서 돌려 세운다.
 	model.rotation.y = PI
 	_rig.add_child(model)
+	_model = model
 	for node: Node in model.find_children("*", "MeshInstance3D", true, false):
 		var mesh := node as MeshInstance3D
 		_model_meshes.append(mesh)
@@ -310,7 +344,26 @@ func _animate_model(delta: float) -> void:
 			_play_role(&"dead", 0.12)
 			_dead_time += delta
 			_rig.position.y = -clampf((_dead_time - SINK_FROM) / SINK_TIME, 0.0, 1.0) * enemy.data.height
+	_update_turn(delta)
 	_update_overlay()
+
+
+## 원작 공격 동작의 몸 돌림(EnemyAttackData.turn, 동작에서는 뺐다)을 모델에 준다. 예고를 시작한 자리(clip_from)를
+## 기준으로 돌리고, 공격이 끝나면 자연스러운 빠르기로 원래 방향으로 돌아온다. 예전에는 돌림이 동작 안에 있어서
+## 공격이 끝나는 순간 0.2초 만에 휙 돌아갔다(170도 넘게 도는 공격도 있다).
+func _update_turn(delta: float) -> void:
+	var attack := enemy.current_attack() if enemy.state in [Enemy.State.WIND_UP, Enemy.State.RECOVER] else null
+	if attack != null and not attack.turn.is_empty() and _animation.current_animation == _role_clip(attack.clip):
+		var wanted := deg_to_rad(attack.turn_at(_animation.current_animation_position) - attack.turn_at(attack.clip_from))
+		_turn = move_toward(_turn, wanted, TURN_FOLLOW_SPEED * delta)
+	else:
+		_turn = move_toward(wrapf(_turn, -PI, PI), 0.0, TURN_BACK_SPEED * delta)
+	_model.rotation.y = PI + _turn
+
+
+## 공격 동작을 따라 모델을 더 돌려 그리는 각도(도, 테스트용)
+func model_turn_degrees() -> float:
+	return rad_to_deg(_turn)
 
 
 ## 지금 동작의 재생 위치를 따라가며 원작 소리를 낸다. 공격 동작은 예고 시간에 맞춘 빠르기로 틀어서 시간으로 예약하면

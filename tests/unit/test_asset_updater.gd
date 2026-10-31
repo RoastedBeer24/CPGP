@@ -89,8 +89,17 @@ func test_publish_tool_uses_same_names() -> void:
 	assert_true(tool.contains('REPOSITORY = "%s"' % AssetUpdater.REPOSITORY))
 	assert_true(tool.contains('RELEASE_TAG = "%s"' % AssetUpdater.RELEASE_TAG))
 	assert_true(tool.contains('MANIFEST_NAME = "%s"' % AssetUpdater.MANIFEST_NAME))
-	var appearance := Characters.find(Characters.DEFAULT_ID).appearance()
-	assert_true(tool.contains('"%s"' % appearance.external_model_file), "게임이 읽는 모델 경로로 올린다")
+	# 모델은 게임이 glb 자리에서 먼저 찾는 구운 장면(.scn)으로 올린다.
+	for character in Characters.all():
+		var appearance := character.appearance()
+		assert_true(tool.contains('"%s"' % CharacterAppearance.baked_path(appearance.external_model_file)),
+				"게임이 읽는 모델 경로로 올린다: %s" % character.id)
+		assert_true(tool.contains('"%s"' % appearance.fx_external_file), "소리 꾸러미: %s" % character.id)
+	for weapon in Weapons.all():
+		assert_true(tool.contains('"%s"' % CharacterAppearance.baked_path(weapon.external_file)), "무기: %s" % weapon.id)
+	for path: String in DirAccess.get_files_at("res://data/enemies"):
+		var data := load("res://data/enemies/" + path) as EnemyData
+		assert_true(tool.contains('"%s"' % CharacterAppearance.baked_path(data.model_file)), "적: %s" % data.model_file)
 
 
 func _write(path: String, text: String) -> void:

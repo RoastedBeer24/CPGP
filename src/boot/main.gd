@@ -36,6 +36,8 @@ var autoplay := false
 var updater: Updater
 ## 에셋(캐릭터 모델) 자동 업데이트. 업데이트할 수 없는 실행 환경이면 null.
 var asset_updater: AssetUpdater
+## 모델·소리를 배경에서 미리 읽기 (화면 확인 중에는 null)
+var preloader: AssetPreloader
 var settings_menu: SettingsMenu
 
 @onready var menu: MainMenu = $MainMenu
@@ -71,6 +73,7 @@ func _ready() -> void:
 	menu.open()
 	_start_updater()
 	_apply_command_line()
+	_start_preloading()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -267,6 +270,21 @@ func _start_updater() -> void:
 	add_child(asset_updater)
 	asset_updater.status_changed.connect(menu.set_asset_status)
 	asset_updater.check()
+
+
+## 모델·소리 꾸러미·이펙트를 배경 스레드에서 미리 읽는다(캐릭터를 바꿀 때 멈칫하지 않게). 에셋을 받는 중이면 다 받은
+## 뒤에 읽는다(읽는 도중의 파일은 바꿔 넣지 못한다). 화면 확인 중에는 하지 않는다.
+func _start_preloading() -> void:
+	if is_recording() or not AssetPreloader.enabled:
+		return
+	preloader = AssetPreloader.new()
+	preloader.name = "AssetPreloader"
+	add_child(preloader)
+	var character := command_line_character if command_line_character != &"" else GameSettings.character_id
+	if asset_updater != null and asset_updater.state in [AssetUpdater.State.CHECKING, AssetUpdater.State.DOWNLOADING]:
+		asset_updater.finished.connect(func(_updated: Array[String]) -> void: preloader.start_for(character), CONNECT_ONE_SHOT)
+	else:
+		preloader.start_for(character)
 
 
 func _on_update_ready() -> void:

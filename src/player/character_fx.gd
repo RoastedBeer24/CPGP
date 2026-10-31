@@ -21,8 +21,9 @@ const MAX_SOUNDS := 10
 ## 소리가 들리는 거리: 이 거리(m)까지는 거의 그대로 들린다.
 const UNIT_SIZE := 8.0
 
-## zip 경로 → {"roles": 동작별 정보, "streams": 파일 이름 → AudioStream}. 플레이어마다 다시 읽지 않는다.
-static var _loaded: Dictionary[String, Dictionary] = {}
+## zip 경로 → {"roles": 동작별 정보, "streams": 파일 이름 → AudioStream, ...}. 플레이어마다 다시 읽지 않고,
+## 배경 스레드(AssetPreloader)가 미리 읽어 두기도 한다. 못 읽었으면 빈 사전.
+static var _packages := SharedCache.new()
 
 var _source := ""
 var _roles: Dictionary = {}
@@ -43,30 +44,50 @@ var _preload: Array[Array] = []
 var _sounds_started := 0
 ## 소품(보조 무기) 목록: [{file, idle, fight, shown, timelines}] (tools/extract_character_fx.py의 PROPS)
 var _props: Array = []
-## 읽은 소품 장면: "zip|파일" → PackedScene
-static var _prop_scenes: Dictionary[String, PackedScene] = {}
+## 읽은 소품 장면: "zip|파일" → PackedScene (못 읽었으면 null)
+static var _prop_scenes := SharedCache.new()
 
 
 ## 꾸러미를 읽는다. 없거나 읽지 못하면 false (소리 없이 돈다).
 func setup(zip_path: String) -> bool:
-	if zip_path.is_empty() or not FileAccess.file_exists(zip_path):
+	var package := load_package(zip_path)
+	if package.is_empty():
 		return false
-	if not _loaded.has(zip_path):
-		var package := _read_package(zip_path)
-		if package.is_empty():
-			return false
-		_loaded[zip_path] = package
 	_source = zip_path
-	_roles = _loaded[zip_path]["roles"]
-	_streams = _loaded[zip_path]["streams"]
-	_cameras = _loaded[zip_path].get("camera", {})
-	_camera_poses = _loaded[zip_path].get("camera_poses", {})
-	_props = _loaded[zip_path].get("props", [])
+	_roles = package["roles"]
+	_streams = package["streams"]
+	_cameras = package.get("camera", {})
+	_camera_poses = package.get("camera_poses", {})
+	_props = package.get("props", [])
 	_voice = _make_player(&"Voice")
 	for role: String in _roles:
 		for effect: Dictionary in (_roles[role] as Dictionary).get("effects", []):
-			_preload.append([str(effect.get("file", "")), str(effect.get("particles", ""))])
+			if not EffectLibrary.is_loaded(zip_path, str(effect.get("file", ""))):
+				_preload.append([str(effect.get("file", "")), str(effect.get("particles", ""))])
 	return true
+
+
+## 꾸러미(fx.json과 소리)를 읽는다. 플레이어끼리 한 번만 읽는다. 없거나 못 읽으면 빈 사전.
+static func load_package(zip_path: String) -> Dictionary:
+	if zip_path.is_empty() or not FileAccess.file_exists(zip_path):
+		return {}
+	return _packages.get_or_load(zip_path, _read_package.bind(zip_path))
+
+
+## 꾸러미에 든 것을 모두 미리 읽는다: 소리, 소품 모델, 원작 이펙트 (배경 스레드에서 부른다).
+## keep_going이 false를 돌려주면(게임을 끝낼 때) 그만 읽는다.
+static func preload_package(zip_path: String, keep_going: Callable) -> void:
+	var package := load_package(zip_path)
+	for info: Dictionary in package.get("props", []):
+		if not keep_going.call():
+			return
+		load_prop(zip_path, str(info.get("file", "")))
+	var roles: Dictionary = package.get("roles", {})
+	for role: String in roles:
+		for effect: Dictionary in (roles[role] as Dictionary).get("effects", []):
+			if not keep_going.call():
+				return
+			EffectLibrary.load_effect(zip_path, str(effect.get("file", "")), str(effect.get("particles", "")))
 
 
 func has_sounds() -> bool:
@@ -146,28 +167,33 @@ func props() -> Array:
 
 ## 소품 모델 장면(zip 안 glb를 실행 중에 읽는다, 플레이어끼리 한 번만). 읽지 못하면 null.
 func prop_scene(file: String) -> PackedScene:
-	var key := "%s|%s" % [_source, file]
-	if _prop_scenes.has(key):
-		return _prop_scenes[key]
-	var scene: PackedScene = null
+	return load_prop(_source, file)
+
+
+static func load_prop(zip_path: String, file: String) -> PackedScene:
+	return _prop_scenes.get_or_load("%s|%s" % [zip_path, file], _read_prop.bind(zip_path, file))
+
+
+static func _read_prop(zip_path: String, file: String) -> PackedScene:
 	var reader := ZIPReader.new()
-	if reader.open(_source) == OK:
-		var glb := reader.read_file(file)
-		reader.close()
-		var document := GLTFDocument.new()
-		var state := GLTFState.new()
-		if not glb.is_empty() and document.append_from_buffer(glb, "", state) == OK:
-			var root := document.generate_scene(state)
-			if root != null:
-				CharacterAppearance._add_mipmaps(root)
-				for node: Node in root.find_children("*", "", true, false):
-					node.owner = root
-				scene = PackedScene.new()
-				if scene.pack(root) != OK:
-					scene = null
-				root.free()
-	_prop_scenes[key] = scene
-	return scene
+	if reader.open(zip_path) != OK:
+		return null
+	var glb := reader.read_file(file)
+	reader.close()
+	GltfMipmaps.ensure_registered()
+	var document := GLTFDocument.new()
+	var state := GLTFState.new()
+	if glb.is_empty() or document.append_from_buffer(glb, "", state) != OK:
+		return null
+	var root := document.generate_scene(state)
+	if root == null:
+		return null
+	for node: Node in root.find_children("*", "", true, false):
+		node.owner = root
+	var scene := PackedScene.new()
+	var error := scene.pack(root)
+	root.free()
+	return scene if error == OK else null
 
 
 ## 지금까지 낸 효과음 수 (테스트용)

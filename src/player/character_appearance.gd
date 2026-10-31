@@ -5,15 +5,20 @@ extends Resource
 ##
 ## 모델을 찾는 순서:
 ##   1) 프로젝트 안의 model_path (에디터와 개발 중)
-##   2) 실행 파일 옆의 external_model_file (내보낸 게임). 실행 중에 glTF를 직접 읽는다.
+##   2) 실행 파일 옆의 external_model_file (내보낸 게임). 같은 자리에 구운 장면(같은 이름의 .scn,
+##      tools/bake_models.gd)이 있으면 그것을, 없으면 glTF를 실행 중에 직접 읽는다.
 ## 내보낸 게임에는 모델을 넣지 않는다(export_presets.cfg에서 제외). 공개 릴리스에 섞여 나가지 않게 하고,
 ## 자동 업데이트가 실행 파일만 바꿔도 각자 넣어 둔 모델이 그대로 남게 하기 위함이다.
+## 구운 장면은 큰 텍스처가 미리 BC7로 압축되어 있다. 내보낸 게임에는 텍스처 압축기가 없어서 glTF를 직접 읽으면
+## 텍스처가 그래픽 메모리를 4배 쓰고(캐릭터 하나에 125~300MB), 그림을 풀고 밉맵을 만드느라 1~2초 멈췄다.
 
-## 실행 중에 읽은 glTF 장면. 플레이어마다 다시 읽지 않도록 파일(경로와 고친 시각)마다 한 번만 읽는다.
-## 에셋 자동 업데이트로 파일이 바뀌면 고친 시각이 달라져서 새로 읽는다.
-static var _runtime_scenes: Dictionary[String, PackedScene] = {}
-## 실행 중에 읽은 glTF의 이미지(재질이 쓰지 않는 색 띠·마스크 포함): 파일 키 → {이미지 이름: 텍스처}
-static var _runtime_images: Dictionary[String, Dictionary] = {}
+## 실행 중에 읽은 모델: 파일 키(경로와 고친 시각) → [장면, {이미지 이름: 텍스처}]. 플레이어마다 다시 읽지 않고,
+## 배경 스레드(AssetPreloader)가 미리 읽어 두기도 한다. 에셋 자동 업데이트로 파일이 바뀌면 고친 시각이 달라져서
+## 새로 읽는다. 이미지에는 재질이 쓰지 않는 색 띠·마스크도 들어 있다.
+static var _models := SharedCache.new()
+## 프로젝트 안에서 불러온 자원(에디터로 가져온 모델·텍스처): 경로 → 자원. 붙잡아 두지 않으면 플레이어가 사라질 때
+## 함께 풀려서, 캐릭터를 바꿀 때마다 디스크에서 다시 읽었다(모델 하나에 0.3초 넘게).
+static var _project_resources := SharedCache.new()
 ## 읽은 아이콘: 파일 키 → 텍스처
 static var _icons: Dictionary[String, Texture2D] = {}
 
@@ -193,13 +198,40 @@ func weapon_place(clip: StringName, time: float) -> int:
 ## 모델 장면. 찾지 못하면 null이다.
 func load_model_scene() -> PackedScene:
 	if not model_path.is_empty() and ResourceLoader.exists(model_path):
-		return load(model_path) as PackedScene
+		return project_resource(model_path) as PackedScene
 	var file := external_model_path()
-	if file.is_empty() or not FileAccess.file_exists(file):
+	if file.is_empty():
 		return null
-	var scene := load_gltf_file(file)
-	_images = _runtime_images.get(_cache_key(file), {})
-	return scene
+	var entry := model_entry(file)
+	_images = entry[1]
+	return entry[0]
+
+
+## 프로젝트 안 자원을 불러와 붙잡아 둔다(다시 찾으면 디스크에서 다시 읽지 않는다). 없으면 null.
+static func project_resource(path: String) -> Resource:
+	return _project_resources.get_or_load(path, func() -> Resource: return load(path) if ResourceLoader.exists(path) else null)
+
+
+## 실행 파일 옆 모델(.glb)을 읽는다. 같은 자리에 구운 장면(.scn)이 있으면 그것을 읽는다. 없거나 못 읽으면 null.
+static func load_model_file(path: String) -> PackedScene:
+	return model_entry(path)[0]
+
+
+## 실행 파일 옆 모델의 [장면, {이미지 이름: 텍스처}]. 없거나 못 읽으면 [null, {}]. 배경 스레드에서도 부른다.
+static func model_entry(path: String) -> Array:
+	var baked := baked_path(path)
+	if FileAccess.file_exists(baked):
+		var entry: Array = _models.get_or_load(_cache_key(baked), _read_baked.bind(baked))
+		if entry[0] != null:
+			return entry
+	if not FileAccess.file_exists(path):
+		return [null, {}]
+	return _models.get_or_load(_cache_key(path), _read_gltf.bind(path))
+
+
+## 모델 파일(.glb)의 구운 장면 경로: 같은 자리, 같은 이름의 .scn
+static func baked_path(path: String) -> String:
+	return path.get_basename() + ".scn"
 
 
 ## 소리 꾸러미의 실제 경로. 없으면 빈 문자열.
@@ -238,14 +270,14 @@ static func executable_relative(file: String) -> String:
 
 
 ## 모델에 들어 있는 이미지를 이름으로 찾는다(재질이 쓰지 않는 색 띠·마스크 포함). 없으면 null.
-## 실행 중에 읽은 glTF는 읽을 때 모아 둔 것을, 에디터로 가져온 모델은 꺼내 둔 파일
+## 실행 중에 읽은 모델은 읽을 때 모아 둔 것을, 에디터로 가져온 모델은 꺼내 둔 파일
 ## ("<모델 파일 이름>_<이미지 이름>.webp")을 쓴다.
 func texture(image_name: String) -> Texture2D:
 	if _images.has(image_name):
 		return _images[image_name]
 	var path := "%s_%s.webp" % [model_path.get_basename(), image_name]
 	if not model_path.is_empty() and ResourceLoader.exists(path):
-		return load(path) as Texture2D
+		return project_resource(path) as Texture2D
 	return null
 
 
@@ -262,57 +294,52 @@ func external_model_path() -> String:
 	return OS.get_executable_path().get_base_dir().path_join(external_model_file)
 
 
-## 실행 중에 읽은 glTF의 텍스처에는 밉맵이 없어서, 멀리서 보면 자글거리고 거칠어 보인다(에디터로 가져온 것은 있다).
-## 크기는 원본 그대로 두고 밉맵만 만든다.
-static func _add_mipmaps(root: Node) -> void:
-	var done := {}
-	for node: Node in root.find_children("*", "MeshInstance3D", true, false):
-		var mesh := (node as MeshInstance3D).mesh
-		if mesh == null:
-			continue
-		for i in mesh.get_surface_count():
-			var material := mesh.surface_get_material(i) as BaseMaterial3D
-			if material == null:
-				continue
-			for slot in BaseMaterial3D.TEXTURE_MAX:
-				var texture := material.get_texture(slot) as ImageTexture
-				if texture == null or done.has(texture):
-					continue
-				done[texture] = true
-				var image := texture.get_image()
-				if image != null and not image.has_mipmaps() and not image.is_compressed():
-					image.generate_mipmaps()
-					texture.set_image(image)
-
-
-## glTF 파일을 실행 중에 읽어 장면으로 만든다. 실패하면 null이다.
-static func load_gltf_file(path: String) -> PackedScene:
-	var key := _cache_key(path)
-	if _runtime_scenes.has(key):
-		return _runtime_scenes[key]
+## glTF 파일을 읽어 노드 장면으로 만든다(모델을 구울 때도 쓴다). 텍스처에는 밉맵이 들어 있고(GltfMipmaps),
+## 뿌리의 메타데이터 images에 이미지 이름 → 텍스처를 넣는다. 실패하면 null.
+static func read_gltf(path: String) -> Node:
+	GltfMipmaps.ensure_registered()
 	var document := GLTFDocument.new()
 	var state := GLTFState.new()
 	var error := document.append_from_file(path, state)
 	if error != OK:
-		push_warning("캐릭터 모델을 읽지 못했습니다 (%s): %s" % [error_string(error), path])
+		push_warning("모델을 읽지 못했습니다 (%s): %s" % [error_string(error), path])
 		return null
 	var root := document.generate_scene(state)
 	if root == null:
 		return null
-	_add_mipmaps(root)
 	var images := {}
 	var image_list: Array = state.json.get("images", [])
 	var textures := state.get_images()
 	for i in mini(image_list.size(), textures.size()):
 		images[str((image_list[i] as Dictionary).get("name", ""))] = textures[i]
-	_runtime_images[key] = images
+	root.set_meta(&"images", images)
 	# PackedScene은 owner가 장면 뿌리인 노드만 저장한다.
 	for node: Node in root.find_children("*", "", true, false):
 		node.owner = root
+	return root
+
+
+static func _read_gltf(path: String) -> Array:
+	var root := read_gltf(path)
+	if root == null:
+		return [null, {}]
+	var images: Dictionary = root.get_meta(&"images", {})
 	var scene := PackedScene.new()
-	error = scene.pack(root)
+	var error := scene.pack(root)
 	root.free()
-	if error != OK:
-		return null
-	_runtime_scenes[key] = scene
-	return scene
+	return [scene if error == OK else null, images]
+
+
+## 구운 장면(.scn)을 읽는다. 이미지 목록은 뿌리의 메타데이터 images에 있다.
+static func _read_baked(path: String) -> Array:
+	# 파일이 바뀌어도(에셋 자동 업데이트) 엔진의 자원 저장소에 남은 옛 장면을 받지 않게 저장소를 쓰지 않는다.
+	var scene := ResourceLoader.load(path, "PackedScene", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+	if scene == null:
+		push_warning("구운 모델을 읽지 못했습니다: %s" % path)
+		return [null, {}]
+	var state := scene.get_state()
+	for i in state.get_node_property_count(0):
+		if state.get_node_property_name(0, i) == &"metadata/images":
+			var images: Variant = state.get_node_property_value(0, i)
+			return [scene, images if images is Dictionary else {}]
+	return [scene, {}]

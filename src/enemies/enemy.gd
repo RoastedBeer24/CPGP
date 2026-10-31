@@ -31,8 +31,9 @@ const CORPSE_TIME := 4.0
 const ENERGY_ON_HURT := 3.0
 ## 적끼리 떨어지려는 거리(m)
 const SEPARATION := 1.3
-## 내디딤과 밀려남이 줄어드는 빠르기(m/s²)
-const KNOCKBACK_DECAY := 18.0
+## 밀려남(과 원작 이동 곡선이 없는 공격의 내디딤)이 줄어드는 빠르기(m/s²). 예전 18은 맞는 순간 확 밀렸다가 0.3초 만에
+## 멈춰서 순간이동처럼 보였다. 같은 거리를 조금 더 길게 밀린다.
+const KNOCKBACK_DECAY := 10.0
 ## 격노하면 예고 시간과 이동 속도에 곱하는 값
 const ENRAGED_WIND_UP := 0.75
 const ENRAGED_SPEED := 1.25
@@ -64,6 +65,8 @@ var _attack: EnemyAttackData
 var _state_time := 0.0
 var _cooldowns: Dictionary[StringName, float] = {}
 var _knockback := Vector3.ZERO
+## 이번 공격에서 원작 이동 곡선(EnemyAttackData.travel)대로 나아간 거리(m)
+var _traveled := 0.0
 var _since_hit := 100.0
 var _repath := 0.0
 ## 이번 공격을 이미 피한 플레이어 (완벽한 회피를 한 번만 알린다)
@@ -168,11 +171,14 @@ func _physics_process(delta: float) -> void:
 				_set_state(State.IDLE)
 		State.WIND_UP:
 			_process_wind_up(delta)
+			move = _attack_move(delta)
 		State.RECOVER:
 			if _attack.sweep_time > 0.0 and _state_time <= _attack.sweep_time:
 				_sweep_strike(_attack)
 			if _state_time >= _attack.recovery:
 				_set_state(State.CHASE)
+			else:
+				move = _attack_move(delta)
 		State.HURT:
 			if _state_time >= HURT_TIME:
 				_set_state(State.CHASE)
@@ -283,7 +289,24 @@ func _start_attack(attack: EnemyAttackData) -> void:
 	_dodged.clear()
 	_struck.clear()
 	_cooldowns[attack.id] = attack.cooldown
+	_traveled = attack.travel_at(attack.clip_time(0.0, wind_up_time(attack), false), _attack_end_time(attack))
 	_set_state(State.WIND_UP)
+
+
+## 공격 동작의 재생 위치를 따라 원작 이동 곡선대로 나아가는 속도. 예고 동안에도 원작처럼 다가서거나 뛰어든다.
+func _attack_move(delta: float) -> Vector3:
+	if _attack == null or _attack.travel.is_empty() or delta <= 0.0:
+		return Vector3.ZERO
+	var time := _attack.clip_time(_state_time, wind_up_time(_attack), state == State.RECOVER)
+	var distance := _attack.travel_at(time, _attack_end_time(_attack))
+	var step := distance - _traveled
+	_traveled = distance
+	return facing() * (step / delta)
+
+
+## 공격 동작이 끝나는(맞힌 뒤 쉬기가 끝나는) 동작 시각
+static func _attack_end_time(attack: EnemyAttackData) -> float:
+	return maxf(attack.clip_hit, attack.clip_from) + attack.recovery
 
 
 func _process_wind_up(delta: float) -> void:
@@ -298,8 +321,9 @@ func _process_wind_up(delta: float) -> void:
 
 
 func _execute_attack(attack: EnemyAttackData) -> void:
-	if attack.lunge > 0.0:
-		# 줄어드는 빠르기가 일정하므로, lunge(m)만큼 가려면 처음 속도는 sqrt(2 × 줄어드는 빠르기 × 거리)다.
+	if attack.lunge > 0.0 and attack.travel.is_empty():
+		# 원작 이동 곡선이 없으면 한꺼번에 내디딘다. 줄어드는 빠르기가 일정하므로, lunge(m)만큼 가려면 처음 속도는
+		# sqrt(2 × 줄어드는 빠르기 × 거리)다.
 		_knockback = facing() * sqrt(2.0 * KNOCKBACK_DECAY * attack.lunge)
 	if attack.sweep_time > 0.0:
 		_sweep_strike(attack)
@@ -388,11 +412,11 @@ func receive_hit(attacker_peer: int, hit: HitData, attack_power: float, from: Ve
 	var attacker := _player_of(attacker_peer)
 	if attacker != null and attacker.is_alive():
 		target = attacker
-	# 밀려남
+	# 밀려남: knockback² (m)만큼 (knockback 1이면 1m, 0.3이면 9cm). 처음 속도는 sqrt(2 × 줄어드는 빠르기 × 거리).
 	var away := global_position - from
 	away.y = 0.0
 	if away.length() > 0.01 and data.knockback_scale > 0.0:
-		_knockback = away.normalized() * hit.knockback * data.knockback_scale * 6.0
+		_knockback = away.normalized() * hit.knockback * data.knockback_scale * sqrt(2.0 * KNOCKBACK_DECAY)
 	if not is_staggered():
 		stagger = minf(stagger + stagger_gain, data.stagger_max)
 		if stagger >= data.stagger_max:

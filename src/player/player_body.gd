@@ -1765,7 +1765,7 @@ func equip_weapon(weapon: WeaponData) -> void:
 		_sword = _build_sword()
 	_sword.set_meta(&"weapon_id", weapon_id)
 	_weapon_anchors.get(_weapon_place, _weapon_anchors[WeaponPlace.HAND]).add_child(_sword)
-	_make_weapon_materials()
+	_weapon_materials = _dissolve_materials(_sword)
 	for material in _weapon_materials:
 		material.set_shader_parameter(&"reveal", _weapon_reveal)
 	_sword.visible = _weapon_reveal > 0.0
@@ -1792,27 +1792,32 @@ func _hand_anchor(left: bool) -> Node3D:
 	return anchor
 
 
-## 무기 메시마다 나타나고 사라지는 재질(weapon.gdshader)을 입힌다. 원래 재질의 색과 그림을 옮긴다.
-## 무기 축(+Y, 손잡이 → 칼끝)을 메시 기준으로 바꾸고, 메시가 그 축에서 차지하는 범위를 잰다.
-func _make_weapon_materials() -> void:
-	for node: Node in _sword.find_children("*", "MeshInstance3D", true, false):
+## 무기(와 소품) 메시마다 나타나고 사라지는 재질(weapon.gdshader)을 입힌다. 원래 재질의 색과 그림을 옮긴다.
+## 무기 축(+Y, 손잡이 → 칼끝)을 메시 기준으로 바꾸고, 메시가 그 축에서 차지하는 범위를 잰다. 스킨이 있는 메시(마디가 있는
+## 포그라니치니크 소품)는 메시 자료가 묶기 전 자세라 범위를 뼈 자리로 잰다.
+static func _dissolve_materials(root: Node3D) -> Array[ShaderMaterial]:
+	var materials: Array[ShaderMaterial] = []
+	for node: Node in root.find_children("*", "MeshInstance3D", true, false):
 		var mesh_instance := node as MeshInstance3D
 		if mesh_instance.mesh == null:
 			continue
-		# 메시 → 무기 변환 (무기 아래의 노드 변환을 차례로 곱한다)
-		var to_weapon := Transform3D.IDENTITY
-		var step: Node = mesh_instance
-		while step != _sword and step is Node3D:
-			to_weapon = (step as Node3D).transform * to_weapon
-			step = step.get_parent()
+		var to_weapon := _to_root(mesh_instance, root)
 		var axis := (to_weapon.basis.inverse() * Vector3.UP).normalized()
-		var box := mesh_instance.mesh.get_aabb()
 		var low := INF
 		var high := -INF
-		for i in 8:
-			var along := box.get_endpoint(i).dot(axis)
-			low = minf(low, along)
-			high = maxf(high, along)
+		var skeleton := mesh_instance.get_node_or_null(mesh_instance.skeleton) as Skeleton3D if mesh_instance.skin != null else null
+		if skeleton != null and skeleton.get_bone_count() > 0:
+			var to_mesh := to_weapon.affine_inverse() * _to_root(skeleton, root)
+			for bone in skeleton.get_bone_count():
+				var along := (to_mesh * skeleton.get_bone_global_rest(bone).origin).dot(axis)
+				low = minf(low, along - 0.15)
+				high = maxf(high, along + 0.15)
+		else:
+			var box := mesh_instance.mesh.get_aabb()
+			for i in 8:
+				var along := box.get_endpoint(i).dot(axis)
+				low = minf(low, along)
+				high = maxf(high, along)
 		for i in mesh_instance.mesh.get_surface_count():
 			var source := mesh_instance.get_active_material(i) as BaseMaterial3D
 			var material := ShaderMaterial.new()
@@ -1829,7 +1834,18 @@ func _make_weapon_materials() -> void:
 			material.set_shader_parameter(&"cut_from", low)
 			material.set_shader_parameter(&"cut_to", high)
 			_set_material(mesh_instance, i, material)
-			_weapon_materials.append(material)
+			materials.append(material)
+	return materials
+
+
+## 노드 → root 변환 (root 아래의 노드 변환을 차례로 곱한다)
+static func _to_root(node: Node, root: Node) -> Transform3D:
+	var result := Transform3D.IDENTITY
+	var step := node
+	while step != root and step is Node3D:
+		result = (step as Node3D).transform * result
+		step = step.get_parent()
+	return result
 
 
 ## 소품(보조 무기, 원작 꾸러미의 props)을 모델의 자리 노드에 붙여 둔다(처음에는 숨김).
@@ -1848,22 +1864,32 @@ func _attach_props() -> void:
 			(geometry as GeometryInstance3D).layers |= CHARACTER_RENDER_LAYER
 		var rest := idle if idle != null else fight
 		rest.add_child(node)
-		node.visible = false
-		_props.append({"node": node, "idle": rest, "fight": fight if fight != null else rest, "place": 0,
-				"shown": bool(info.get("shown", false)), "timelines": info.get("timelines", {})})
+		# 칼처럼 나타날 때는 차오르고 사라질 때는 끝부터 지워진다(예전에는 툭 나타나고 사라졌다). 평소에 보이는
+		# 소품은 처음부터 보인다.
+		var shown := bool(info.get("shown", false))
+		var materials := _dissolve_materials(node)
+		for material in materials:
+			material.set_shader_parameter(&"reveal", 1.0 if shown else 0.0)
+		node.visible = shown
+		_props.append({"node": node, "idle": rest, "fight": fight if fight != null else rest, "place": 1 if shown else 0,
+				"shown": shown, "timelines": info.get("timelines", {}), "materials": materials, "reveal": 1.0 if shown else 0.0})
 
 
-## 소품 수와 그 소품이 지금 있는 자리(0 숨김, 1 쉬는 자리, 2 싸우는 자리) (테스트용)
+## 소품 수와 그 소품이 지금 있는 자리(0 숨김, 1 쉬는 자리, 2 싸우는 자리), 나타난 정도(0~1) (테스트용)
 func prop_count() -> int:
 	return _props.size()
 
 func prop_place(index: int) -> int:
 	return int(_props[index]["place"])
 
+func prop_reveal(index: int) -> float:
+	return float(_props[index]["reveal"])
+
 
 ## 소품을 동작마다 원작 시간표대로 쉬는 자리·싸우는 자리에 두거나 숨긴다. 시간표가 없는 동작(이동·대기)에서는 정한
 ## 대로 쉬는 자리에 보이거나 숨긴다. 포그라니치니크는 배틀 스킬·처형·궁극기 동안 칼 대신 왼손에 소품을 든다.
-func _update_props() -> void:
+## 칼처럼 나타날 때는 차오르고, 사라질 때는 지금 자리에서 끝부터 지워진다.
+func _update_props(delta: float) -> void:
 	for prop in _props:
 		var timelines: Dictionary = prop["timelines"]
 		var place := 1 if prop["shown"] else 0
@@ -1872,12 +1898,18 @@ func _update_props() -> void:
 		elif not _action_showing and timelines.has(String(locomotion)):
 			place = _timeline_place(timelines[String(locomotion)], 0.0)
 		var node: Node3D = prop["node"]
-		node.visible = place != 0
 		if place != 0:
 			var anchor: Node3D = prop["fight"] if place == 2 else prop["idle"]
 			if node.get_parent() != anchor:
 				node.reparent(anchor, false)
 				node.transform = Transform3D.IDENTITY
+		var reveal := move_toward(float(prop["reveal"]), 1.0 if place != 0 else 0.0,
+				delta / (WEAPON_APPEAR_TIME if place != 0 else WEAPON_VANISH_TIME))
+		if reveal != float(prop["reveal"]):
+			prop["reveal"] = reveal
+			for material: ShaderMaterial in prop["materials"]:
+				material.set_shader_parameter(&"reveal", reveal)
+		node.visible = reveal > 0.0
 		if place != int(prop["place"]):
 			prop["place"] = place
 			if _first_person:
@@ -1896,7 +1928,7 @@ static func _timeline_place(timeline: Array, time: float) -> int:
 
 ## 지금 보이는 동작에 맞춰 무기를 옮기고, 나타나거나 사라지게 한다.
 func _update_weapon(delta: float) -> void:
-	_update_props()
+	_update_props(delta)
 	if _sword == null:
 		return
 	var wanted := _wanted_weapon_place()

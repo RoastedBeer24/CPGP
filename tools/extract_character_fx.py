@@ -38,12 +38,15 @@ BORROWED = {
 
 
 # 소품(보조 무기): 원작 무기 연결 정보(weapon_binding.json)의 battle.copies 가운데 칼 다음 것들. 캐릭터 →
-# [(copy의 index, 꾸러미의 소품 이름(object_catalog), 시간표가 없는 동작(이동·대기)에서 쉬는 자리에 보이는지)].
-# 진천우는 싸울 때 왼손에 wpn_misc_0002를 들고(평소엔 inner 자리) 허리(outer)에 wpn_misc_0003을 단다. 포그라니치니크는
+# [(copy의 index, 꾸러미의 소품 이름(object_catalog), 시간표가 없는 동작(이동·대기)에서 쉬는 자리에 보이는지,
+# 숨기는 동작(역할 이름))].
+# 진천우는 싸울 때 왼손에 wpn_misc_0002를 들고(평소엔 inner 자리) 허리(outer)에 wpn_misc_0003을 단다. 원작 캐릭터 화면
+# 자료(animation_events.json의 deco_events)에서 쉬는 자세(relax)와 그 반응 동작에서는 둘 다 숨긴다. 포그라니치니크는
 # 처형·배틀 스킬·궁극기 동안 칼을 거두고 왼손에 wpn_misc_0035를 든다(그 밖에는 숨김).
+RELAX_ROLES = ("relax_in", "relax", "relax_sp_1", "relax_sp_2", "ui_react")
 PROPS = {
-    "chen": [(10, "deco:1", True), (11, "deco:2", True)],
-    "pograni": [(10, "deco:7", False)],
+    "chen": [(10, "deco:1", True, RELAX_ROLES), (11, "deco:2", True, RELAX_ROLES)],
+    "pograni": [(10, "deco:7", False, ())],
 }
 
 
@@ -74,7 +77,7 @@ def collect_props(extras, who, char, catalog):
     binding = json.load(open(binding_path, encoding="utf-8"))
     file_of = {c["name"]: c["file"] for c in json.load(open(clips_path, encoding="utf-8"))}
     copies = binding["battle"]["copies"]
-    for copy_index, deco, shown in PROPS[char]:
+    for copy_index, deco, shown, hidden_roles in PROPS[char]:
         slot = next(i for i, c in enumerate(copies) if c["index"] == copy_index)
         info = catalog.get(deco) or {}
         source = os.path.join(extras, info.get("glb", ""))
@@ -87,6 +90,8 @@ def collect_props(extras, who, char, catalog):
             per_copy = binding["battle"]["clips"].get(file_of.get(name, "")) if name else None
             if per_copy and slot < len(per_copy):
                 timelines[role] = [x for t, v in per_copy[slot] for x in (round(t, 4), int(v))]
+            if role in hidden_roles and name:
+                timelines[role] = [0.0, 0]
         name = "props/%d.glb" % copy_index
         files[name] = prop_bytes(source)
         props.append({"file": name, "idle": copies[slot].get("idle"), "fight": copies[slot].get("fight"),

@@ -12,7 +12,7 @@
 | 아케쿠리 모델 (chr_0019_karin) | `assets/characters/akekuri/akekuri.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Akekuri_Complete_Assets.zip`, studio.warfarin.wiki에서 추출) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 원본은 `!File/Akekuri_Assets/models/`. 저해상도 메시(lod1~3)와 그림자 대용 메시는 뺀다 |
 | 아케쿠리 소리·보이스·이펙트 꾸러미 | `assets/characters/akekuri/akekuri_fx.zip` (**저장소에 없음**) | 같은 파일 | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `tools/extract_character_fx.py "!File/Akekuri_Assets" Akekuri ...` |
 | 무기 O.B.J. 엣지 오브 라이트 (wpn_sword_0019) | `assets/weapons/edge_of_lightness.glb` (**저장소에 없음**) | 같은 파일 (`weapons/OBJ_Edge_of_Lightness.glb`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 아케쿠리의 무기. 오른손(wep_R)에 쥔다 |
-| 본 크러셔 적 모델 (eny_0029_lbmob, 0033_lbhunt, 0018_lbtough, 0068_lbtough2, 0051_rodin) | `assets/enemies/*.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Bonekrusher_Complete_Assets.zip`, studio.warfarin.wiki에서 추출) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `tools/extract_enemy.py`로 쓰는 동작만 뽑는다. 로댄은 소리 꾸러미(`assets/enemies/rodin_fx.zip`)도 만든다. 원본은 `!File/Bonekrusher_Assets/` |
+| 본 크러셔 적 모델 (eny_0029_lbmob, 0033_lbhunt, 0018_lbtough, 0068_lbtough2, 0051_rodin) | `assets/enemies/*.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Bonekrusher_Complete_Assets.zip`, studio.warfarin.wiki에서 추출) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `tools/extract_enemy.py`로 쓰는 동작만 뽑는다(공격의 몸 이동·회전 곡선은 `data/enemies/*.tres`의 travel·turn에 넣고 동작에서는 뺀다). 로댄은 소리 꾸러미(`assets/enemies/rodin_fx.zip`)도 만든다. 원본은 `!File/Bonekrusher_Assets/` |
 | 진천우·아크라이트·포그라니치니크 모델 (chr_0005_chen, chr_0007_ikut, chr_0029_pograni) | `assets/characters/{chen_qianyu,arclight,pogranichnik}/*.glb` (**저장소에 없음**) | 사용자가 직접 준 파일 (2026-10-31, `!File/Chen_Arclight_Pogranichnik_Complete_Assets.zip`, studio.warfarin.wiki에서 추출) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 원본은 `!File/Chen_Arclight_Pogranichnik_Assets/` |
 | 세 캐릭터 소리·보이스·이펙트 꾸러미 | `assets/characters/<이름>/<이름>_fx.zip` (**저장소에 없음**) | 같은 파일 | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | `tools/extract_character_fx.py "!File/Chen_Arclight_Pogranichnik_Assets" chr_0005_chen ...` |
 | 무기 숭배의 시선·십이문·끝없는 방랑 (wpn_sword_0015, 0018, 0016) | `assets/weapons/{aspirant,twelve_questions,never_rest}.glb` (**저장소에 없음**) | 같은 파일 (`weapons/`) | 원작: 명일방주: 엔드필드 | 상용 게임 자산. 재배포 불가 | 세 캐릭터의 전용 무기. 오른손(wep_R)에 쥔다 |
@@ -35,6 +35,7 @@
 | 진천우·아크라이트·포그라니치니크 | `assets/characters/<이름>/<이름>.glb`, `<이름>_fx.zip` | `characters/<이름>.glb`, `characters/<이름>_fx.zip` |
 | 세 캐릭터 무기 | `assets/weapons/{aspirant,twelve_questions,never_rest}.glb` | `weapons/<이름>.glb` |
 | 적 모델 (본 크러셔) | `assets/enemies/<이름>.glb` (lbmob, lbhunt, lbtough, lbtough_elite, rodin), `rodin_fx.zip` | `Crossfield.exe`가 있는 폴더의 `enemies/<이름>.glb`, `enemies/rodin_fx.zip` |
+| (모든 모델) 구운 장면 | `build/baked/<종류>/<이름>.scn` (`tools/publish_assets.py`가 만든다) | glb 자리의 같은 이름 `.scn` (예: `characters/akekuri.scn`). 있으면 glb 대신 읽는다 |
 
 - **애니메이션이 든 원본(`*_Animated.glb`, 약 450MB)에서** 게임에 쓰는 동작(이동·멈추기, 점프·착지, 공격 5단계, 대시 공격, 처형, 낙하 공격, 스킬, 궁극기, 회피, 맞음, 쓰러짐, 쉬는 자세와 특수 대기, 무기 꺼내기·거두기, 캐릭터 화면 동작) 49개만 골라 가벼운 파일(여 약 45MB, 남 약 57MB)을 만들어 넣습니다. 고르는 동작 목록은 도구 안의 `ROLES`에 있고, 여·남은 원본 이름을 보고 알아서 고릅니다.
   ```bash
@@ -55,7 +56,8 @@
 
 ### 모델 자동 업데이트 (비공개 에셋 저장소)
 게임 실행 파일은 공개 릴리스로 받지만, 모델은 공개할 수 없어서 **비공개** 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스 `assets`에 따로 올립니다. 게임은 켤 때 그 릴리스의 목록(`assets.json`, 파일마다 SHA-256)과 자기 `characters/` 파일을 비교해 바뀐 것만 받습니다(`src/core/asset_updater.gd`).
-- **올리기 (모델을 다시 뽑았을 때):** `python3 tools/publish_assets.py`. 저장소는 2026-10-30에 비공개로 만들어 두었습니다(없으면 `--create`가 비공개로 만듭니다). 저장소가 공개면 올리지 않습니다.
+- **올리기 (모델을 다시 뽑았을 때):** `python3 tools/publish_assets.py`. 저장소는 2026-10-30에 비공개로 만들어 두었습니다(없으면 `--create`가 비공개로 만듭니다). 저장소가 공개면 올리지 않습니다. 릴리스에 있는 목록과 비교해 바뀐 파일만 올립니다.
+- **구운 모델(.scn):** 모델은 glb 대신 미리 구운 Godot 장면을 올립니다(2026-10-31부터). 올리기 전에 도구가 `tools/bake_models.gd`로 `build/baked/`에 굽습니다(원본이나 굽는 코드가 더 새로울 때만, Godot 위치를 `GODOT` 환경 변수로). 큰 색·법선·설정·발광 텍스처는 BC7로 압축하고 모든 텍스처에 밉맵을 넣습니다. 내보낸 게임(Godot 내보내기 템플릿)에는 텍스처 압축기가 없어서 glb를 그대로 읽으면 텍스처가 압축되지 않은 채 그래픽 메모리를 4배 쓰고(모델 전부 약 2GB → 구우면 약 0.5GB), 그림을 풀고 밉맵을 만드느라 캐릭터 하나에 1~2초 멈췄습니다(구운 장면은 0.2초). 게임은 `characters/<이름>.glb` 자리에서 같은 이름의 `.scn`을 먼저 찾고, 없거나 못 읽으면 glb를 읽습니다(`CharacterAppearance.model_entry`).
 - **받기:** PC마다 게임 설정 → 게임 → "에셋 키"에 그 저장소를 읽을 수 있는 GitHub 토큰을 한 번 넣습니다. 키가 없으면 모델을 받지 않고 있던 모델을 그대로 씁니다.
   - 토큰 만들기: GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Repository access는 "Only select repositories"로 `CPGP-assets` 하나만, Permissions는 Contents: Read-only만 줍니다.
 - 공개 저장소(이 저장소)의 릴리스나 커밋에는 절대 넣지 않습니다.

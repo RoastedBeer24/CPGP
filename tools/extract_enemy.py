@@ -4,17 +4,27 @@
 
 동작 이름은 게임이 부르는 역할 이름(idle, move, hit, stun_start, stun, dead, attack_1 ...)으로 바꾼다(EnemyData.clips가 이
 이름을 쓴다). 원본 동작은 몸(뿌리 뼈 Bip001)이 앞으로 나가므로 모두 제자리로 묶는다. 적은 게임이 직접 움직인다
-(이동 속도, 공격의 lunge). 원래 이동 동작의 빠르기(m/s)를 찍으므로 EnemyData.move_clip_speed에 넣는다.
+(이동 속도, 공격의 travel). 원래 이동 동작의 빠르기(m/s)를 찍으므로 EnemyData.move_clip_speed에 넣는다.
+공격 동작은 몸이 앞으로 나아간 거리와 좌우로 돈 각도를 재어 그 모델을 쓰는 적 데이터(data/enemies/*.tres)의 공격마다
+travel·turn으로 넣고, 모델 동작에서는 돈 각도도 뺀다. 게임이 그 곡선대로 적을 움직이고 모델을 돌린다(EnemyAttackData).
+예전에는 공격이 맞는 순간 한꺼번에 밀어 줘서 순간이동처럼 보였고, 몸을 돌리는 공격은 끝날 때 휙 돌아갔다.
 원작 소리가 있는 적(로댄)은 소리 꾸러미(<결과>_fx.zip)도 만든다(SOUNDS).
 결과 파일은 재배포할 수 없는 모델이라 저장소에 올리지 않는다(docs/assets.md).
 """
+import glob
 import json
+import math
 import os
+import re
 import sys
 import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from extract_character import read_glb, read_floats, reshape, save_compact, strip_extra_meshes, ROOT_BONE  # noqa: E402
+from extract_character import (read_glb, read_floats, reshape, save_compact, strip_extra_meshes, parent_rotation,  # noqa: E402
+                               ROOT_BONE)
+import measure_attack_clips as measure  # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # 원본 동작 이름의 앞부분("A_monster_<이름>_") → 역할 → 원본 동작 이름의 나머지. 처형자 정예(eny_0068_lbtough2)는
 # 처형자와 같은 동작(lbtough)을 쓴다. 로댄은 1형태(rodin_01)만 쓴다.
@@ -146,12 +156,96 @@ def build_sounds(source, prefix, target):
     print("%s: 소리 %d개, 소리 있는 역할 %s" % (target, len(audio_files), ", ".join(sorted(roles))))
 
 
+def root_motion(doc, data, anim):
+    """원본 동작에서 뿌리 뼈가 앞(+Z, 모델이 보는 쪽)으로 나아간 거리(m)와 좌우로 돈 각도(도, 위에서 본 회전을
+    360도 넘어도 이어 센다)를 초당 30번 잰다: ([(시각, 거리)], [(시각, 각도)])"""
+    nodes = doc["nodes"]
+    parent = {}
+    for i, n in enumerate(nodes):
+        for c in n.get("children", []):
+            parent[c] = i
+    chain = []
+    i = next(k for k, n in enumerate(nodes) if n.get("name") == ROOT_BONE)
+    while i is not None:
+        chain.append(i)
+        i = parent.get(i)
+    chain.reverse()
+    tracks = {}
+    end = 0.0
+    for channel in anim["channels"]:
+        sampler = anim["samplers"][channel["sampler"]]
+        times = [v[0] for v in read_floats(doc, data, sampler["input"])]
+        tracks[(channel["target"].get("node"), channel["target"]["path"])] = (times, read_floats(doc, data, sampler["output"]))
+        end = max(end, times[-1])
+
+    def world(t):
+        pos, rot, scale = (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), (1.0, 1.0, 1.0)
+        for k in chain:
+            n = nodes[k]
+            tr, ro, sc = tracks.get((k, "translation")), tracks.get((k, "rotation")), tracks.get((k, "scale"))
+            tr = measure.sample(*tr, t, False) if tr else n.get("translation", [0, 0, 0])
+            ro = measure.sample(*ro, t, True) if ro else n.get("rotation", [0, 0, 0, 1])
+            sc = measure.sample(*sc, t, False) if sc else n.get("scale", [1, 1, 1])
+            p = measure.qrot(rot, (tr[0] * scale[0], tr[1] * scale[1], tr[2] * scale[2]))
+            pos = (pos[0] + p[0], pos[1] + p[1], pos[2] + p[2])
+            rot = measure.qmul(rot, tuple(ro))
+            scale = (scale[0] * sc[0], scale[1] * sc[1], scale[2] * sc[2])
+        return pos, rot
+
+    start, start_rotation = world(0.0)
+    start_inv = (-start_rotation[0], -start_rotation[1], -start_rotation[2], start_rotation[3])
+    travel, turn = [], []
+    previous = 0.0
+    frame = 0
+    while frame / 30.0 <= end + 1e-6:
+        t = frame / 30.0
+        pos, rot = world(t)
+        travel.append((t, pos[2] - start[2]))
+        r = measure.qmul(rot, start_inv)
+        angle = math.degrees(2.0 * math.atan2(r[1], r[3]))
+        angle += round((previous - angle) / 360.0) * 360.0
+        previous = angle
+        turn.append((t, angle))
+        frame += 1
+    return travel, turn
+
+
+def vec2(points, digits):
+    return "PackedVector2Array(%s)" % ", ".join("%g, %g" % (round(t, 4), round(v, digits)) for t, v in points)
+
+
+def update_enemy_data(target, motions):
+    """이 모델을 쓰는 적 데이터(data/enemies/*.tres)의 공격마다 travel·turn을 넣는다(공격의 clip 이름으로 찾는다)."""
+    model_file = "enemies/" + os.path.basename(target)
+    for path in sorted(glob.glob(os.path.join(ROOT, "data", "enemies", "*.tres"))):
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        if 'model_file = "%s"' % model_file not in text:
+            continue
+        blocks = re.split(r"(?m)^(?=\[)", text)
+        changed = 0
+        for k, block in enumerate(blocks):
+            clip = re.search(r'(?m)^clip = &"([^"]+)"$', block)
+            if not clip or clip.group(1) not in motions:
+                continue
+            travel, turn = motions[clip.group(1)]
+            block = re.sub(r"(?m)^(travel|turn) = .*\n", "", block)
+            block = block.replace(clip.group(0), "%s\ntravel = %s\nturn = %s" % (clip.group(0), vec2(travel, 3), vec2(turn, 1)), 1)
+            blocks[k] = block
+            changed += 1
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write("".join(blocks))
+        print("%s: 공격 %d개에 travel·turn" % (os.path.relpath(path, ROOT), changed))
+
+
 def main(source, target):
     doc, data = read_glb(source)
     data = bytearray(data)
     by_name = {a.get("name"): a for a in doc.get("animations", [])}
     prefix = pick_enemy(by_name)
+    root_parent = parent_rotation(doc, ROOT_BONE)
     animations = []
+    motions = {}
     for role, rest in ENEMIES[prefix].items():
         name = "A_monster_%s_%s" % (prefix, rest)
         if name not in by_name:
@@ -160,12 +254,16 @@ def main(source, target):
         if role == "move":
             distance, length = root_travel(doc, data, anim)
             print("이동 동작 원래 빠르기: %.2f m/s (EnemyData.move_clip_speed)" % (distance / length if length > 0 else 0.0))
+        attack = role.startswith("attack_")
+        if attack:
+            motions[role] = root_motion(doc, data, anim)
         anim["name"] = role + ("-loop" if role in LOOPING else "")
-        reshape(doc, data, anim, None, True)
+        reshape(doc, data, anim, None, True, None, attack, root_parent)
         animations.append(anim)
     doc["animations"] = animations
     strip_extra_meshes(doc)
     save_compact(doc, data, target)
+    update_enemy_data(target, motions)
     build_sounds(source, prefix, os.path.splitext(target)[0] + "_fx.zip")
 
 

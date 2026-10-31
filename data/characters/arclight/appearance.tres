@@ -9,6 +9,7 @@ external_model_file = "characters/arclight.glb"
 headgear_meshes = Array[StringName]([])
 cloth_chains = PackedStringArray()
 ribbon_chains = PackedStringArray()
+spring_chains = PackedStringArray("tail_base_Back_a_01_jnt_ctrl:tail_base_Back_a_06_jnt_ctrl", "ear_base_L_a_01_jnt_ctrl:ear_base_L_a_02_jnt_ctrl", "ear_base_R_a_01_jnt_ctrl:ear_base_R_a_02_jnt_ctrl")
 face_materials = Array[StringName]([&"M_actor_ikut_face_01", &"M_actor_ikut_brow_01", &"M_actor_ikut_eye_01"])
 shade_materials = Dictionary[StringName, float]({
 &"M_hairshadow_common_01": 1.0,

@@ -7,8 +7,9 @@ script = ExtResource("1_appearance")
 model_path = "res://assets/characters/pogranichnik/pogranichnik.glb"
 external_model_file = "characters/pogranichnik.glb"
 headgear_meshes = Array[StringName]([])
-cloth_chains = PackedStringArray()
+cloth_chains = PackedStringArray("dress_base_L_a_01_jnt:dress_base_L_a_05_jnt", "dress_base_L_b_01_jnt:dress_base_L_b_05_jnt", "dress_base_L_c_01_jnt:dress_base_L_c_05_jnt", "dress_base_R_a_01_jnt:dress_base_R_a_05_jnt", "dress_base_R_b_01_jnt:dress_base_R_b_05_jnt", "dress_base_R_c_01_jnt:dress_base_R_c_05_jnt")
 ribbon_chains = PackedStringArray()
+spring_chains = PackedStringArray("tail_base_M_a_01_jnt:tail_base_M_a_06_jnt", "feather_base_L_a_01_jnt:feather_base_L_a_02_jnt", "feather_base_R_a_01_jnt:feather_base_R_a_02_jnt")
 face_materials = Array[StringName]([&"M_actor_pograni_face_01", &"M_actor_pograni_brow_01", &"M_actor_pograni_iris_01"])
 shade_materials = Dictionary[StringName, float]({
 &"M_hairshadow_common_05": 1.0

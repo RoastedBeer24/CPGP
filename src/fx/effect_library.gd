@@ -25,28 +25,33 @@ class Effect:
 	var system_materials: Dictionary[int, ShaderMaterial] = {}
 
 
-## zip 경로 + 이펙트 파일 → Effect (못 읽었으면 null도 기억해 다시 읽지 않는다)
-static var _cache: Dictionary[String, Effect] = {}
+## zip 경로 + 이펙트 파일 → Effect (못 읽었으면 null도 기억해 다시 읽지 않는다). 배경 스레드(AssetPreloader)가
+## 미리 읽어 두기도 한다.
+static var _cache := SharedCache.new()
 
 
 ## 꾸러미에서 이펙트를 읽는다. 없거나 읽지 못하면 null.
 static func load_effect(zip_path: String, glb_file: String, particles_file: String) -> Effect:
-	var key := "%s|%s" % [zip_path, glb_file]
-	if _cache.has(key):
-		return _cache[key]
-	var effect: Effect = null
+	return _cache.get_or_load("%s|%s" % [zip_path, glb_file], _read.bind(zip_path, glb_file, particles_file))
+
+
+## 이미 읽어 둔 이펙트인지
+static func is_loaded(zip_path: String, glb_file: String) -> bool:
+	return _cache.has("%s|%s" % [zip_path, glb_file])
+
+
+static func _read(zip_path: String, glb_file: String, particles_file: String) -> Effect:
 	var reader := ZIPReader.new()
-	if reader.open(zip_path) == OK:
-		var glb := reader.read_file("effects/" + glb_file)
-		var particles := reader.read_file("effects/" + particles_file) if not particles_file.is_empty() else PackedByteArray()
-		reader.close()
-		if not glb.is_empty():
-			effect = _parse(glb, particles)
-	_cache[key] = effect
-	return effect
+	if reader.open(zip_path) != OK:
+		return null
+	var glb := reader.read_file("effects/" + glb_file)
+	var particles := reader.read_file("effects/" + particles_file) if not particles_file.is_empty() else PackedByteArray()
+	reader.close()
+	return _parse(glb, particles) if not glb.is_empty() else null
 
 
 static func _parse(glb: PackedByteArray, particles: PackedByteArray) -> Effect:
+	GltfMipmaps.ensure_registered()
 	var document := GLTFDocument.new()
 	var state := GLTFState.new()
 	if document.append_from_buffer(glb, "", state) != OK:
@@ -57,8 +62,9 @@ static func _parse(glb: PackedByteArray, particles: PackedByteArray) -> Effect:
 	var images := state.get_images()
 	var samplers := state.get_texture_samplers()
 	for gltf_texture: GLTFTexture in state.get_textures():
+		# 밉맵은 그림을 풀 때 넣었다(GltfMipmaps). 멀리서 자글거리지 않게 한다.
 		var image := images[gltf_texture.src_image] if gltf_texture.src_image >= 0 and gltf_texture.src_image < images.size() else null
-		effect.textures.append(_with_mipmaps(image))
+		effect.textures.append(image)
 		var repeat := true
 		if gltf_texture.sampler >= 0 and gltf_texture.sampler < samplers.size():
 			repeat = samplers[gltf_texture.sampler].wrap_s == 10497
@@ -82,14 +88,3 @@ static func _parse(glb: PackedByteArray, particles: PackedByteArray) -> Effect:
 	var error := effect.scene.pack(root)
 	root.free()
 	return effect if error == OK else null
-
-
-## 실행 중에 읽은 텍스처에는 밉맵이 없어서 멀리서 자글거린다. 크기는 그대로 두고 밉맵만 만든다.
-static func _with_mipmaps(texture: Texture2D) -> Texture2D:
-	if texture == null:
-		return null
-	var image := texture.get_image()
-	if image == null or image.has_mipmaps() or image.is_compressed():
-		return texture
-	image.generate_mipmaps()
-	return ImageTexture.create_from_image(image)
