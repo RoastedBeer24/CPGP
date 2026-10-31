@@ -48,13 +48,16 @@ func test_preloader_works_in_the_background() -> void:
 		mutex.lock()
 		threads.append(OS.get_thread_caller_id())
 		mutex.unlock()])
-	for i in 300:
-		if preloader.is_done():
-			break
+	# 테스트는 프레임을 실제 시간보다 빨리 돌린다(--fixed-fps). 우선순위가 낮은 스레드가 차례를 받도록 실제 시간으로
+	# 기다리며 주 스레드를 잠깐씩 쉬게 한다(CI에서 프레임 300개로는 모자랐다).
+	var deadline := Time.get_ticks_msec() + 10000
+	while not preloader.is_done() and Time.get_ticks_msec() < deadline:
+		OS.delay_msec(5)
 		await tree.process_frame
 	assert_true(preloader.is_done(), "할 일을 마친다")
 	assert_eq(threads.size(), 1)
-	assert_ne(threads[0], OS.get_main_thread_id(), "주 스레드가 아닌 곳에서 읽는다")
+	if threads.size() == 1:
+		assert_ne(threads[0], OS.get_main_thread_id(), "주 스레드가 아닌 곳에서 읽는다")
 
 
 func test_preloader_stops_when_the_game_ends() -> void:
