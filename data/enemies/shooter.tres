@@ -6,7 +6,9 @@
 [sub_resource type="Resource" id="shot"]
 script = ExtResource("2_attack")
 id = &"shot"
-clip = &"shoot"
+clip = &"attack_1"
+clip_hit = 1.55
+clip_from = 0.6
 min_range = 3.0
 max_range = 16.0
 wind_up = 0.9
@@ -18,22 +20,28 @@ projectile_speed = 16.0
 [sub_resource type="Resource" id="bash"]
 script = ExtResource("2_attack")
 id = &"bash"
-clip = &"attack"
+clip = &"attack_2"
+clip_hit = 1.45
+clip_from = 0.8
 max_range = 1.6
 wind_up = 0.6
 recovery = 0.8
 cooldown = 3.0
 damage = 60.0
-reach = 2.0
+reach = 2.2
 arc = 70.0
 
 [resource]
 script = ExtResource("1_data")
 id = &"shooter"
-display_name = "사수"
+display_name = "본 크러셔 저격수"
 max_health = 650.0
 stagger_max = 80.0
 move_speed = 3.0
+radius = 0.5
+height = 2.05
 preferred_range = 9.0
 attacks = Array[ExtResource("2_attack")]([SubResource("bash"), SubResource("shot")])
 color = Color(0.42, 0.55, 0.62, 1)
+model_file = "enemies/lbhunt.glb"
+move_clip_speed = 4.5

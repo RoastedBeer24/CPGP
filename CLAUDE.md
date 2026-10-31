@@ -28,7 +28,7 @@
 |---|---|---|
 | M0 정리 | 완료 | 이름 변경(설치된 게임의 자동 업데이트 유지), 옛 게임 코드 삭제. 메뉴·설정·자동 업데이트·협동 연결·캐릭터 모델 처리·만화풍 셰이더는 다시 씀 |
 | M1 첫 전투 방 | 검수 대기 | 관리자(여·남) 검 5연속·대시 공격·처형·배틀 스킬(원석 결정)·궁극기(결정 파쇄)·회피(완벽한 회피)·경직, 적 3종(임시 도형 몸), 웨이브, HUD, 협동, 캐릭터 고르기 (`docs/dev/review/m1.md`) |
-| M2 적 모델 | 작업 예정 | 본 크러셔 적 17종 꾸러미를 받음(`!File/Bonekrusher_Complete_Assets.zip`) |
+| M2 적 모델 | 검수 대기 | 본 크러셔 꾸러미(`!File/Bonekrusher_Assets/`, 17종)에서 약탈자·저격수·처형자·처형자 정예(중간 보스)·로댄(최종 보스)을 지금 적 자리에 넣음. 공격 동작은 예고 끝에 타격 시각을 맞춤(`clip_from`→`clip_hit`), 쓰러지면 가라앉음, 맞으면 번쩍임 (`docs/dev/review/m2.md`) |
 | **M3 한 판** | **검수 대기** | 로비(캐릭터 화면 C, 출발 Enter), 방 다섯 개(배치 둘 + 보스 방), 보상 12종, 중간·최종 보스(격노), 원작 무기 타르 11·소리·보이스, 검기, 카메라 확대·축소 (`docs/dev/review/m3.md`) |
 | 원작 동작·무기 자리 | 검수 대기 | 전투 무기는 오른손(wep_R)으로 고침, 싸우는 동작에서만 무기가 나타남(칼날이 차오르고 지워짐), 무기 꺼내기·거두기, 쉬는 자세·특수 대기, 멈추기, 무거운 착지, 가벼운 피격(윗몸), 캐릭터 화면 동작·무기 보기 (`docs/dev/review/motions.md`) |
 | 시점·이펙트 다듬기 (3차 포함) | 검수 대기 | 기본 시점(3인칭 고정 거리, V로 1인칭), 자유 시점(`, 얼굴까지 확대), 벽에서 천천히 되돌리기·싸울 때 물러나기, 충격파 고리·화면 왜곡·방사 흐림, 궁극기·대시 공격 이펙트, Shift 짧게 회피·누르고 있으면 질주, Ctrl 걷기, 원작 낙하 공격, 캐릭터 화면 원작 구도 (`docs/dev/review/camera.md`) |
@@ -42,7 +42,7 @@
 - `src/player/player.gd`: 3인칭 액션 조작. 카메라(CameraRig, 몸과 따로 돈다. `CameraMode`: 3인칭·1인칭·자유 시점), 카메라 기준 이동, 공격 연속·스킬·회피·대상 고정·쓰러짐·동료 일으키기. 동작은 `action_id`/`action_count`, 회피는 `dodge_count`로 동기화
 - `src/player/player_body.gd`: 모델·만화풍 재질·옷자락·발 IK, 이동 동작 고르기(서 있을 때는 전투 대기·쉬는 자세·캐릭터 화면 대기), 동작 층(공격·스킬·회피·맞음·쓰러짐과 대기 연출), 윗몸만 움찔하는 가벼운 피격, 무기 자리(오른손·등 뒤·왼손)와 나타나고 사라지기(`weapon.gdshader`)
 - `src/combat/`: `KitData`(캐릭터 전투 구성) → `AttackData`(동작 하나: 길이, 이어지는 시각, 내디딤 거리) → `HitData`(타격 하나: 시각, 배율, 경직, 범위, 원석 결정 효과). `Health`, `Hitbox`, `CombatQuery.melee`, `DamageNumber`, `HitSpark`. `WeaponData`/`Weapons`(`data/weapons/*.tres`: 무기군, 모델, 공격력 보너스)
-- `src/enemies/`: `Enemy`(호스트가 판단: 쫓기 → 예고 → 맞히기 → 쉬기, 움찔·경직·원석 결정), `EnemyBody`(예고 표시, 모델 또는 도형 몸), `EnemyProjectile`, `EnemyData`/`EnemyAttackData`(`data/enemies/*.tres`)
+- `src/enemies/`: `Enemy`(호스트가 판단: 쫓기 → 예고 → 맞히기 → 쉬기, 움찔·경직·원석 결정), `EnemyBody`(예고 표시, 원작 모델(`assets/enemies/*.glb`, `tools/extract_enemy.py`) 또는 도형 몸), `EnemyProjectile`, `EnemyData`/`EnemyAttackData`(`data/enemies/*.tres`)
 - `src/zones/combat_room/`: 웨이브, 방 정리, 전멸. 적은 방 안의 `EnemySpawner`가 복제한다. 씬 세 개(방 A·B, 보스 방)는 `tools/gen_combat_room.py`로 만든다
 - `src/zones/lobby/`: 로비(격납고, `tools/gen_lobby.py`). `src/run/`: 작전(`Run`, 세션의 자식): 방 차례, 보상 고르기(`RewardPool`, `data/rewards/pool.tres`), 작전 완료·실패 뒤 로비. 작전 구성은 `data/runs/first_run.tres`
 - `src/player/character_fx.gd`: 동작에 맞춘 원작 소리·보이스·이펙트(캐릭터마다 zip, `tools/extract_character_fx.py`). `weapon_trail.gd`: 원작 이펙트가 없는 동작의 임시 검기
@@ -73,6 +73,8 @@ python3 tools/extract_character_fx.py "!File/Akekuri_Assets" Akekuri assets/char
 godot --path . -- --single --autoplay=combo   # 확인용: combo(연속 공격·스킬·궁극기), plunge(낙하 공격), finisher(처형), run(달리기)
 tools/capture.sh build/screenshots/fp 120 --single --first-person --pitch=-60   # 1인칭에서 내려다보기 (--third-person: 저장된 1인칭을 무시)
 python tools/make_icons.py   # 공식 초상화(!File/Portraits/)에서 캐릭터 고르기 아이콘 만들기 (Pillow가 있는 python)
+python3 tools/extract_enemy.py "!File/Bonekrusher_Assets/enemies/eny_0029_lbmob/eny_0029_lbmob_Animated.glb" assets/enemies/lbmob.glb   # 적 모델 (동작은 ENEMIES)
+tools/capture.sh build/screenshots/foe 90,130,170 --single --third-person --spawn-enemy=raider_chief   # 로비에 적을 세워 공격 확인
 python3 tools/measure_attack_clips.py <원본_Animated.glb> attack_01:1.4   # 공격 동작의 타격 시각과 내디딤 거리 재기
 python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장소에 올리기 (게임이 자동으로 받음)
 ```
@@ -160,3 +162,5 @@ python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장�
 - **근접 판정 각도:** `HitData.arc`는 반각이다. 180도 이상은 둘레 전체로 본다(바로 뒤의 적은 각도가 180을 아주 조금 넘게 계산되어 빠졌다).
 - **회피·질주 키:** Shift 하나로 가른다. 누르자마자 회피하면 달리려고 누를 때 회피가 먼저 나가므로, 뗄 때 짧았으면 회피, 오래 누르고 있으면 질주한다(`Player.dodge_key`, 키 이벤트로 받는다). 테스트는 `dodge_key(true/false)`를 부른다.
 - **코드로 만드는 자세:** 이 모델은 뼈 축이 제각각(3ds Max Biped)이라 각도 대신 "몸 기준 방향"으로 뼈를 돌린다(`PlayerBody._point_bone`). `Basis.looking_at`은 방향이 위쪽 기준과 나란하거나 0이면 오류가 난다.
+- **적 모델 동작:** 원작 적 동작도 몸(뿌리 뼈)이 앞으로 2~12m 나가고 돈다. `tools/extract_enemy.py`가 모두 제자리로 묶고 적은 게임이 움직인다(이동 속도, `lunge`). 공격 동작은 예고 동안 `clip_from`에서 `clip_hit`(무기가 가장 빠른 순간, `tools/measure_attack_clips.py --weapon=`)까지를 예고 시간에 맞춘 빠르기로 튼다. 예고가 짧다고 앞부분을 건너뛰면, 로댄의 내려찍기(5.5m 뛰어올랐다 내리꽂음)가 이미 공중에서 시작해 보스가 화면 위로 사라졌다. 저격수(lbhunt)는 무기가 빠르게 움직이지 않는 원거리 적이라 쏘는 반동(작은 속도 봉우리)으로 시각을 찾았다. 사수(hvybow)는 이름과 달리 근접이다.
+- **본 크러셔 꾸러미:** 일반 적에는 소리·이펙트 자료가 없고, 로댄·네파리스(1·2형태)에만 소리가 있다. 적 모델은 기본 재질(StandardMaterial3D)로 그려도 읽기 좋다. 덩치 큰 적이 붙으면 카메라가 몸속에 들어가서 카메라 가까운 곳(0.3~0.9m)은 점점이 지운다.

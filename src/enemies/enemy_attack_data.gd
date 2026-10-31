@@ -5,6 +5,11 @@ extends Resource
 @export var id := &""
 ## 모델에서 틀 동작 이름 (모델이 없으면 코드로 만든 자세를 쓴다)
 @export var clip := &""
+## 그 동작에서 맞히는 시각(초, tools/measure_attack_clips.py로 잰다)과 예고를 시작할 때 틀 시각. 예고 동안 clip_from에서
+## clip_hit까지를 예고 시간에 맞춘 빠르기로 틀어, 예고가 끝나는 순간에 맞힌다(앞부분을 건너뛰면 뛰어오르는 동작이
+## 이미 공중에서 시작했다). clip_hit가 0이면 clip_from부터 원래 빠르기로 튼다.
+@export var clip_hit := 0.0
+@export var clip_from := 0.0
 ## 이 거리(m, 몸 가장자리 사이) 안에 목표가 있을 때 쓴다.
 @export var min_range := 0.0
 @export var max_range := 2.2

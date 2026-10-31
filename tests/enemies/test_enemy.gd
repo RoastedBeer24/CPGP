@@ -75,8 +75,8 @@ func test_grunt_flinches_but_heavy_does_not() -> void:
 	hit.stagger = 5.0
 	grunt.receive_hit(1, hit, 100.0, player.global_position)
 	heavy.receive_hit(1, hit, 100.0, player.global_position)
-	assert_eq(grunt.state, Enemy.State.HURT, "돌격병은 움찔한다")
-	assert_ne(heavy.state, Enemy.State.HURT, "중장병은 버틴다")
+	assert_eq(grunt.state, Enemy.State.HURT, "약탈자는 움찔한다")
+	assert_ne(heavy.state, Enemy.State.HURT, "처형자는 버틴다")
 	assert_eq(grunt.hurt_count, 1)
 
 
@@ -115,6 +115,27 @@ func test_crystal_shatter_deals_bonus_damage() -> void:
 	assert_almost_eq(outcome.amount, 100.0 + 100.0 * Enemy.SHATTER_BONUS, 0.01, "결정을 깨뜨리면 추가 피해")
 	assert_true(outcome.flags & Player.HIT_SHATTER)
 	assert_false(enemy.has_crystal())
+
+
+func test_enemy_models_have_every_clip() -> void:
+	# 원작 모델이 있으면(이 PC) 적마다 쓰는 동작(서기·이동·맞음·경직·쓰러짐·공격)이 모델에 다 있다.
+	var slot := 0
+	for file in DirAccess.get_files_at("res://data/enemies"):
+		if not file.ends_with(".tres"):
+			continue
+		var data := load("res://data/enemies/" + file) as EnemyData
+		if data.model_file.is_empty():
+			continue
+		slot += 1
+		var enemy := _enemy(file.get_basename(), Vector3(slot * 8.0, 0, -40))
+		await _frames(1)
+		if not enemy.body.has_model:
+			continue
+		for role: StringName in [&"idle", &"move", &"hit", &"stun", &"dead"]:
+			assert_ne(enemy.body._role_clip(role), &"", "%s: %s 동작" % [data.id, role])
+		for attack in data.attacks:
+			assert_ne(enemy.body._role_clip(attack.clip), &"", "%s: 공격 %s의 동작 %s" % [data.id, attack.id, attack.clip])
+			assert_true(attack.clip_hit >= attack.clip_from, "%s: %s 타격 시각이 시작 시각 뒤" % [data.id, attack.id])
 
 
 func test_defeated_enemy_disappears() -> void:

@@ -3,8 +3,10 @@ data/characters/*/kit.tres의 advance(내디딤)와 hits의 time을 정할 때 �
 
     python3 tools/measure_attack_clips.py "!File/Endministrator_F_Animated.glb" attack_01:1.4 normal_skill:1.6
     python3 tools/measure_attack_clips.py "!File/endministrator_m/Endministrator_M_Animated.glb" --prefix=A_actor_endminm_battle_ attack_01:1.4
+    python3 tools/measure_attack_clips.py "!File/Bonekrusher_Assets/enemies/eny_0051_rodin/eny_0051_rodin_Animated.glb" --prefix=A_monster_rodin_01_ --weapon=Bip001_R_Hand skill_04:6.4
 
 동작 이름 뒤의 숫자는 몇 초까지 잴지다. 앞으로 나아간 거리는 0.05초마다, 무기 속도의 봉우리는 "시각(m/s)"로 찍는다.
+무기 뼈가 없는 모델(적)은 --weapon=으로 손 뼈 등을 고른다.
 """
 import json
 import math
@@ -12,6 +14,7 @@ import struct
 import sys
 
 PREFIX = "A_actor_endminf_battle_"
+WEAPON = "IK_Weapon_R_001"
 
 
 def read_glb(path):
@@ -97,7 +100,7 @@ def main(path, specs):
             i = parent.get(i)
         return list(reversed(out))
 
-    chains = {"root": chain("Bip001"), "weapon": chain("IK_Weapon_R_001")}
+    chains = {"root": chain("Bip001"), "weapon": chain(WEAPON)}
     wanted = {PREFIX + spec.split(":")[0]: float(spec.split(":")[1]) for spec in specs}
     for anim in doc["animations"]:
         name = anim.get("name", "")
@@ -174,8 +177,12 @@ def main(path, specs):
 
 if __name__ == "__main__":
     args = sys.argv[2:]
-    if args and args[0].startswith("--prefix="):
-        PREFIX = args[0].split("=", 1)[1]
+    while args and args[0].startswith("--"):
+        key, _, value = args[0].partition("=")
+        if key == "--prefix":
+            PREFIX = value
+        elif key == "--weapon":
+            WEAPON = value
         args = args[1:]
     if len(sys.argv) < 3:
         sys.exit(__doc__)

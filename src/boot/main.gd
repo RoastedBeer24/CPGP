@@ -17,6 +17,7 @@ extends Node
 ##   --first-person / --free-face                # 1인칭으로, 또는 자유 시점으로 얼굴 앞에서 시작 (화면 확인용, 저장 안 함)
 ##   --third-person                              # 설정에 1인칭이 저장돼 있어도 3인칭으로 시작 (화면 확인용, 저장 안 함)
 ##   --pitch=-50                                 # 카메라 위아래 각도(도)로 시작, --autoplay=run은 이 각도를 지킨다 (화면 확인용)
+##   --spawn-enemy=heavy                         # 로비에서 그 적(data/enemies/<이름>.tres)을 8m 앞에 세운다 (적 모델·공격 확인용)
 ##   --no-update                                # 자동 업데이트를 하지 않음
 ##   --update-url=http://127.0.0.1:8000/latest   # 업데이트 확인 주소 바꾸기 (시험용)
 ##
@@ -187,6 +188,9 @@ func _on_player_spawned(player: Player) -> void:
 	var pitch := _command_line_pitch(args)
 	if not is_nan(pitch) and player.is_multiplayer_authority():
 		player.camera_pitch = deg_to_rad(pitch)
+	for arg in args:
+		if arg.begins_with("--spawn-enemy=") and player.is_multiplayer_authority():
+			_spawn_test_enemy(StringName(arg.trim_prefix("--spawn-enemy=")), player)
 	if autoplay and player.is_multiplayer_authority():
 		var pilot := AutoPilot.new()
 		pilot.name = "AutoPilot"
@@ -198,6 +202,19 @@ func _on_player_spawned(player: Player) -> void:
 		pilot.plunge_only = OS.get_cmdline_user_args().has("--autoplay=plunge")
 		pilot.finisher_only = OS.get_cmdline_user_args().has("--autoplay=finisher")
 		player.add_child(pilot)
+
+
+## 화면 확인용: 그 적을 플레이어 8m 앞에 플레이어를 보게 세운다(싸움을 건다).
+func _spawn_test_enemy(id: StringName, player: Player) -> void:
+	var data := load("res://data/enemies/%s.tres" % id) as EnemyData
+	if data == null:
+		push_warning("없는 적: %s" % id)
+		return
+	var enemy := (load("res://src/enemies/enemy.tscn") as PackedScene).instantiate() as Enemy
+	enemy.data = data
+	enemy.position = player.global_position - player.global_basis.z * 8.0
+	enemy.rotation.y = player.rotation.y + PI
+	session.add_child.call_deferred(enemy)
 
 
 ## 명령줄로 정한 카메라 위아래 각도(--pitch=도). 없으면 NAN.

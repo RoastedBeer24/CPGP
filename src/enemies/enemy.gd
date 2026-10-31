@@ -25,8 +25,8 @@ const HURT_TIME := 0.35
 ## 맞지 않은 채 이 시간(초)이 지나면 경직 게이지가 줄기 시작한다(초당 줄어드는 비율).
 const STAGGER_DECAY_DELAY := 3.0
 const STAGGER_DECAY_RATE := 0.15
-## 쓰러진 뒤 몸이 사라질 때까지(초)
-const CORPSE_TIME := 2.5
+## 쓰러진 뒤 몸이 사라질 때까지(초). 원작 모델은 쓰러지는 동작(3초 남짓)을 보이고 땅으로 가라앉는다(EnemyBody).
+const CORPSE_TIME := 4.0
 ## 플레이어가 적의 공격에 맞을 때 얻는 궁극기 에너지
 const ENERGY_ON_HURT := 3.0
 ## 적끼리 떨어지려는 거리(m)

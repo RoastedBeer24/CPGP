@@ -1,7 +1,8 @@
 class_name EnemyBody
 extends Node3D
 ## 적의 보이는 몸. 동기화된 상태(Enemy.state, attack_count, hurt_count, crystal_left)를 보고 모든 피어가 같은 모습을 그린다.
-##   - 모델 파일이 있으면 모델의 동작을 튼다(EnemyData.clips). 없으면 단순한 도형 몸을 코드로 움직인다.
+##   - 모델 파일이 있으면 모델의 동작을 튼다(EnemyData.clips). 공격 동작은 예고가 끝나는 순간에 동작의 타격 시각이 오게
+##     맞추고(EnemyAttackData.clip_hit), 쓰러지면 쓰러지는 동작 뒤 땅으로 가라앉는다. 없으면 단순한 도형 몸을 코드로 움직인다.
 ##   - 공격 예고: 맞을 자리(부채꼴·원·직선)가 땅에 깔리고, 맞는 순간까지 안쪽이 차오른다. 눈이 밝아진다.
 ##   - 맞으면 하얗게 번쩍이고, 경직되면 옆으로 기울어 머리 위에 노란 고리가 돈다.
 ##   - 원석 결정이 붙으면 몸 둘레에 주황빛 결정이 돋는다.
@@ -11,6 +12,14 @@ const TELEGRAPH_HEIGHT := 0.06
 const RANGED_TELEGRAPH_LENGTH := 14.0
 const CRYSTAL_COLOR := Color(1.0, 0.6, 0.15)
 const FLASH_TIME := 0.12
+## 모델: 쓰러진 뒤 이 시각(초)부터 이만큼(초) 동안 땅으로 가라앉는다 (Enemy.CORPSE_TIME 안에 끝난다)
+const SINK_FROM := 2.6
+const SINK_TIME := 1.2
+## 격노한 모델에 덧씌우는 붉은빛
+const ENRAGED_TINT := Color(1.0, 0.25, 0.15, 0.22)
+## 모델: 카메라에서 이 거리(m) 안은 점점이 지운다(FROM에서 다 지우고 TO부터 다 보인다)
+const CAMERA_FADE_FROM := 0.3
+const CAMERA_FADE_TO := 0.9
 
 var enemy: Enemy
 var has_model := false
@@ -25,6 +34,10 @@ var _telegraph_time := 0.0
 var _stagger_ring: MeshInstance3D
 var _crystals: Node3D
 var _animation: AnimationPlayer
+## 모델의 메시와, 맞으면 번쩍이게(격노하면 붉게) 덧씌우는 재질, 지금 덧씌웠는지
+var _model_meshes: Array[MeshInstance3D] = []
+var _overlay: StandardMaterial3D
+var _overlay_on := false
 var _last_attack_count := 0
 var _last_hurt_count := 0
 var _flash := 0.0
@@ -67,9 +80,13 @@ func _process(delta: float) -> void:
 	if enemy.attack_count != _last_attack_count:
 		_last_attack_count = enemy.attack_count
 		_show_telegraph(enemy.current_attack())
+		if has_model:
+			_start_attack_clip(enemy.current_attack())
 	if enemy.hurt_count != _last_hurt_count:
 		_last_hurt_count = enemy.hurt_count
 		_flash = FLASH_TIME
+		if has_model:
+			_play_role(&"hit", 0.08, true)
 	_update_telegraph(delta)
 	_flash = maxf(_flash - delta, 0.0)
 	_crystals.visible = enemy.has_crystal()
@@ -79,7 +96,7 @@ func _process(delta: float) -> void:
 	if _stagger_ring.visible:
 		_stagger_ring.rotate_y(delta * 4.0)
 	if has_model:
-		_animate_model()
+		_animate_model(delta)
 	else:
 		_animate_placeholder(delta)
 
@@ -182,35 +199,116 @@ func _load_model() -> bool:
 	# glTF 모델은 보통 +Z를 앞으로 본다. 적의 앞은 -Z라서 돌려 세운다.
 	model.rotation.y = PI
 	_rig.add_child(model)
+	for node: Node in model.find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		_model_meshes.append(mesh)
+		# 덩치 큰 적(보스)이 플레이어에 붙으면 카메라가 몸속에 들어가 팔이 화면을 가렸다. 카메라에 아주 가까운 곳은
+		# 점점이 지운다. 재질은 같은 모델의 적끼리 함께 쓰므로 한 번만 바꾸면 된다.
+		for i in mesh.get_surface_override_material_count():
+			var material := mesh.get_active_material(i) as BaseMaterial3D
+			if material != null and material.distance_fade_mode == BaseMaterial3D.DISTANCE_FADE_DISABLED:
+				material.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_DITHER
+				material.distance_fade_min_distance = CAMERA_FADE_FROM
+				material.distance_fade_max_distance = CAMERA_FADE_TO
+	_overlay = StandardMaterial3D.new()
+	_overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_overlay.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	var players := model.find_children("*", "AnimationPlayer", true, false)
 	if not players.is_empty():
 		_animation = players[0] as AnimationPlayer
 		PlayerBody._normalize_animation_names(_animation)
+		_play_role(&"idle", 0.0)
 	has_model = true
 	return true
 
 
-func _animate_model() -> void:
+## 모델에서 그 역할(idle, move, hit, 공격의 clip 등)로 틀 동작 이름. 없으면 빈 이름.
+func _role_clip(role: StringName) -> StringName:
+	var clip := StringName(enemy.data.clips.get(role, String(role)))
+	return clip if _animation != null and _animation.has_animation(clip) else &""
+
+
+## 역할의 동작을 튼다(이미 틀고 있으면 그대로, restart면 처음부터).
+func _play_role(role: StringName, blend: float, restart := false) -> void:
+	var clip := _role_clip(role)
+	if clip == &"":
+		return
+	if restart or _animation.current_animation != clip:
+		_animation.play(clip, blend)
+		if restart:
+			_animation.seek(0.0, true)
+	_animation.speed_scale = 1.0
+
+
+## 공격 동작을 예고 동안 clip_from에서 clip_hit까지 예고 시간에 맞춘 빠르기로 틀어, 예고가 끝나는 순간에 맞히게 한다
+## (격노해서 예고가 짧으면 더 빠르게). 늦게 알았으면(원격 피어) 지난 만큼 앞으로 옮긴다. 맞힌 뒤(RECOVER)에는 원래
+## 빠르기로 마저 튼다.
+func _start_attack_clip(attack: EnemyAttackData) -> void:
+	if attack == null or _animation == null:
+		return
+	var clip := _role_clip(attack.clip)
+	if clip == &"":
+		return
+	var total := maxf(enemy.wind_up_time(attack), 0.05)
+	var progress := clampf(enemy.state_time() / total, 0.0, 1.0) if enemy.state == Enemy.State.WIND_UP else 1.0
+	_animation.play(clip, 0.12)
+	if attack.clip_hit > attack.clip_from:
+		_animation.seek(lerpf(attack.clip_from, attack.clip_hit, progress), true)
+		_animation.speed_scale = (attack.clip_hit - attack.clip_from) / total
+	else:
+		_animation.seek(attack.clip_from, true)
+		_animation.speed_scale = 1.0
+
+
+func _animate_model(delta: float) -> void:
 	if _animation == null:
 		return
-	var role := &"idle"
 	match enemy.state:
-		Enemy.State.CHASE:
-			role = &"move" if _speed > 0.5 else &"idle"
+		Enemy.State.IDLE, Enemy.State.CHASE:
+			if _speed > 0.5 and _role_clip(&"move") != &"":
+				_play_role(&"move", 0.2)
+				_animation.speed_scale = clampf(_speed / maxf(enemy.data.move_clip_speed, 0.1), 0.6, 1.8)
+			else:
+				_play_role(&"idle", 0.25)
 		Enemy.State.WIND_UP, Enemy.State.RECOVER:
 			var attack := enemy.current_attack()
-			role = attack.clip if attack != null else &"idle"
+			if attack != null and _animation.current_animation != _role_clip(attack.clip):
+				_start_attack_clip(attack)
+			if enemy.state == Enemy.State.RECOVER:
+				_animation.speed_scale = 1.0
 		Enemy.State.HURT:
-			role = &"hit"
+			_play_role(&"hit", 0.08)
 		Enemy.State.STAGGERED:
-			role = &"stun"
+			# 경직: 무너지는 동작 뒤 무너진 채 반복한다.
+			var current := _animation.current_animation
+			if current != _role_clip(&"stun") and current != _role_clip(&"stun_start"):
+				if _role_clip(&"stun_start") != &"":
+					_play_role(&"stun_start", 0.12)
+					if _role_clip(&"stun") != &"":
+						_animation.queue(_role_clip(&"stun"))
+				else:
+					_play_role(&"stun", 0.12)
 		Enemy.State.DEAD:
-			role = &"dead"
-	var clip := StringName(enemy.data.clips.get(role, ""))
-	if clip == &"" or not _animation.has_animation(clip):
-		return
-	if _animation.current_animation != clip:
-		_animation.play(clip, 0.15)
+			_play_role(&"dead", 0.12)
+			_dead_time += delta
+			_rig.position.y = -clampf((_dead_time - SINK_FROM) / SINK_TIME, 0.0, 1.0) * enemy.data.height
+	_update_overlay()
+
+
+## 맞으면 하얗게 번쩍이고, 격노한 보스는 붉은빛이 돈다(모델 위에 더하는 재질).
+func _update_overlay() -> void:
+	var flash := _flash / FLASH_TIME
+	var tint := Color(1.0, 1.0, 1.0, flash * 0.8)
+	if enemy.enraged and flash <= 0.0:
+		tint = ENRAGED_TINT
+	var on := tint.a > 0.0
+	if on != _overlay_on:
+		_overlay_on = on
+		for mesh in _model_meshes:
+			mesh.material_overlay = _overlay if on else null
+	if on:
+		_overlay.albedo_color = Color(tint.r * tint.a, tint.g * tint.a, tint.b * tint.a, 1.0)
 
 
 # ---- 모델이 없을 때의 도형 몸 ----

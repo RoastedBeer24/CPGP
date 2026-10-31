@@ -6,34 +6,38 @@
 [sub_resource type="Resource" id="slam"]
 script = ExtResource("2_attack")
 id = &"slam"
-clip = &"slam"
-max_range = 2.4
+clip = &"attack_1"
+clip_hit = 1.5
+clip_from = 0.3
+max_range = 2.6
 wind_up = 1.2
 recovery = 1.3
 cooldown = 3.5
 damage = 220.0
 heavy = true
-reach = 3.4
+reach = 3.6
 arc = 180.0
 
 [sub_resource type="Resource" id="sweep"]
 script = ExtResource("2_attack")
 id = &"sweep"
-clip = &"attack"
+clip = &"attack_2"
+clip_hit = 0.98
+clip_from = 0.1
 max_range = 3.0
 wind_up = 0.9
 recovery = 1.0
 cooldown = 5.0
 damage = 150.0
 heavy = true
-reach = 3.6
+reach = 3.8
 arc = 75.0
 lunge = 1.0
 
 [resource]
 script = ExtResource("1_data")
 id = &"heavy"
-display_name = "중장병"
+display_name = "본 크러셔 처형자"
 max_health = 3200.0
 stagger_max = 250.0
 stagger_duration = 5.0
@@ -41,8 +45,10 @@ flinches = false
 knockback_scale = 0.2
 move_speed = 2.4
 turn_speed = 4.0
-radius = 0.7
-height = 2.4
+radius = 0.8
+height = 2.7
 attacks = Array[ExtResource("2_attack")]([SubResource("slam"), SubResource("sweep")])
 color = Color(0.4, 0.42, 0.5, 1)
 bulk = 1.6
+model_file = "enemies/lbtough.glb"
+move_clip_speed = 1.6

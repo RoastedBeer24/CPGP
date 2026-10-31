@@ -251,7 +251,7 @@ func test_enemy_attack_hurts_and_heavy_hit_staggers_player() -> void:
 		await _frames(1)
 		if not hits.is_empty():
 			break
-	assert_false(hits.is_empty(), "중장병의 공격에 맞는다")
+	assert_false(hits.is_empty(), "처형자의 공격에 맞는다")
 	assert_true(player.health.current < player.kit.max_health)
 	assert_true(hits[0], "강한 공격")
 	assert_eq(player.state, Player.State.HURT, "크게 맞으면 휘청인다")

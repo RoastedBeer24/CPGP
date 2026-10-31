@@ -370,7 +370,12 @@ def main(source, target):
         animations.append(anim)
     doc["animations"] = animations
     strip_extra_meshes(doc)
+    save_compact(doc, data, target)
 
+
+def save_compact(doc, data, target):
+    """쓰이는 accessor·bufferView만 새 버퍼로 옮겨 glb로 저장한다(버린 동작의 데이터를 뺀다)."""
+    animations = doc["animations"]
     # 쓰이는 accessor만 남기고 번호를 다시 매긴다.
     used = []
     def keep(index):

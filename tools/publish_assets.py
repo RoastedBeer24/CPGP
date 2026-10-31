@@ -31,6 +31,12 @@ FILES = {
     "characters/akekuri.glb": "assets/characters/akekuri/akekuri.glb",
     "characters/akekuri_fx.zip": "assets/characters/akekuri/akekuri_fx.zip",
     "weapons/edge_of_lightness.glb": "assets/weapons/edge_of_lightness.glb",
+    # 적 모델(tools/extract_enemy.py로 본 크러셔 꾸러미에서 뽑은 것)
+    "enemies/lbmob.glb": "assets/enemies/lbmob.glb",
+    "enemies/lbhunt.glb": "assets/enemies/lbhunt.glb",
+    "enemies/lbtough.glb": "assets/enemies/lbtough.glb",
+    "enemies/lbtough_elite.glb": "assets/enemies/lbtough_elite.glb",
+    "enemies/rodin.glb": "assets/enemies/rodin.glb",
     # 캐릭터 고르기 아이콘(tools/make_icons.py로 공식 초상화에서 잘라 낸 그림)
     "characters/endministrator_f_icon.png": "assets/characters/endministrator_f/endministrator_f_icon.png",
     "characters/endministrator_m_icon.png": "assets/characters/endministrator_m/endministrator_m_icon.png",

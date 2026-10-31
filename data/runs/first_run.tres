@@ -17,7 +17,7 @@ waves = Array[PackedStringArray]([PackedStringArray("grunt", "grunt", "grunt", "
 
 [sub_resource type="Resource" id="stage_3"]
 script = ExtResource("2_stage")
-title = "중간 보스: 중장병 대장"
+title = "중간 보스: 본 크러셔 처형자 · 정예"
 scene_path = "res://src/zones/combat_room/boss_room.tscn"
 waves = Array[PackedStringArray]([PackedStringArray("heavy_captain", "grunt", "grunt")])
 boss = true
@@ -30,7 +30,7 @@ waves = Array[PackedStringArray]([PackedStringArray("shooter", "shooter", "shoot
 
 [sub_resource type="Resource" id="stage_5"]
 script = ExtResource("2_stage")
-title = "최종 보스: 약탈자 우두머리"
+title = "최종 보스: '본 크러셔의 주먹' 로댄"
 scene_path = "res://src/zones/combat_room/boss_room.tscn"
 waves = Array[PackedStringArray]([PackedStringArray("raider_chief", "shooter", "shooter")])
 boss = true
