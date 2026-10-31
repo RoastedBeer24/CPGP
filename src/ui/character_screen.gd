@@ -1,14 +1,18 @@
 class_name CharacterScreen
 extends Control
 ## 로비의 캐릭터 화면(C). 카메라가 원작 캐릭터 화면의 구도로 내 캐릭터를 비추고(Player.showcase), 오른쪽에
-## 소개와 기술이 나온다. 캐릭터는 원작의 캐릭터 화면 동작으로 걸어 들어와 선다. 캐릭터를 누르면 반응하고,
-## 무기 보기(W)를 누르면 왼손에 무기를 꺼내 보여 준다(카메라도 원작의 무기 보기 구도로 옮겨 간다).
-## ◀ ▶(또는 A·D)로 캐릭터를 바꾸면 그 자리에서 새 캐릭터로 다시 나타난다(코옵에서도 모두에게 보인다).
+## 소개·무기·기술이 나온다. 캐릭터는 원작의 캐릭터 화면 동작으로 걸어 들어와 선다. 캐릭터를 누르면 반응하고,
+## 무기 보기(W)를 누르면 무기를 꺼내 보여 준다(카메라도 원작의 무기 보기 구도로 옮겨 간다).
+## 아래쪽에 고를 수 있는 캐릭터의 아이콘이 나란히 있다(오버워치 영웅 고르기처럼). 누르면 그 자리에서 새 캐릭터로
+## 다시 나타난다(코옵에서도 모두에게 보인다). 무기는 원작처럼 그 캐릭터의 무기군 안에서 고른다.
 ## 휠로 얼굴 앞까지 다가가거나 물러나고, 마우스 오른쪽 버튼을 끌거나 Q·E로 캐릭터 둘레를 돈다.
 
 signal closed
 
 const PANEL_WIDTH := 460.0
+## 캐릭터 아이콘 한 칸의 크기(px)
+const ICON_SIZE := 96.0
+const GOLD := Color(0.98, 0.84, 0.25)
 
 var session: Session
 
@@ -17,10 +21,14 @@ var _title_label: Label
 var _description: Label
 var _stats: Label
 var _skills: Label
-var _index_label: Label
+var _weapon_list: VBoxContainer
 var _weapon_button: Button
 var _panel: PanelContainer
+var _roster: HBoxContainer
 var _dragging := false
+## 마지막으로 그린 캐릭터와 무기 (바뀔 때만 목록을 다시 만든다)
+var _shown_character := &""
+var _shown_weapon := &""
 
 
 func _ready() -> void:
@@ -38,7 +46,7 @@ func _ready() -> void:
 	panel.offset_bottom = -32.0
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.06, 0.07, 0.09, 0.82)
-	style.border_color = Color(0.98, 0.84, 0.25, 0.9)
+	style.border_color = Color(GOLD, 0.9)
 	style.border_width_left = 3
 	style.content_margin_left = 24.0
 	style.content_margin_right = 24.0
@@ -47,42 +55,65 @@ func _ready() -> void:
 	panel.add_theme_stylebox_override("panel", style)
 	add_child(panel)
 	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 10)
+	rows.add_theme_constant_override("separation", 8)
 	panel.add_child(rows)
-	_title_label = _label(rows, 16, Color(0.98, 0.84, 0.25))
+	_title_label = _label(rows, 16, GOLD)
 	_name_label = _label(rows, 34, Color.WHITE)
-	_description = _label(rows, 16, Color(0.85, 0.87, 0.9))
+	_description = _label(rows, 15, Color(0.85, 0.87, 0.9))
 	_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_stats = _label(rows, 17, Color(0.7, 0.95, 0.75))
-	_skills = _label(rows, 15, Color(0.9, 0.9, 0.9))
-	_skills.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_skills.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var switcher := HBoxContainer.new()
-	switcher.alignment = BoxContainer.ALIGNMENT_CENTER
-	switcher.add_theme_constant_override("separation", 16)
-	rows.add_child(switcher)
-	var previous := Button.new()
-	previous.text = "◀"
-	previous.custom_minimum_size = Vector2(64, 40)
-	previous.pressed.connect(cycle.bind(-1))
-	switcher.add_child(previous)
-	_index_label = _label(switcher, 18, Color.WHITE)
-	var next := Button.new()
-	next.text = "▶"
-	next.custom_minimum_size = Vector2(64, 40)
-	next.pressed.connect(cycle.bind(1))
-	switcher.add_child(next)
+	_stats = _label(rows, 16, Color(0.7, 0.95, 0.75))
+	var weapon_header := _label(rows, 16, GOLD)
+	weapon_header.text = "무기"
+	_weapon_list = VBoxContainer.new()
+	_weapon_list.add_theme_constant_override("separation", 4)
+	rows.add_child(_weapon_list)
 	_weapon_button = Button.new()
-	_weapon_button.custom_minimum_size = Vector2(0, 40)
+	_weapon_button.custom_minimum_size = Vector2(0, 36)
 	_weapon_button.pressed.connect(toggle_weapon)
 	rows.add_child(_weapon_button)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	rows.add_child(scroll)
+	_skills = _label(scroll, 14, Color(0.9, 0.9, 0.9))
+	_skills.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_skills.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var close := Button.new()
 	close.text = "닫기 (C / Esc)"
-	close.custom_minimum_size = Vector2(0, 40)
+	close.custom_minimum_size = Vector2(0, 36)
 	close.pressed.connect(close_screen)
 	rows.add_child(close)
+	# 아래쪽: 캐릭터 아이콘 줄(소개 칸 왼쪽 빈 곳의 가운데). 뒤에 아래로 갈수록 짙어지는 띠를 깐다.
+	var band := TextureRect.new()
+	var fade := Gradient.new()
+	fade.set_color(0, Color(0, 0, 0, 0.0))
+	fade.set_color(1, Color(0, 0, 0, 0.6))
+	var fade_texture := GradientTexture2D.new()
+	fade_texture.gradient = fade
+	fade_texture.fill_from = Vector2(0, 0)
+	fade_texture.fill_to = Vector2(0, 1)
+	band.texture = fade_texture
+	band.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	band.stretch_mode = TextureRect.STRETCH_SCALE
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	band.anchor_top = 1.0
+	band.anchor_bottom = 1.0
+	band.anchor_right = 1.0
+	band.offset_top = -ICON_SIZE - 110.0
+	add_child(band)
+	_roster = HBoxContainer.new()
+	_roster.alignment = BoxContainer.ALIGNMENT_CENTER
+	_roster.add_theme_constant_override("separation", 14)
+	_roster.anchor_top = 1.0
+	_roster.anchor_bottom = 1.0
+	_roster.anchor_right = 1.0
+	_roster.offset_left = 32.0
+	_roster.offset_right = -PANEL_WIDTH - 64.0
+	_roster.offset_top = -ICON_SIZE - 64.0
+	_roster.offset_bottom = -24.0
+	add_child(_roster)
 	var hint := _label(self, 15, Color(1, 1, 1, 0.7))
-	hint.text = "캐릭터 누르기: 반응   W: 무기 보기   휠: 가까이·멀리   마우스 오른쪽 끌기 또는 Q·E: 둘러보기   A·D: 캐릭터 바꾸기"
+	hint.text = "아이콘을 눌러 캐릭터 바꾸기   캐릭터 누르기: 반응   W: 무기 보기   휠: 가까이·멀리   마우스 오른쪽 끌기 또는 Q·E: 둘러보기"
 	hint.position = Vector2(32, 32)
 
 
@@ -95,6 +126,7 @@ func open_screen() -> void:
 	player.face_camera()
 	player.showcase = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_shown_character = &""
 	_refresh()
 
 
@@ -111,7 +143,7 @@ func close_screen() -> void:
 	closed.emit()
 
 
-## 무기 보기를 켜거나 끈다: 캐릭터가 왼손에 무기를 꺼내 보여 주고, 끄면 거둔다.
+## 무기 보기를 켜거나 끈다: 캐릭터가 무기를 꺼내 보여 주고, 끄면 거둔다.
 func toggle_weapon() -> void:
 	var player := _player()
 	if player != null:
@@ -126,7 +158,17 @@ func poke() -> void:
 		player.showcase_pokes += 1
 
 
-## 캐릭터를 앞(+1)이나 뒤(-1)로 바꾼다.
+## 캐릭터를 고른다(아이콘을 누름). 그 자리에서 새 캐릭터로 다시 나타난다.
+func choose(character_id: StringName) -> void:
+	var player := _player()
+	if player == null or player.character_id == character_id:
+		return
+	GameSettings.character_id = character_id
+	GameSettings.save()
+	session.request_character(character_id)
+
+
+## 캐릭터를 앞(+1)이나 뒤(-1)로 바꾼다 (← → 키).
 func cycle(step: int) -> void:
 	var characters := Characters.all()
 	var player := _player()
@@ -136,10 +178,14 @@ func cycle(step: int) -> void:
 	for i in characters.size():
 		if characters[i].id == player.character_id:
 			index = i
-	var chosen := characters[wrapi(index + step, 0, characters.size())]
-	GameSettings.character_id = chosen.id
-	GameSettings.save()
-	session.request_character(chosen.id)
+	choose(characters[wrapi(index + step, 0, characters.size())].id)
+
+
+## 무기를 고른다(그 캐릭터의 무기군 안에서). 무기 보기 중이면 새 무기를 바로 보여 준다.
+func choose_weapon(weapon_id: StringName) -> void:
+	var player := _player()
+	if player != null and player.set_weapon(weapon_id):
+		_refresh()
 
 
 func _process(delta: float) -> void:
@@ -173,9 +219,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo:
 		match key.physical_keycode:
-			KEY_A, KEY_LEFT:
+			KEY_LEFT:
 				cycle(-1)
-			KEY_D, KEY_RIGHT:
+			KEY_RIGHT:
 				cycle(1)
 			KEY_W:
 				toggle_weapon()
@@ -188,7 +234,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if button != null and player != null:
 		if button.button_index == MOUSE_BUTTON_RIGHT:
 			_dragging = button.pressed
-		elif button.pressed and button.button_index == MOUSE_BUTTON_LEFT and not _panel.get_global_rect().has_point(button.position):
+		elif button.pressed and button.button_index == MOUSE_BUTTON_LEFT and not _panel.get_global_rect().has_point(button.position) \
+				and not _roster.get_global_rect().has_point(button.position):
 			poke()
 		elif button.pressed and button.button_index == MOUSE_BUTTON_WHEEL_UP:
 			player.zoom(-1)
@@ -205,22 +252,95 @@ func _refresh() -> void:
 		return
 	var character := Characters.find(player.character_id)
 	var kit := player.kit
+	_weapon_button.text = "무기 거두기 (W)" if player.showcase_weapon else "무기 보기 (W)"
+	var weapon := player.weapon()
+	var weapon_id := weapon.id if weapon != null else &""
+	if character.id == _shown_character and weapon_id == _shown_weapon:
+		return
+	_shown_character = character.id
+	_shown_weapon = weapon_id
 	_title_label.text = character.title
 	_name_label.text = character.display_name
-	_weapon_button.text = "무기 거두기 (W)" if player.showcase_weapon else "무기 보기 (W)"
 	_description.text = character.description
-	_stats.text = "체력 %d   공격력 %d   궁극기 에너지 %d" % [roundi(kit.max_health), roundi(kit.attack_power), roundi(kit.max_energy)]
+	var attack := kit.attack_power * (1.0 + (weapon.attack_bonus if weapon != null else 0.0))
+	_stats.text = "체력 %d   공격력 %d   궁극기 에너지 %d" % [roundi(kit.max_health), roundi(attack), roundi(kit.max_energy)]
 	var lines: PackedStringArray = ["[왼쪽 클릭] 기본 공격 %d연속" % kit.basic_chain.size()]
-	for attack: AttackData in [kit.basic_chain.back(), kit.dash_attack, kit.finisher, kit.plunge_start, kit.battle_skill, kit.ultimate]:
-		if attack != null and not attack.description.is_empty():
-			lines.append("%s\n    %s" % [attack.display_name, attack.description])
+	for skill: AttackData in [kit.basic_chain.back(), kit.dash_attack, kit.finisher, kit.plunge_start, kit.battle_skill, kit.ultimate]:
+		if skill != null and not skill.description.is_empty():
+			lines.append("%s\n    %s" % [skill.display_name, skill.description])
 	_skills.text = "\n".join(lines)
-	var characters := Characters.all()
-	var index := 0
-	for i in characters.size():
-		if characters[i].id == player.character_id:
-			index = i
-	_index_label.text = "%d / %d" % [index + 1, characters.size()]
+	_build_weapons(character, weapon_id)
+	_build_roster(character.id)
+
+
+## 그 캐릭터의 무기군에 맞는 무기 목록. 지금 든 무기가 눌려 있다.
+func _build_weapons(character: CharacterData, current: StringName) -> void:
+	for child in _weapon_list.get_children():
+		child.queue_free()
+	for weapon in Weapons.of_type(character.weapon_type):
+		var button := Button.new()
+		button.toggle_mode = true
+		button.button_pressed = weapon.id == current
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.custom_minimum_size = Vector2(0, 34)
+		var bonus := "  공격력 +%d%%" % roundi(weapon.attack_bonus * 100.0) if weapon.attack_bonus > 0.0 else ""
+		var equipped := "   (장착 중)" if weapon.id == current else ""
+		button.text = "%s  %s%s%s" % ["★".repeat(weapon.rarity), weapon.display_name, bonus, equipped]
+		button.tooltip_text = weapon.description
+		button.add_theme_color_override("font_pressed_color", GOLD)
+		button.add_theme_color_override("font_hover_pressed_color", GOLD)
+		button.pressed.connect(choose_weapon.bind(weapon.id))
+		_weapon_list.add_child(button)
+
+
+## 아래쪽 캐릭터 아이콘 줄. 고른 캐릭터는 금색 테두리로 크게 보인다. 아이콘 그림이 없으면 이름 첫 글자를 쓴다.
+func _build_roster(current: StringName) -> void:
+	for child in _roster.get_children():
+		child.queue_free()
+	for character in Characters.all():
+		var chosen := character.id == current
+		var tile := VBoxContainer.new()
+		tile.alignment = BoxContainer.ALIGNMENT_END
+		tile.add_theme_constant_override("separation", 4)
+		var button := Button.new()
+		var side := ICON_SIZE * (1.12 if chosen else 1.0)
+		button.custom_minimum_size = Vector2(side, side)
+		button.tooltip_text = character.display_name
+		button.focus_mode = Control.FOCUS_NONE
+		var look := character.appearance()
+		var icon := look.icon() if look != null else null
+		# 초상화는 배경이 투명하고 머리카락이 어두워서 밝은 바탕에 얹는다(고른 캐릭터는 금빛 바탕).
+		var frame := StyleBoxFlat.new()
+		if icon != null:
+			frame.bg_color = Color(0.98, 0.9, 0.62) if chosen else Color(0.78, 0.8, 0.84)
+		else:
+			frame.bg_color = Color(0.1, 0.11, 0.14, 0.9)
+		frame.border_color = GOLD if chosen else Color(1, 1, 1, 0.35)
+		frame.set_border_width_all(4 if chosen else 2)
+		frame.set_corner_radius_all(8)
+		for state: String in ["normal", "hover", "pressed", "focus"]:
+			button.add_theme_stylebox_override(state, frame)
+		if icon != null:
+			var picture := TextureRect.new()
+			picture.texture = icon
+			picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+			picture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			picture.offset_left = 4
+			picture.offset_top = 4
+			picture.offset_right = -4
+			picture.offset_bottom = -4
+			picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			button.add_child(picture)
+		else:
+			button.text = character.display_name.left(1)
+			button.add_theme_font_size_override("font_size", 40)
+		button.pressed.connect(choose.bind(character.id))
+		tile.add_child(button)
+		var caption := _label(tile, 15, GOLD if chosen else Color(1, 1, 1, 0.85))
+		caption.text = character.display_name
+		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_roster.add_child(tile)
 
 
 func _player() -> Player:

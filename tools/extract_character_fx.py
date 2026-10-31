@@ -27,8 +27,8 @@ WHO = {"F": "endminf", "M": "endminm", "Akekuri": "karin"}
 # 원작 자료에 이펙트가 없는 동작은 비슷한 동작의 원작 이펙트를 타격 시각에 맞춰 빌려 쓴다(게임에서 정한 것).
 # 캐릭터 → 동작 → [(빌려 올 동작, 그 동작의 타격 시각, 이 동작의 타격 시각), ...]. 타격 시각은 data/characters/*/kit.tres.
 BORROWED = {
-    "endminf": {"dash_attack": [("attack_5", 0.5, 0.53)], "ultimate": [("skill", 0.26, 1.47), ("finisher", 0.92, 3.02)]},
-    "endminm": {"dash_attack": [("attack_5", 0.5, 0.55)], "ultimate": [("skill", 0.3, 2.12), ("finisher", 0.97, 2.33)]},
+    "endminf": {"ultimate": [("skill", 0.26, 1.47), ("finisher", 0.92, 3.02)]},
+    "endminm": {"ultimate": [("skill", 0.3, 2.12), ("finisher", 0.97, 2.33)]},
 }
 
 

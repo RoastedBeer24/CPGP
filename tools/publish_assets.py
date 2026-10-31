@@ -31,6 +31,10 @@ FILES = {
     "characters/akekuri.glb": "assets/characters/akekuri/akekuri.glb",
     "characters/akekuri_fx.zip": "assets/characters/akekuri/akekuri_fx.zip",
     "weapons/edge_of_lightness.glb": "assets/weapons/edge_of_lightness.glb",
+    # 캐릭터 고르기 아이콘(tools/make_icons.py로 공식 초상화에서 잘라 낸 그림)
+    "characters/endministrator_f_icon.png": "assets/characters/endministrator_f/endministrator_f_icon.png",
+    "characters/endministrator_m_icon.png": "assets/characters/endministrator_m/endministrator_m_icon.png",
+    "characters/akekuri_icon.png": "assets/characters/akekuri/akekuri_icon.png",
 }
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -73,3 +73,5 @@ weapon_timelines = Dictionary[StringName, PackedFloat32Array]({
 &"plunge_start": PackedFloat32Array(0, 2),
 &"ultimate": PackedFloat32Array(0, 0, 2.0667, 2)
 })
+icon_path = "res://assets/characters/endministrator_m/endministrator_m_icon.png"
+icon_external_file = "characters/endministrator_m_icon.png"

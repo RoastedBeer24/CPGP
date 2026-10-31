@@ -97,16 +97,12 @@ func test_weapon_appears_in_right_hand_only_while_fighting() -> void:
 	assert_eq(player.body.locomotion, &"battle_idle", "싸우는 중에 서 있으면 전투 대기")
 	assert_true(player.body.sword_shown(), "전투 대기에서는 무기를 든다")
 	intent.move = Vector2(0, 1)
-	await _frames(40)
-	assert_true(player.body.sword_shown(), "싸우는 중에는 달려도 든 채로 둔다(지웠다 꺼내기를 되풀이하지 않는다)")
-	assert_eq(player.body.weapon_place(), HAND)
+	await _frames(60)
+	assert_false(player.body.sword_shown(), "달리면 무기를 거둔다(원작처럼 전투 동작에서만 든다)")
 	intent.move = Vector2.ZERO
-	for i in 480:
-		await _frames(1)
-		if not player.in_combat:
-			break
-	await _frames(90)
-	assert_false(player.body.sword_shown(), "전투가 끝나면 거둔다")
+	intent.attack_pressed = true
+	await _frames(12)
+	assert_true(player.body.sword_shown(), "다시 공격하면 꺼낸다")
 
 
 func test_combat_start_draws_weapon_from_back() -> void:

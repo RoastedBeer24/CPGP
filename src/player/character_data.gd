@@ -10,6 +10,9 @@ extends Resource
 @export_multiline var description := ""
 @export_file("*.tres") var appearance_path := ""
 @export_file("*.tres") var kit_path := ""
+## 무기군(원작처럼 이 무기군의 무기만 든다)과 처음 드는 무기(Weapons의 이름)
+@export var weapon_type := &"sword"
+@export var default_weapon := &"tarr_11"
 
 
 func appearance() -> CharacterAppearance:

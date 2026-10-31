@@ -36,10 +36,22 @@ const CHARACTER_LIGHT_ENERGY := 0.4
 const OUTLINE_WIDTH := 0.0012
 const FACE_FLATNESS := 0.85
 const EMISSION_ENERGY := 2.0
-## 1인칭 팔: 카메라에서 ARM_NEAR_FADE_TO(m)보다 가까우면 점점이 지우기 시작해 ARM_NEAR_FADE_FROM에서 다 지운다.
-## 얼굴 바로 앞을 스치는 소매만 지운다. 더 멀리서부터 지우면 어깨 쪽 위팔이 지워져 팔이 허공에 떠 보였다.
-const ARM_NEAR_FADE_FROM := 0.06
-const ARM_NEAR_FADE_TO := 0.14
+## 1인칭 몸: 카메라에서 VIEW_NEAR_FADE_TO(m)보다 가까우면 점점이 지우기 시작해 VIEW_NEAR_FADE_FROM에서 다 지운다.
+## 눈 바로 아래 옷깃과 얼굴 앞을 스치는 소매·손만 지운다. 더 멀리서부터 지우면 가슴과 어깨가 지워져 몸이 비어 보인다.
+const VIEW_NEAR_FADE_FROM := 0.08
+const VIEW_NEAR_FADE_TO := 0.18
+## 1인칭에서 숨기는 높이의 여유(m): 목 뼈보다 이만큼 아래에 붙은 팔 밖의 뼈(후드, 옷깃, 집게)까지 숨긴다.
+const FIRST_PERSON_NECK_MARGIN := 0.03
+## 1인칭 카메라: 두 눈 뼈(눈알 가운데)의 가운데에서 얼굴 앞으로 눈동자까지 나간 자리에 둔다. 눈동자 뼈가 없는
+## 모델이면 이 깊이(m)를 쓴다(관리자(여·남)·아케쿠리는 3.4~4.6cm).
+const FIRST_PERSON_EYE_DEPTH := 0.04
+## 1인칭에서 위아래를 볼 때 그 각도를 등뼈·가슴·목·머리가 나눠 숙이는 몫. 사람이 발밑을 볼 때처럼 고개와 윗몸을
+## 숙여야 눈(카메라)이 가슴 앞으로 나가 다리와 발이 보인다(눈 위치 그대로 내려다보면 가슴이 발을 가렸다).
+const LOOK_DOWN_SHARES: Dictionary[StringName, float] = {&"spine": 0.12, &"chest": 0.18, &"neck": 0.15, &"head": 0.3}
+const LOOK_UP_SHARES: Dictionary[StringName, float] = {&"chest": 0.08, &"neck": 0.15, &"head": 0.3}
+## 시선 쪽을 보며 옆·뒤로 갈 때 다리를 돌리는 가장 큰 각도(라디안)와 따라가는 빠르기(초당)
+const LEG_TWIST_MAX := PI * 0.5
+const LEG_TURN_RATE := 10.0
 
 ## 몸 기준 앞(-Z)과 오른쪽(+X)
 const FORWARD := Vector3(0, 0, -1)
@@ -99,9 +111,9 @@ const STOP_WINDOW := 0.4
 const STOP_CLIPS := {&"run": [&"run_stop_r", &"run_stop_l"], &"sprint": [&"sprint_stop_l", &"sprint_stop_r"]}
 ## 이보다 높이(m) 떨어져 내려서면 무겁게 착지한다(보통 점프는 1.2m쯤 떨어진다).
 const HEAVY_LANDING_DROP := 3.0
-## 무기가 나타나고 사라지는 시간(초). 싸울 때 나타날 때는 빠르게(첫 칼질에 늦지 않게), 사라질 때와 캐릭터 화면의
-## 무기 보기는 원작처럼 천천히(원작 소멸 0.5초, 등장 0.6초).
-const WEAPON_APPEAR_TIME := 0.12
+## 무기가 나타나고 사라지는 시간(초). 싸울 때 나타날 때는 빠르게(첫 칼질에 늦지 않되 툭 튀지 않게), 사라질 때와
+## 캐릭터 화면의 무기 보기는 원작처럼 천천히(원작 소멸 0.5초, 등장 0.6초).
+const WEAPON_APPEAR_TIME := 0.2
 const WEAPON_VANISH_TIME := 0.5
 const MENU_APPEAR_TIME := 0.6
 const MENU_VANISH_TIME := 0.5
@@ -130,6 +142,12 @@ const RIBBON_GRAVITY := 1.5
 const HAIR_STIFFNESS := 10.0
 const HAIR_DRAG := 0.5
 const HAIR_GRAVITY := 0.3
+## 꼬리·귀: 모양을 지키며 몸놀림에 통통 튀고 조금만 처진다(세상 기준으로 계산하므로 옷자락보다 돌아가는 힘이 약해도
+## 관성으로 충분히 움직인다). 끝 뼈 뒤로 늘리는 길이(m)
+const SPRING_STIFFNESS := 3.0
+const SPRING_DRAG := 0.3
+const SPRING_GRAVITY := 0.3
+const SPRING_TAIL := 0.05
 ## 끈과 머리카락 가닥의 두께(m)
 const STRAND_RADIUS := 0.02
 ## 발 IK가 딛는 물리 레이어: world(1)와 계단 디딤판(foot_ground, 5번 = 16)
@@ -190,14 +208,21 @@ var _biased_materials: Array[ShaderMaterial] = []
 var _material_biases: Array[float] = []
 # 얼굴 메시(얼굴, 눈썹, 눈동자)와, 머리 뼈 공간에서 얼굴 정면·오른쪽 방향
 var _face_meshes: Array[GeometryInstance3D] = []
-## 1인칭인지와, 1인칭에서 보이는 팔(메시마다 위팔부터 손끝까지만 남긴 사본, 처음 1인칭이 될 때 만든다),
-## 지금 팔과 칼을 보여 주는지(공격하는 동안만)
+## 1인칭인지와, 1인칭에서 보이는 몸(메시마다 머리·목·후드·옷깃을 뺀 사본, 처음 1인칭이 될 때 만든다)과 그때 뺀 뼈
 var _first_person := false
-var _arm_meshes: Array[MeshInstance3D] = []
-var _arms_shown := false
-## 눈 뼈(왼쪽·오른쪽)와 처음 자세의 두 눈 가운데(몸 기준). 1인칭 카메라 위치를 정한다.
+var _view_meshes: Array[MeshInstance3D] = []
+var _view_hidden_bones: Dictionary[int, bool] = {}
+## 다리(골반 아래)를 가는 쪽으로 돌린 각도(몸 기준, 라디안)와, 뒤로 가서 이동 동작을 거꾸로 트는지.
+## 시선 쪽을 보며 옆·뒤로 갈 때(Player.strafing) 다리만 돌리고 윗몸은 되돌린다(_twist_legs).
+var _leg_yaw := 0.0
+var _legs_backward := false
+## 눈 뼈(왼쪽·오른쪽). 1인칭 카메라 위치와 자유 시점에서 얼굴을 가까이 볼 때의 중심을 정한다.
 var _eye_bones: Array[int] = []
-var _rest_eye := Vector3.ZERO
+## 눈알 가운데에서 눈동자까지의 깊이(m, 모델마다 잰다)
+var _eye_depth := FIRST_PERSON_EYE_DEPTH
+## 1인칭에서 보는 쪽으로 숙인 자세의 눈동자 자리(몸 기준). 숙인 자세는 그리는 프레임에만 남아서 덧입힐 때 적어 둔다.
+var _look_eye := Vector3.ZERO
+var _look_eye_ready := false
 var _face_axis := Vector3.ZERO
 var _face_right_axis := Vector3.ZERO
 ## 숨기는 뼈(눈 하이라이트)
@@ -205,6 +230,8 @@ var _hidden_bones: Array[int] = []
 # 옷자락 물리와, 옷자락이 뚫지 않을 땅
 var _cloth: SpringBoneSimulator3D
 var _cloth_ground: SpringBoneCollisionPlane3D
+## 꼬리·귀 물리(세상 기준이라 몸이 달리기 시작하거나 멈추고 돌 때 관성으로 출렁인다)
+var _springs: SpringBoneSimulator3D
 ## 사슬마다 처음 정한 처짐(중력) 세기. 달릴 때 바람만큼 키운다.
 var _cloth_gravity: Array[float] = []
 var _cloth_stiffness: Array[float] = []
@@ -291,27 +318,42 @@ func set_view_mode(mode: ViewMode) -> void:
 	visible = mode != ViewMode.HIDDEN
 	_apply_visibility()
 
-## 1인칭: 내 몸은 그림자만 남기고, 공격하는 동안만 팔(위팔부터 손끝까지)과 손에 든 무기가 보인다. 머리·목·후드·
-## 옷깃이 카메라 앞을 가리지 않고, 달리거나 서 있을 때 화면 아래에 손이 떠 보이지 않는다.
+## 1인칭: 원래 몸은 그림자만 남기고, 머리·목·후드·옷깃을 뺀 몸 사본을 그린다. 내려다보면 몸과 다리가, 휘두르면
+## 팔과 손에 든 무기가 보이고, 머리와 옷깃은 카메라 앞을 가리지 않는다.
 func set_first_person(enabled: bool) -> void:
 	if enabled == _first_person:
 		return
 	_first_person = enabled
-	if enabled and _arm_meshes.is_empty() and _skeleton != null:
-		_build_arm_meshes()
+	if enabled and _view_meshes.is_empty() and _skeleton != null:
+		_build_view_meshes()
 	_apply_visibility()
 
-## 1인칭인지 (내 화면에서 몸을 숨기고 팔만 보이는지)
+## 1인칭인지 (내 화면에서 머리를 뺀 몸만 보이는지)
 func first_person() -> bool:
 	return _first_person
 
-## 1인칭에서 보이는 팔 메시 수 (테스트용)
-func arm_mesh_count() -> int:
-	return _arm_meshes.size()
+## 1인칭에서 보이는 몸 메시 수 (테스트용)
+func view_mesh_count() -> int:
+	return _view_meshes.size()
 
-## 1인칭에서 지금 팔과 칼이 보이는지 (테스트용)
-func first_person_arms_visible() -> bool:
-	return _first_person and _arms_shown and not _arm_meshes.is_empty() and _arm_meshes[0].visible
+## 1인칭에서 지금 내 몸이 보이는지 (테스트용)
+func first_person_body_visible() -> bool:
+	return _first_person and not _view_meshes.is_empty() and _view_meshes[0].visible
+
+## 1인칭에서 이 뼈를 따르는 부분을 숨기는지 (테스트용, 1인칭 몸을 만든 뒤에만 안다)
+func first_person_hides(bone_name: StringName) -> bool:
+	return _skeleton != null and _view_hidden_bones.has(_skeleton.find_bone(bone_name))
+
+## 눈알 가운데에서 눈동자까지의 깊이(m, 테스트용)
+func eye_depth() -> float:
+	return _eye_depth
+
+## 다리를 가는 쪽으로 돌린 각도(도)와 이동 동작을 거꾸로 트는지 (테스트용)
+func leg_twist_degrees() -> float:
+	return rad_to_deg(_leg_yaw)
+
+func legs_backward() -> bool:
+	return _legs_backward
 
 ## 눈 위치(세상 좌표, 지금 동작의 자세). 자유 시점에서 얼굴을 가까이 볼 때의 중심이다.
 ## 모델이 없으면 몸 위 눈 높이(캡슐 몸).
@@ -324,14 +366,33 @@ func eye_position() -> Vector3:
 		middle += _skeleton.get_bone_global_pose(index).origin
 	return _skeleton.global_transform * (middle / _eye_bones.size())
 
-## 1인칭 카메라 자리(세상 좌표): 처음 자세의 두 눈 가운데를 몸 방향으로 돌린 곳. 높이만 지금 동작의 눈 높이를
-## 따른다(공격하며 몸을 낮추거나 뛰어오르면 시선도 따라간다). 동작이 머리를 앞뒤·좌우로 흔드는 것은 따르지 않는다.
+## 1인칭 카메라 자리(세상 좌표): 그 캐릭터의 두 눈 가운데 눈동자 자리. 1인칭에서도 몸이 보이므로 카메라가 지금
+## 동작의 눈을 따라가야 내려다본 몸과 어긋나지 않는다(예전에는 처음 자세의 눈 위치에 두어, 숙이거나 내디디면
+## 카메라가 머리 뒤에 남았다). 위아래를 보면 고개와 윗몸을 숙인 자세의 눈이다(_bend_to_look).
+## 걸음마다 흔들리는 머리는 Player가 부드럽게 따라가며 줄인다.
 func first_person_eye() -> Vector3:
 	if _skeleton == null or _eye_bones.is_empty():
 		return eye_position()
-	var point := global_transform * Vector3(_rest_eye.x, 0.0, _rest_eye.z)
-	point.y = eye_position().y
-	return point
+	if _first_person and _look_eye_ready:
+		return global_transform * _look_eye
+	return _pupil_point()
+
+## 처음 자세에서 뼈들의 가운데 (뼈대 공간)
+func _rest_middle(bones: Array[int]) -> Vector3:
+	var middle := Vector3.ZERO
+	for index in bones:
+		middle += _skeleton.get_bone_global_rest(index).origin
+	return middle / bones.size()
+
+## 지금 뼈 자세에서 두 눈 가운데의 눈동자 자리(세상 좌표): 눈 뼈(눈알 가운데)에서 얼굴 앞으로 눈동자 깊이만큼 나간 곳.
+func _pupil_point() -> Vector3:
+	var middle := Vector3.ZERO
+	for index in _eye_bones:
+		middle += _skeleton.get_bone_global_pose(index).origin
+	middle /= _eye_bones.size()
+	var head := _skeleton.get_bone_global_pose(_bone[&"head"]).basis.orthonormalized()
+	var face := (_skeleton.global_basis * (head * _face_axis)).normalized()
+	return _skeleton.global_transform * middle + face * _eye_depth
 
 
 ## 보이는 방식(view_mode)과 1인칭에 맞춰 메시마다 그릴지, 그림자만 남길지 정한다.
@@ -341,9 +402,9 @@ func _apply_visibility() -> void:
 		if node is FxSystem or node is WeaponTrail:
 			continue
 		var geometry := node as GeometryInstance3D
-		if _arm_meshes.has(geometry):
-			geometry.visible = _first_person and _arms_shown
-		elif _first_person and not (_arms_shown and _held_weapon_part(geometry)):
+		if _view_meshes.has(geometry):
+			geometry.visible = _first_person
+		elif _first_person and not _held_weapon_part(geometry):
 			geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 		else:
 			_apply_shadow_mode(geometry)
@@ -389,6 +450,10 @@ func headgear_shown() -> bool:
 ## 옷자락 물리를 쓰는지 (모델에 옷자락 뼈가 있으면)
 func has_cloth() -> bool:
 	return _cloth != null
+
+## 꼬리·귀 물리를 쓰는지
+func has_springs() -> bool:
+	return _springs != null
 
 ## 모델을 내린 높이(m, 양수). 계단에서 낮은 쪽 발에 맞춰 골반을 내린 만큼이다.
 func pelvis_drop() -> float:
@@ -463,8 +528,10 @@ func _process(delta: float) -> void:
 		for mesh in _headgear:
 			mesh.visible = _headgear_on
 		_apply_depth_biases()
-	if _cloth != null and global_position.distance_to(_last_position) > TELEPORT_DISTANCE:
-		_cloth.reset()
+	if global_position.distance_to(_last_position) > TELEPORT_DISTANCE:
+		for simulator: SpringBoneSimulator3D in [_cloth, _springs]:
+			if simulator != null:
+				simulator.reset()
 	_last_position = global_position
 	if _skeleton == null or not visible:
 		_update_weapon(delta)
@@ -560,6 +627,9 @@ func _load_model(scene: PackedScene) -> void:
 			push_warning("캐릭터 모델에 뼈 %s가 없어 자세를 만들지 않습니다." % names[role])
 			return
 		_bone[role] = index
+	# 목: 머리 뼈의 부모 (1인칭에서 숨기고, 위아래를 볼 때 숙인다)
+	var neck := skeleton.get_bone_parent(_bone[&"head"])
+	_bone[&"neck"] = neck if neck >= 0 else _bone[&"head"]
 	_skeleton = skeleton
 
 	_update_space()
@@ -581,11 +651,15 @@ func _load_model(scene: PackedScene) -> void:
 		var index := _skeleton.find_bone(bone_name)
 		if index >= 0:
 			_eye_bones.append(index)
-	if not _eye_bones.is_empty():
-		var middle := Vector3.ZERO
-		for index in _eye_bones:
-			middle += _skeleton.get_bone_global_rest(index).origin
-		_rest_eye = _body_from_skeleton * (middle / _eye_bones.size())
+	# 눈동자 뼈가 있으면 처음 자세에서 눈알 가운데 → 눈동자 깊이(몸 앞쪽 방향)를 잰다.
+	var irises: Array[int] = []
+	for bone_name in appearance.iris_bones:
+		var index := _skeleton.find_bone(bone_name)
+		if index >= 0:
+			irises.append(index)
+	if not _eye_bones.is_empty() and not irises.is_empty() and irises.size() == appearance.iris_bones.size():
+		var gap := _rest_middle(irises) - _rest_middle(_eye_bones)
+		_eye_depth = clampf((_body_from_skeleton.basis * gap).dot(FORWARD), 0.0, 0.08)
 	_setup_materials()
 	_setup_animation()
 	_setup_cloth()
@@ -694,43 +768,67 @@ static func _all_surfaces_have_material(mesh_instance: MeshInstance3D) -> bool:
 	return true
 
 
-## 1인칭에서 보일 팔을 만든다: 모델의 메시마다 위팔·아래팔·손(과 거기 매달린 소매·장갑) 뼈를 따르는 삼각형만
-## 남긴 사본. 외투 메시 하나에 몸 전체가 들어 있어 메시째로는 고를 수 없다. 사본은 원래 메시와 같은 뼈대·스킨으로
-## 움직이고, 그림자는 원래 몸이 드리우므로 드리우지 않는다. 재질은 카메라에 아주 가까운 곳을 점점이 지운다.
-func _build_arm_meshes() -> void:
-	var arm_bones: Dictionary[int, bool] = {}
-	for bone in _skeleton.get_bone_count():
-		var step := bone
-		while step >= 0:
-			if step == _bone[&"upper_arm_l"] or step == _bone[&"upper_arm_r"]:
-				arm_bones[bone] = true
-				break
-			step = _skeleton.get_bone_parent(step)
+## 1인칭에서 보일 몸을 만든다: 모델의 메시마다 머리·목·후드·옷깃 뼈를 따르는 삼각형을 뺀 사본. 외투 메시 하나에
+## 몸 전체가 들어 있어 메시째로는 고를 수 없다. 사본은 원래 메시와 같은 뼈대·스킨으로 움직이고, 그림자는 원래 몸이
+## 드리우므로 드리우지 않는다. 재질은 카메라에 아주 가까운 곳을 점점이 지운다.
+func _build_view_meshes() -> void:
+	_view_hidden_bones = _first_person_hidden_bones()
 	for node: Node in _model.find_children("*", "MeshInstance3D", true, false):
 		var source := node as MeshInstance3D
 		if source.visible and source.mesh is ArrayMesh:
-			var copy := _arm_copy(source, arm_bones)
+			var copy := _view_copy(source, _view_hidden_bones)
 			if copy != null:
-				_arm_meshes.append(copy)
+				_view_meshes.append(copy)
 
 
-## 메시에서 팔 뼈를 따르는 삼각형만 남긴 사본(원래 메시 옆에 붙인다). 팔이 없는 메시면 null.
-## 정점 세 개가 모두 팔 뼈를 절반 넘게 따르는 삼각형만 남긴다(어깨 이음매에서 잘린다).
-func _arm_copy(source: MeshInstance3D, arm_bones: Dictionary[int, bool]) -> MeshInstance3D:
+## 1인칭에서 그리지 않는 뼈: 목과 그 아래 전부(머리, 머리카락, 얼굴, 바이저)와, 팔 밖에서 목 높이쯤에 붙은 뼈와 그
+## 아래(후드, 옷깃, 집게). 카메라가 눈에 있어 이것들이 화면을 가린다. 팔(위팔부터 손끝까지)과 쇄골은 그린다.
+## 높이는 처음 자세에서 골반 → 머리 방향으로 잰다(지금 동작이 뼈대를 기울여도 같은 답이 나오게).
+func _first_person_hidden_bones() -> Dictionary[int, bool]:
+	var neck := _bone[&"neck"]
+	var up := (_skeleton.get_bone_global_rest(_bone[&"head"]).origin - _skeleton.get_bone_global_rest(_bone[&"pelvis"]).origin).normalized()
+	var threshold := _skeleton.get_bone_global_rest(neck).origin.dot(up) - FIRST_PERSON_NECK_MARGIN / maxf(_body_from_skeleton.basis.get_scale().y, 0.001)
+	var arms: Array[int] = [_bone[&"upper_arm_l"], _bone[&"upper_arm_r"]]
+	var clavicles: Array[int] = [_skeleton.get_bone_parent(arms[0]), _skeleton.get_bone_parent(arms[1])]
+	var hidden: Dictionary[int, bool] = {}
+	for bone in _skeleton.get_bone_count():
+		if _descends_from(bone, arms):
+			continue
+		var step := bone
+		while step >= 0:
+			if step == neck or (not clavicles.has(step) and _skeleton.get_bone_global_rest(step).origin.dot(up) >= threshold):
+				hidden[bone] = true
+				break
+			step = _skeleton.get_bone_parent(step)
+	return hidden
+
+
+## 뼈가 roots 가운데 하나이거나 그 아래에 매달렸는지
+func _descends_from(bone: int, roots: Array[int]) -> bool:
+	while bone >= 0:
+		if roots.has(bone):
+			return true
+		bone = _skeleton.get_bone_parent(bone)
+	return false
+
+
+## 메시에서 1인칭에 숨기는 뼈를 따르는 삼각형을 뺀 사본(원래 메시 옆에 붙인다). 남는 삼각형이 없으면 null.
+## 정점 하나라도 숨기는 뼈를 절반 넘게 따르면 그 삼각형을 뺀다(목 둘레가 깔끔하게 잘린다).
+func _view_copy(source: MeshInstance3D, hidden_bones: Dictionary[int, bool]) -> MeshInstance3D:
 	var mesh := source.mesh as ArrayMesh
-	# 정점이 가진 뼈 번호는 스킨의 연결 번호다. 연결마다 팔 뼈인지 미리 정한다.
-	var bind_is_arm: Array[bool] = []
+	# 정점이 가진 뼈 번호는 스킨의 연결 번호다. 연결마다 숨기는 뼈인지 미리 정한다.
+	var bind_hidden: Array[bool] = []
 	if source.skin != null:
 		for i in source.skin.get_bind_count():
 			var bone := source.skin.get_bind_bone(i)
 			var bind_name := source.skin.get_bind_name(i)
 			if not bind_name.is_empty():
 				bone = _skeleton.find_bone(bind_name)
-			bind_is_arm.append(arm_bones.has(bone))
+			bind_hidden.append(hidden_bones.has(bone))
 	else:
 		for bone in _skeleton.get_bone_count():
-			bind_is_arm.append(arm_bones.has(bone))
-	var arms := ArrayMesh.new()
+			bind_hidden.append(hidden_bones.has(bone))
+	var body := ArrayMesh.new()
 	var materials: Array[Material] = []
 	for surface in mesh.get_surface_count():
 		var material := source.get_active_material(surface)
@@ -750,18 +848,18 @@ func _arm_copy(source: MeshInstance3D, arm_bones: Dictionary[int, bool]) -> Mesh
 		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 		var format := mesh.surface_get_format(surface)
 		var per := 8 if format & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS else 4
-		var on_arm := PackedByteArray()
-		on_arm.resize(weights.size() / per)
-		for vertex in on_arm.size():
+		var on_hidden := PackedByteArray()
+		on_hidden.resize(weights.size() / per)
+		for vertex in on_hidden.size():
 			var amount := 0.0
 			for k in per:
 				var bind := bones[vertex * per + k]
-				if bind < bind_is_arm.size() and bind_is_arm[bind]:
+				if bind < bind_hidden.size() and bind_hidden[bind]:
 					amount += weights[vertex * per + k]
-			on_arm[vertex] = 1 if amount >= 0.5 else 0
+			on_hidden[vertex] = 1 if amount >= 0.5 else 0
 		var kept := PackedInt32Array()
 		for t in range(0, indices.size() - 2, 3):
-			if on_arm[indices[t]] and on_arm[indices[t + 1]] and on_arm[indices[t + 2]]:
+			if not (on_hidden[indices[t]] or on_hidden[indices[t + 1]] or on_hidden[indices[t + 2]]):
 				kept.append(indices[t])
 				kept.append(indices[t + 1])
 				kept.append(indices[t + 2])
@@ -770,13 +868,13 @@ func _arm_copy(source: MeshInstance3D, arm_bones: Dictionary[int, bool]) -> Mesh
 		arrays[Mesh.ARRAY_INDEX] = kept
 		# 정점 형식 중 배열만 봐서는 모르는 것(뼈 8개, 추가 UV 형식)은 그대로 넘긴다.
 		var custom_formats := ((1 << (Mesh.ARRAY_FORMAT_CUSTOM_BITS * 4)) - 1) << Mesh.ARRAY_FORMAT_CUSTOM_BASE
-		arms.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, format & (Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS | custom_formats))
+		body.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, format & (Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS | custom_formats))
 		materials.append(_near_faded(material))
-	if arms.get_surface_count() == 0:
+	if body.get_surface_count() == 0:
 		return null
 	var copy := MeshInstance3D.new()
-	copy.name = "%sArms" % source.name
-	copy.mesh = arms
+	copy.name = "%sView" % source.name
+	copy.mesh = body
 	copy.skin = source.skin
 	# 뼈대 경로는 메시 기준이다. 같은 부모 아래에 붙이므로 그대로 쓴다.
 	copy.skeleton = source.skeleton
@@ -790,18 +888,18 @@ func _arm_copy(source: MeshInstance3D, arm_bones: Dictionary[int, bool]) -> Mesh
 	return copy
 
 
-## 카메라에 아주 가까운 곳(ARM_NEAR_FADE_FROM~TO)을 점점이 지우는 재질 사본 (1인칭 팔)
+## 카메라에 아주 가까운 곳(VIEW_NEAR_FADE_FROM~TO)을 점점이 지우는 재질 사본 (1인칭 몸)
 static func _near_faded(material: Material) -> Material:
 	var faded := material.duplicate() as Material
 	var shader := faded as ShaderMaterial
 	var base := faded as BaseMaterial3D
 	if shader != null:
-		shader.set_shader_parameter(&"near_fade_from", ARM_NEAR_FADE_FROM)
-		shader.set_shader_parameter(&"near_fade_to", ARM_NEAR_FADE_TO)
+		shader.set_shader_parameter(&"near_fade_from", VIEW_NEAR_FADE_FROM)
+		shader.set_shader_parameter(&"near_fade_to", VIEW_NEAR_FADE_TO)
 	elif base != null:
 		base.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_DITHER
-		base.distance_fade_min_distance = ARM_NEAR_FADE_FROM
-		base.distance_fade_max_distance = ARM_NEAR_FADE_TO
+		base.distance_fade_min_distance = VIEW_NEAR_FADE_FROM
+		base.distance_fade_max_distance = VIEW_NEAR_FADE_TO
 	if faded.next_pass != null:
 		faded.next_pass = _near_faded(faded.next_pass)
 	return faded
@@ -844,17 +942,12 @@ func _update_face_light() -> void:
 func _setup_cloth() -> void:
 	# 무리마다 (사슬들, 돌아가는 힘, 흔들림 줄임, 처짐, 두께, 다리·땅과 부딪히는지). 망토와 후드에 매달린 끈이 있어서
 	# 망토 → 끈 순서로 계산한다. 머리카락은 다리나 땅에 닿을 일이 없다.
-	var groups: Array[Array] = [
+	var settings := _chain_settings([
 		[appearance.cloth_chains, CLOTH_STIFFNESS, CLOTH_DRAG, CLOTH_GRAVITY, CLOTH_RADIUS, true],
 		[appearance.ribbon_chains, RIBBON_STIFFNESS, RIBBON_DRAG, RIBBON_GRAVITY, STRAND_RADIUS, true],
 		[appearance.hair_chains, HAIR_STIFFNESS, HAIR_DRAG, HAIR_GRAVITY, STRAND_RADIUS, false],
-	]
-	var settings: Array[Array] = []
-	for group in groups:
-		for chain: String in group[0]:
-			var ends := chain.split(":")
-			if ends.size() == 2 and _is_chain(_skeleton.find_bone(ends[0]), _skeleton.find_bone(ends[1])):
-				settings.append([ends[0], ends[1]] + group.slice(1))
+	])
+	_setup_springs()
 	if settings.is_empty():
 		return
 	_cloth = SpringBoneSimulator3D.new()
@@ -886,6 +979,42 @@ func _setup_cloth() -> void:
 		_cloth_stiffness.append(setting[2])
 		_cloth.set_radius(i, setting[5])
 		_cloth.set_enable_all_child_collisions(i, setting[6])
+
+## 무리마다 적힌 사슬("시작 뼈:끝 뼈")을 설정 목록 [시작, 끝, 무리 값들...]으로 푼다. 사슬이 아닌 것은 뺀다.
+func _chain_settings(groups: Array[Array]) -> Array[Array]:
+	var settings: Array[Array] = []
+	for group in groups:
+		for chain: String in group[0]:
+			var ends := chain.split(":")
+			if ends.size() == 2 and _is_chain(_skeleton.find_bone(ends[0]), _skeleton.find_bone(ends[1])):
+				settings.append([ends[0], ends[1]] + group.slice(1))
+	return settings
+
+
+## 꼬리·귀(spring_chains)를 물리로 흔든다. 옷자락과 달리 세상 기준으로 계산해서, 몸이 달리기 시작하거나 멈추고 돌
+## 때 관성으로 출렁이고 걸음마다 통통 튄다(뼈대 기준으로 계산하면 원본 동작의 작은 흔들림만 받아 굳어 보였다).
+## 다리·땅과는 부딪히지 않으므로 Godot 4.5의 기준 노드 문제(충돌 모양 위치)와 상관없다.
+func _setup_springs() -> void:
+	var settings := _chain_settings([[appearance.spring_chains]])
+	if settings.is_empty():
+		return
+	_springs = SpringBoneSimulator3D.new()
+	_springs.name = "Springs"
+	_skeleton.add_child(_springs)
+	_springs.setting_count = settings.size()
+	for i in settings.size():
+		_springs.set_root_bone_name(i, settings[i][0])
+		_springs.set_end_bone_name(i, settings[i][1])
+		_springs.set_extend_end_bone(i, true)
+		_springs.set_end_bone_length(i, SPRING_TAIL)
+		_springs.set_center_from(i, SpringBoneSimulator3D.CENTER_FROM_WORLD_ORIGIN)
+		_springs.set_stiffness(i, SPRING_STIFFNESS)
+		_springs.set_drag(i, SPRING_DRAG)
+		_springs.set_gravity(i, SPRING_GRAVITY)
+		_springs.set_gravity_direction(i, Vector3.DOWN)
+		_springs.set_radius(i, STRAND_RADIUS)
+		_springs.set_enable_all_child_collisions(i, false)
+
 
 ## 끝 뼈가 시작 뼈 아래에 매달린 사슬인지. 관리자(남)의 등 끈 하나는 마디마다 등뼈에 따로 붙어 있어 사슬이 아니다.
 func _is_chain(root: int, end: int) -> bool:
@@ -1173,10 +1302,29 @@ func _update_locomotion(delta: float) -> void:
 	if next != locomotion:
 		locomotion = next
 		_tree.set(&"parameters/locomotion/transition_request", String(next))
+	_update_leg_twist(delta)
 	if NATURAL_SPEEDS.has(locomotion):
 		var natural: float = NATURAL_SPEEDS[locomotion]
 		var lowest := 0.5 if locomotion == &"walk" else 0.6
-		_tree.set(StringName("parameters/%s_speed/scale" % locomotion), clampf(_speed / natural, lowest, 2.2))
+		var rate := clampf(_speed / natural, lowest, 2.2)
+		_tree.set(StringName("parameters/%s_speed/scale" % locomotion), -rate if _legs_backward else rate)
+
+
+## 시선 쪽을 보며(Player.strafing, 1인칭) 옆·뒤로 가면 다리를 가는 쪽으로 돌릴 각도를 정한다. 뒤로 가면(110도 넘게)
+## 다리를 반대쪽으로 돌리고 이동 동작을 거꾸로 튼다. 앞으로 돌아오는 것은 70도 안쪽에서 해서 경계에서 떨지 않는다.
+## 공격·공중에서는 다리를 바로 놓는다(동작이 다리를 움직인다).
+func _update_leg_twist(delta: float) -> void:
+	var target := 0.0
+	if player.strafing and _raw_speed > 0.5 and not _airborne and _action_amount < 0.5:
+		var heading := atan2(-_move_dir.x, -_move_dir.z)
+		if absf(heading) > deg_to_rad(110.0):
+			_legs_backward = true
+		elif absf(heading) < deg_to_rad(70.0):
+			_legs_backward = false
+		target = clampf(wrapf(heading + PI, -PI, PI) if _legs_backward else heading, -LEG_TWIST_MAX, LEG_TWIST_MAX)
+	elif not player.strafing or _raw_speed <= 0.5:
+		_legs_backward = false
+	_leg_yaw = lerp_angle(_leg_yaw, target, minf(LEG_TURN_RATE * delta, 1.0))
 
 
 ## 서 있을 때 고를 반복 동작: 캐릭터 화면이면 화면용 대기(무기 보기 중이면 무기를 든 대기), 싸우는 중이면 전투 대기,
@@ -1312,12 +1460,6 @@ func _update_actions(delta: float) -> void:
 		fade = IDLE_FADE_IN if showing else (IDLE_FADE_OUT if _is_standing() else ACTION_FADE_OUT)
 	_action_amount = move_toward(_action_amount, 1.0 if showing else 0.0, delta / fade)
 	_action_showing = showing
-	# 1인칭: 공격 동작(대기 연출·회피·맞음이 아닌 것)을 보여 주는 동안만 팔과 칼을 그린다.
-	var arms := showing and not idle_clip and not NON_ATTACK_CLIPS.has(_action_clip)
-	if arms != _arms_shown:
-		_arms_shown = arms
-		if _first_person:
-			_apply_visibility()
 	_tree.set(&"parameters/action/blend_amount", _action_amount)
 	if trail != null:
 		# 원작 이펙트(칼빛)가 있는 동작은 임시 검기를 그리지 않는다.
@@ -1374,6 +1516,8 @@ func _is_playing(shot: StringName) -> bool:
 ## 애니메이션이 뼈에 적용된 뒤 부른다. 다리 IK, 얼굴 빛, 숨기는 뼈, 옷자락 중력을 덧입힌다.
 func apply_overlays() -> void:
 	_update_space()
+	_twist_legs()
+	_bend_to_look()
 	_legs_ik()
 	_update_face_light()
 	_hide_bones()
@@ -1382,6 +1526,27 @@ func apply_overlays() -> void:
 		# 옷자락이 뚫지 않을 땅: 낮은 쪽 발밑 높이
 		var floor_y := player.global_position.y + minf(foot_offsets.x, foot_offsets.y) + 0.01
 		_cloth_ground.global_transform = Transform3D(Basis.IDENTITY, Vector3(global_position.x, floor_y, global_position.z))
+
+## 다리를 가는 쪽으로 돌리고(골반, 다리와 등뼈가 붙어 있다) 윗몸은 등뼈 둘에 나눠 되돌려 시선 쪽을 보게 한다.
+func _twist_legs() -> void:
+	if absf(_leg_yaw) < 0.002:
+		return
+	_rotate_bone(&"pelvis", Vector3.UP, _leg_yaw)
+	_rotate_bone(&"spine", Vector3.UP, -_leg_yaw * 0.6)
+	_rotate_bone(&"chest", Vector3.UP, -_leg_yaw * 0.4)
+
+## 1인칭에서 위아래를 보면 고개와 윗몸을 그쪽으로 숙이고(LOOK_DOWN_SHARES, LOOK_UP_SHARES), 숙인 자세의 눈을 적어
+## 둔다(카메라 자리). 보는 각도는 내 화면에만 있어서 다른 피어에 보이는 몸은 숙이지 않는다.
+func _bend_to_look() -> void:
+	if not _first_person or _eye_bones.is_empty():
+		_look_eye_ready = false
+		return
+	var pitch := player.camera_pitch
+	var shares := LOOK_DOWN_SHARES if pitch < 0.0 else LOOK_UP_SHARES
+	for role: StringName in shares:
+		_rotate_bone(role, RIGHT, pitch * shares[role])
+	_look_eye = global_transform.affine_inverse() * _pupil_point()
+	_look_eye_ready = true
 
 ## 다리 IK. 한 발이 낮은 계단에서 골반을 내리고 발이 실제 땅에 닿도록 다리를 접는다.
 func _legs_ik() -> void:
@@ -1400,7 +1565,7 @@ func _legs_ik() -> void:
 	var level := absf(_pelvis_drop) < 0.003 and absf(foot_offsets.x) < 0.003 and absf(foot_offsets.y) < 0.003
 	if level:
 		return
-	var forward := facing()
+	var forward := facing().rotated(Vector3.UP, _leg_yaw)
 	for side: float in [-1.0, 1.0]:
 		var roles := _leg_roles(side)
 		var hip := _posed_point(roles[0])
@@ -1492,8 +1657,8 @@ func _set_global_basis(index: int, global: Basis) -> void:
 	_skeleton.set_bone_pose_rotation(index, (parent_basis.inverse() * global).get_rotation_quaternion())
 
 # ---- 무기 ----
-## 원작의 무기 자리(오른손 wep_R, 등 뒤 걸이, 왼손 wep_L)를 찾아 두고, 무기를 오른손에 쥐여 둔다(처음에는 보이지 않는다).
-## 무기 모델(타르 11)이 없으면 코드로 만든 검을 쥔다. 무기 자리가 없는 모델이면 손 뼈에 붙인다.
+## 원작의 무기 자리(오른손 wep_R, 등 뒤 걸이, 왼손 wep_L)를 찾아 두고, 고른 무기를 오른손에 쥐여 둔다(처음에는 보이지
+## 않는다). 무기 자리가 없는 모델이면 손 뼈에 붙인다.
 func _attach_weapon() -> void:
 	var mounts := {
 		WeaponPlace.HAND: appearance.weapon_hand_mount,
@@ -1508,23 +1673,48 @@ func _attach_weapon() -> void:
 			_weapon_anchors[place] = anchor
 	if not _weapon_anchors.has(WeaponPlace.BACK):
 		_weapon_anchors[WeaponPlace.BACK] = _weapon_anchors[WeaponPlace.HAND]
-	var scene := appearance.load_weapon_scene()
+	_weapon_place = WeaponPlace.HAND
+	trail = WeaponTrail.new()
+	trail.name = "WeaponTrail"
+	add_child(trail)
+	equip_weapon(player.weapon() if player != null else null)
+
+
+## 무기를 바꿔 쥔다(캐릭터 화면에서 같은 무기군의 다른 무기를 고르면). 지금 무기 자리와 나타난 정도는 그대로 둔다.
+## 무기 모델이 없으면 코드로 만든 검을 쥔다.
+func equip_weapon(weapon: WeaponData) -> void:
+	if _weapon_anchors.is_empty():
+		return
+	var weapon_id := weapon.id if weapon != null else &""
+	if _sword != null and _sword.get_meta(&"weapon_id", &"__none") == weapon_id:
+		return
+	if _sword != null:
+		_sword.get_parent().remove_child(_sword)
+		_sword.queue_free()
+	_weapon_materials.clear()
+	var scene := weapon.load_scene() if weapon != null else null
 	if scene != null:
 		_sword = scene.instantiate() as Node3D
 		_sword.name = "Weapon"
-		_sword.scale = Vector3.ONE * appearance.weapon_scale
+		_sword.scale = Vector3.ONE * appearance.weapon_scale * weapon.scale
 		for geometry: Node in _sword.find_children("*", "GeometryInstance3D", true, false):
 			(geometry as GeometryInstance3D).layers |= CHARACTER_RENDER_LAYER
 	else:
 		_sword = _build_sword()
-	_weapon_anchors[WeaponPlace.HAND].add_child(_sword)
-	_weapon_place = WeaponPlace.HAND
+	_sword.set_meta(&"weapon_id", weapon_id)
+	_weapon_anchors.get(_weapon_place, _weapon_anchors[WeaponPlace.HAND]).add_child(_sword)
 	_make_weapon_materials()
-	_sword.visible = false
-	trail = WeaponTrail.new()
-	trail.name = "WeaponTrail"
+	for material in _weapon_materials:
+		material.set_shader_parameter(&"reveal", _weapon_reveal)
+	_sword.visible = _weapon_reveal > 0.0
 	trail.weapon = _sword
-	add_child(trail)
+	if _first_person:
+		_apply_visibility()
+
+
+## 지금 쥔 무기 이름(Weapons). 코드로 만든 검이면 빈 이름.
+func weapon_id() -> StringName:
+	return _sword.get_meta(&"weapon_id", &"") if _sword != null else &""
 
 
 ## 무기 자리가 없는 모델: 손 뼈에 무기 자리를 만든다.
@@ -1588,8 +1778,9 @@ func _update_weapon(delta: float) -> void:
 	var menu := wanted == WeaponPlace.MENU or (wanted == WeaponPlace.HIDDEN and _weapon_place == WeaponPlace.MENU)
 	if wanted != WeaponPlace.HIDDEN:
 		if wanted != _weapon_place and _weapon_anchors.has(wanted):
+			var size := _sword.scale
 			_sword.reparent(_weapon_anchors[wanted], false)
-			_sword.transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * appearance.weapon_scale), Vector3.ZERO)
+			_sword.transform = Transform3D(Basis.IDENTITY.scaled(size), Vector3.ZERO)
 			_weapon_place = wanted as WeaponPlace
 			if _first_person:
 				_apply_visibility()
@@ -1603,19 +1794,16 @@ func _update_weapon(delta: float) -> void:
 
 ## 무기를 둘 자리. 동작 층의 동작을 보여 주는 중이면 그 동작의 무기 연결 정보(CharacterAppearance.weapon_timelines)를 시각에 맞춰 읽고,
 ## 아니면 이동·대기 동작의 것을 읽는다. 목록에 없는 동작이면 거둔다. 애니메이션이 없는 모델은 싸울 때 오른손에 든다.
-## 싸우는 동안(Player.in_combat)은 달리기·멈추기·회피·맞음에서도 오른손에 든 채로 둔다. 동작마다 지웠다가 다시
-## 꺼내기를 되풀이하면 부자연스러웠다(사용자 지적). 회피·맞음은 원작 자료가 잠깐 숨기지만 싸움 밖에서는 꺼내지 않는다.
+## 원작처럼 무기는 전투 동작(공격·스킬·전투 대기 등)에서만 들고, 달리기·걷기 같은 이동 중에는 거둔다(사용자 지시).
+## 싸움 밖의 회피·맞음에서는 꺼내지 않는다(원작 자료의 회피는 끝날 때 무기를 꺼낸다).
 func _wanted_weapon_place() -> int:
 	if not animated:
 		return WeaponPlace.HAND if player.in_combat or player.is_attacking() else WeaponPlace.HIDDEN
-	var fighting := player.in_combat or player.is_attacking()
-	if _action_showing and NON_ATTACK_CLIPS.has(_action_clip):
-		return WeaponPlace.HAND if fighting else WeaponPlace.HIDDEN
-	var place := appearance.weapon_place(_action_clip, _action_elapsed) if _action_showing else appearance.weapon_place(locomotion, 0.0)
-	var listed := appearance.weapon_timelines.has(_action_clip if _action_showing else locomotion)
-	if place == WeaponPlace.HIDDEN and not listed and fighting:
-		return WeaponPlace.HAND
-	return place
+	if _action_showing and NON_ATTACK_CLIPS.has(_action_clip) and not (player.in_combat or player.is_attacking()):
+		return WeaponPlace.HIDDEN
+	if _action_showing:
+		return appearance.weapon_place(_action_clip, _action_elapsed)
+	return appearance.weapon_place(locomotion, 0.0)
 
 
 ## 원작 무기 모델을 쥐었는지 (없으면 코드로 만든 검)

@@ -200,6 +200,29 @@ func test_cloth_hangs_and_stays_above_ground() -> void:
 		await _frames(1)
 
 
+func test_akekuri_tail_bounces_when_running() -> void:
+	# 원본 이동 동작에는 꼬리·귀 움직임이 없어서 달려도 굳어 있었다. 탄력 물리(spring_chains)로 흔든다.
+	if not await _spawn_with_model(&"akekuri") or not player.body.animated:
+		return
+	assert_true(player.body.has_springs(), "꼬리·귀 물리가 있다")
+	# 꼬리 끝이 꼬리가 붙은 뼈(등뼈) 기준으로 움직인 거리를 잰다. 원본 이동 동작만이면 꼬리는 등뼈에 붙박여 0이다.
+	var skeleton: Skeleton3D = player.body._skeleton
+	var tip := skeleton.find_bone("tail_base_L_a_03_jnt")
+	var base := skeleton.get_bone_parent(skeleton.find_bone("tail_base_L_a_01_jnt"))
+	var seen := {"count": 0, "first": Vector3.ZERO, "spread": 0.0}
+	player.body._springs.modification_processed.connect(func() -> void:
+		var point := skeleton.get_bone_global_pose(base).affine_inverse() * skeleton.get_bone_global_pose(tip).origin
+		if int(seen["count"]) == 0:
+			seen["first"] = point
+		seen["count"] = int(seen["count"]) + 1
+		seen["spread"] = maxf(float(seen["spread"]), (seen["first"] as Vector3).distance_to(point)))
+	intent.move = Vector2(0, 1)
+	await _frames(60)
+	intent.move = Vector2.ZERO
+	await _frames(20)
+	assert_true(float(seen["spread"]) > 0.02, "달리고 서면 꼬리가 흔들린다: %.3f" % float(seen["spread"]))
+
+
 func test_eyes_stay_still() -> void:
 	if not await _spawn_with_model() or not player.body.animated:
 		return

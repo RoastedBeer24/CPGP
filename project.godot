@@ -51,3 +51,10 @@ theme/custom_font="res://assets/fonts/noto_sans_kr/NotoSansKR-Regular.otf"
 [rendering]
 
 renderer/rendering_method="forward_plus"
+
+[shader_globals]
+
+fx_camera_fade={
+"type": "vec2",
+"value": Vector2(0.15, 0.5)
+}

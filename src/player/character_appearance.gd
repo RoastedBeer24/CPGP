@@ -14,6 +14,8 @@ extends Resource
 static var _runtime_scenes: Dictionary[String, PackedScene] = {}
 ## 실행 중에 읽은 glTF의 이미지(재질이 쓰지 않는 색 띠·마스크 포함): 파일 키 → {이미지 이름: 텍스처}
 static var _runtime_images: Dictionary[String, Dictionary] = {}
+## 읽은 아이콘: 파일 키 → 텍스처
+static var _icons: Dictionary[String, Texture2D] = {}
 
 ## 프로젝트 안의 모델 파일(.glb) 경로
 @export_file("*.glb", "*.gltf", "*.tscn") var model_path := ""
@@ -67,6 +69,9 @@ static var _runtime_images: Dictionary[String, Dictionary] = {}
 ## 머리카락 뼈 사슬(예: "hair_L_d_01_jnt:hair_L_d_04_jnt"). 이 모델은 비워 둔다. 원본 동작에 머리카락 흔들림이
 ## 이미 들어 있고, 물리를 더하면 몸을 돌 때마다 머리카락이 어색하게 휘날렸다.
 @export var hair_chains: PackedStringArray = []
+## 꼬리·귀처럼 모양을 지키며 몸놀림에 통통 튀는 뼈 사슬(예: 아케쿠리 꼬리와 귀). 원본 이동 동작(서기·걷기·달리기)과
+## 회피에는 이 뼈의 움직임이 없어서 굳어 보였다. 끝 뼈 뒤로 짧게(SPRING_TAIL) 늘려 계산한다.
+@export var spring_chains: PackedStringArray = []
 
 @export_group("재질")
 ## 얼굴 재질(얼굴, 눈썹, 눈동자). 얼굴 전체를 얼굴이 보는 방향으로 고르게 비춘다(toon.gdshader의 flatness).
@@ -118,19 +123,25 @@ static var _runtime_images: Dictionary[String, Dictionary] = {}
 ## 숨기는 뼈: 이 뼈를 따르는 정점을 한 점으로 모아 보이지 않게 한다. 눈 하이라이트(흰 마름모)는 원래 게임이
 ## 따로 움직이는데 처음 자세 그대로면 동공 밖 흰자에 떠 있다.
 @export var hidden_bones: Array[StringName] = [&"faceLfHighlightJoint", &"faceRtHighlightJoint"]
-## 눈 뼈(왼쪽·오른쪽): 1인칭 카메라를 두 눈 사이에 둔다. 없으면 정해진 눈 높이를 쓴다.
+## 눈 뼈(왼쪽·오른쪽, 눈알 가운데): 1인칭 카메라를 두 눈 사이에 둔다. 없으면 정해진 눈 높이를 쓴다.
 @export var eye_bones: Array[StringName] = [&"eyeLfJoint", &"eyeRtJoint"]
+## 눈동자 뼈(왼쪽·오른쪽): 눈알 가운데에서 눈동자까지의 깊이를 재어 1인칭 카메라를 그 캐릭터의 눈동자 자리에 둔다.
+## 없으면 정해진 깊이(PlayerBody.FIRST_PERSON_EYE_DEPTH)를 쓴다.
+@export var iris_bones: Array[StringName] = [&"eyeLf03IrissdJoint", &"eyeRt03IrissdJoint"]
 
 @export_group("소리")
 ## 원작 소리·보이스 꾸러미(zip, tools/extract_character_fx.py): 프로젝트 안 경로와 실행 파일 옆 경로
 @export var fx_path := "res://assets/characters/endministrator_f/endministrator_f_fx.zip"
 @export var fx_external_file := "characters/endministrator_f_fx.zip"
 
+@export_group("아이콘")
+## 캐릭터 고르기 아이콘(공식 초상화에서 얼굴을 잘라 낸 PNG, tools/make_icons.py). 원작 그림이라 모델처럼 비공개
+## 에셋 저장소에만 둔다. 프로젝트 안 경로와 실행 파일 옆 경로. 없으면 캐릭터 화면이 이름 첫 글자를 쓴다.
+@export var icon_path := ""
+@export var icon_external_file := ""
+
 @export_group("무기")
-## 무기 모델(.glb): 프로젝트 안 경로와, 실행 파일 옆에서 찾을 경로. 없으면 코드로 만든 임시 검을 쥔다.
-## 관리자의 무기는 원작의 타르 11(wpn_sword_0003)이다. 손잡이가 원점이고 칼날이 +Y로 뻗는다.
-@export_file("*.glb") var weapon_model_path := "res://assets/weapons/tarr_11.glb"
-@export var weapon_external_file := "weapons/tarr_11.glb"
+## 무기 모델은 고른 무기(WeaponData)에 있다. 여기에는 캐릭터마다 다른 무기 자리와 크기, 동작별 자리를 둔다.
 ## 무기를 붙일 노드(원본 모델의 무기 자리, 원작 무기 연결 정보). 싸울 때는 오른손(wep_R)에 쥐고,
 ## 무기를 꺼내는 동작의 처음에는 등 뒤 걸이에, 캐릭터 화면의 무기 보기에서는 왼손(wep_L)에 든다.
 @export var weapon_hand_mount := &"wep_R"
@@ -193,21 +204,28 @@ func load_model_scene() -> PackedScene:
 
 ## 소리 꾸러미의 실제 경로. 없으면 빈 문자열.
 func fx_file() -> String:
-	var project := ProjectSettings.globalize_path(fx_path) if not fx_path.is_empty() else ""
+	return _existing_file(fx_path, fx_external_file)
+
+
+## 캐릭터 고르기 아이콘. 없으면 null.
+func icon() -> Texture2D:
+	var file := _existing_file(icon_path, icon_external_file)
+	if file.is_empty():
+		return null
+	var key := _cache_key(file)
+	if not _icons.has(key):
+		var image := Image.load_from_file(file)
+		_icons[key] = ImageTexture.create_from_image(image) if image != null else null
+	return _icons[key]
+
+
+## 프로젝트 안 파일이 있으면 그 실제 경로, 없으면 실행 파일 옆 파일의 경로. 둘 다 없으면 빈 문자열.
+static func _existing_file(project_path: String, external_file: String) -> String:
+	var project := ProjectSettings.globalize_path(project_path) if not project_path.is_empty() else ""
 	if not project.is_empty() and FileAccess.file_exists(project):
 		return project
-	var external := executable_relative(fx_external_file)
+	var external := executable_relative(external_file)
 	return external if not external.is_empty() and FileAccess.file_exists(external) else ""
-
-
-## 무기 장면. 찾지 못하면 null이다(그러면 코드로 만든 검을 쥔다).
-func load_weapon_scene() -> PackedScene:
-	if not weapon_model_path.is_empty() and ResourceLoader.exists(weapon_model_path):
-		return load(weapon_model_path) as PackedScene
-	var file := executable_relative(weapon_external_file)
-	if file.is_empty() or not FileAccess.file_exists(file):
-		return null
-	return load_gltf_file(file)
 
 
 ## 실행 파일 폴더 기준 경로를 실제 경로로 바꾼다. 비어 있으면 빈 문자열.

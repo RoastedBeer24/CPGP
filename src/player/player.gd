@@ -59,6 +59,10 @@ const SLOW_MOTION_TIME := 0.4
 ## 자유 시점은 얼굴을 가까이 보는 것이 목적이라 카메라가 정말 머리 속에 들어갔을 때만 숨긴다.
 const CAMERA_INSIDE_DISTANCE := 0.35
 const FREE_INSIDE_DISTANCE := 0.1
+## 이펙트가 카메라 가까이에서 흐려지는 거리(m, x에서 다 지우고 y부터 다 보인다, 셰이더 전역 값 fx_camera_fade).
+## 1인칭은 카메라가 이펙트 한가운데(몸)에 있어서, 낙하 공격 착지 섬광이 화면을 하얗게 덮었다. 더 멀리서부터 흐린다.
+const FX_CAMERA_FADE := Vector2(0.15, 0.5)
+const FIRST_PERSON_FX_CAMERA_FADE := Vector2(0.5, 2.2)
 ## 휠 한 칸에 카메라 거리가 바뀌는 배율. 가까울수록 조금씩, 멀수록 크게 바뀐다.
 const ZOOM_FACTOR := 1.15
 ## 1인칭에서 자동으로 고르는 공격 대상: 카메라가 보는 쪽에서 이 각도(도) 안의 적만
@@ -105,6 +109,17 @@ var flinch_count := 0
 var flinch_side := HitSide.FRONT
 ## 머리 장비(바이저)를 쓰고 있는지. 내 플레이어는 설정에 저장된 값으로 시작한다.
 var visor_on := true
+## 든 무기(Weapons의 이름). 조종하는 피어가 정하고(내 플레이어는 설정에 저장된 고른 무기) 모든 피어에 동기화된다.
+## 비었거나 캐릭터의 무기군이 아니면 캐릭터의 처음 무기를 든다(weapon()).
+var weapon_id := &"":
+	set(value):
+		if value == weapon_id:
+			return
+		weapon_id = value
+		if is_node_ready():
+			body.equip_weapon(weapon())
+## 몸이 가는 쪽이 아니라 시선 쪽을 보는지(1인칭). 옆·뒤로 가면 몸이 다리만 가는 쪽으로 돌린다(원격 몸도).
+var strafing := false
 ## 무적(회피 직후, 궁극기·처형 중). 호스트가 적의 공격을 판정할 때 본다.
 var invulnerable := false
 ## 전투 중이면 몸이 전투 대기 동작을 한다.
@@ -252,6 +267,7 @@ func _ready() -> void:
 		_base_camera = CameraMode.FIRST_PERSON
 	if local and use_device_input:
 		visor_on = GameSettings.visor_on
+		weapon_id = GameSettings.weapon_choices.get(character_id, &"")
 		# 내 화면에서만 캐릭터(나와 동료)를 카메라 쪽에서 약하게 비춘다.
 		camera.add_child(PlayerBody.make_character_light())
 	# 카메라 팔의 길이는 직접 정한다(_update_camera: 벽에 막히면 바로 당기고 풀리면 천천히 되돌린다).
@@ -261,6 +277,7 @@ func _ready() -> void:
 	health.revived.connect(_on_revived)
 	_apply_view()
 	_update_camera(0.0)
+	body.equip_weapon(weapon())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -379,6 +396,28 @@ func set_camera_mode(mode: CameraMode, remember := true) -> void:
 			GameSettings.save()
 	camera_mode = mode
 	_apply_view()
+
+
+## 든 무기. 고른 무기가 없거나 캐릭터의 무기군이 아니면 캐릭터의 처음 무기다. 무기 목록이 비었으면 null.
+func weapon() -> WeaponData:
+	var character := Characters.find(character_id)
+	var chosen := Weapons.find(weapon_id)
+	if chosen != null and (character == null or chosen.weapon_type == character.weapon_type):
+		return chosen
+	return Weapons.find(character.default_weapon) if character != null else null
+
+
+## 무기를 바꾼다(캐릭터 화면). 캐릭터의 무기군이 아닌 무기는 들 수 없다. 내 플레이어면 고른 무기를 저장한다.
+func set_weapon(id: StringName) -> bool:
+	var character := Characters.find(character_id)
+	var chosen := Weapons.find(id)
+	if chosen == null or (character != null and chosen.weapon_type != character.weapon_type):
+		return false
+	weapon_id = id
+	if use_device_input and is_multiplayer_authority():
+		GameSettings.weapon_choices[character_id] = id
+		GameSettings.save()
+	return true
 
 
 ## 몸이 보는 방향 (수평, 길이 1)
@@ -510,6 +549,7 @@ func _physics_process(delta: float) -> void:
 
 	_timers(delta, intent)
 	reviving = intent.interact_held and is_alive() and _downed_teammate_nearby() != null
+	strafing = _first_person_aim()
 	if _hit_stop > 0.0:
 		# 맞힌 순간: 동작을 잠깐 멈춘다. 떨어지는 것만 계속한다.
 		_hit_stop = maxf(_hit_stop - delta, 0.0)
@@ -885,7 +925,7 @@ func _resolve_hit(peer: int, attack_id: StringName, index: int, origin: Vector3,
 	var flags := PackedInt32Array()
 	var energy_gain := 0.0
 	var sp_gain := 0.0
-	var power := kit.attack_power * (1.0 + bonus(&"attack")) * (1.0 + bonus(_damage_stat(attack)))
+	var power := attack_power_for(attack)
 	var stagger_scale := 1.0 + bonus(&"stagger")
 	var shatter_scale := 1.0 + bonus(&"shatter_damage")
 	for target in CombatQuery.melee(get_world_3d().direct_space_state, origin, forward, hit.reach, hit.arc, TEAM):
@@ -904,6 +944,12 @@ func _resolve_hit(peer: int, attack_id: StringName, index: int, origin: Vector3,
 		_apply_hit_results(positions, amounts, flags, energy_gain, sp_gain)
 	else:
 		_hit_results.rpc_id(peer, positions, amounts, flags, energy_gain, sp_gain)
+
+
+## 이 동작 한 번의 공격력: 캐릭터 공격력에 무기와 보상의 공격력 보너스, 동작별 피해 보너스를 곱한다.
+func attack_power_for(attack: AttackData) -> float:
+	var gear := weapon()
+	return kit.attack_power * (1.0 + bonus(&"attack") + (gear.attack_bonus if gear != null else 0.0)) * (1.0 + bonus(_damage_stat(attack)))
 
 
 ## 이 동작의 피해를 올리는 보상 수치
@@ -1584,11 +1630,13 @@ func _update_fov(delta: float) -> void:
 	camera.fov = lerpf(camera.fov, target, minf(config.fov_transition_speed * delta, 1.0))
 
 
-## 내 화면에서 내 몸을 어떻게 그릴지: 1인칭이면 몸은 그림자만 남기고 팔과 손에 든 칼만 보이고, 3인칭 카메라가
-## 벽에 밀려 머리에 붙었으면 몸 전체를 그림자만 남긴다.
+## 내 화면에서 내 몸을 어떻게 그릴지: 1인칭이면 머리·목·옷깃을 뺀 몸을 그리고(머리는 그림자만), 3인칭 카메라가
+## 벽에 밀려 머리에 붙었으면 몸 전체를 그림자만 남긴다. 이펙트가 카메라 가까이에서 흐려지는 거리도 정한다.
 func _apply_view() -> void:
 	var mine := is_multiplayer_authority()
 	body.set_first_person(mine and camera_mode == CameraMode.FIRST_PERSON and not showcase and not cinematic)
+	if mine and use_device_input:
+		RenderingServer.global_shader_parameter_set(&"fx_camera_fade", FIRST_PERSON_FX_CAMERA_FADE if body.first_person() else FX_CAMERA_FADE)
 	if mine and _camera_inside:
 		body.set_view_mode(PlayerBody.ViewMode.SHADOW_ONLY)
 	else:

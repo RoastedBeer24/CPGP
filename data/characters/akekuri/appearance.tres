@@ -9,6 +9,7 @@ external_model_file = "characters/akekuri.glb"
 headgear_meshes = Array[StringName]([])
 cloth_chains = PackedStringArray()
 ribbon_chains = PackedStringArray()
+spring_chains = PackedStringArray("tail_base_L_a_01_jnt:tail_base_L_a_03_jnt", "ear_base_L_a_01_jnt:ear_base_L_a_02_jnt", "ear_base_R_a_01_jnt:ear_base_R_a_02_jnt")
 face_materials = Array[StringName]([&"M_actor_karin_face_01", &"M_actor_karin_brow_01", &"M_actor_karin_iris_01"])
 shade_materials = Dictionary[StringName, float]({
 &"M_hairshadow_common_03": 1.0
@@ -51,8 +52,6 @@ depth_biases = Dictionary[StringName, float]({
 })
 fx_path = "res://assets/characters/akekuri/akekuri_fx.zip"
 fx_external_file = "characters/akekuri_fx.zip"
-weapon_model_path = "res://assets/weapons/edge_of_lightness.glb"
-weapon_external_file = "weapons/edge_of_lightness.glb"
 weapon_back_mount = &"GEN_wep_M_0_拖我改武器位置旋转_预览武器prefab挂这"
 weapon_menu_mount = &"wep_R"
 weapon_timelines = Dictionary[StringName, PackedFloat32Array]({
@@ -75,3 +74,5 @@ weapon_timelines = Dictionary[StringName, PackedFloat32Array]({
 &"ui_weapon_out": PackedFloat32Array(0, 3, 1.0345, 0),
 &"ultimate": PackedFloat32Array(0, 0, 6.0333, 2)
 })
+icon_path = "res://assets/characters/akekuri/akekuri_icon.png"
+icon_external_file = "characters/akekuri_icon.png"

@@ -78,7 +78,7 @@ func test_character_kits_are_consistent() -> void:
 		assert_true(kit.plunge_land.hits[0].arc >= 180.0, "낙하 공격 착지는 둘레 전체를 친다")
 	var akekuri := Characters.find(&"akekuri").kit()
 	assert_eq(akekuri.basic_chain.size(), 4, "아케쿠리는 기본 공격 4단계")
-	assert_true(akekuri.dash_attack == null, "아케쿠리는 대시 공격이 없다(원작 동작이 없다)")
+	assert_true(akekuri.dash_attack != null, "아케쿠리 대시 공격은 원작 연계 스킬(섬광 돌진)")
 	assert_true(akekuri.ultimate.rally_sp > 0.0, "궁극기 소대, 집합!은 동료에게 SP를 나눠 준다")
 	assert_true(akekuri.battle_skill.sp_per_hit > 0.0, "배틀 스킬은 맞히면 SP를 돌려받는다")
 

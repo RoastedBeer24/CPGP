@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://src/combat/weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"tarr_11"
+display_name = "타르 11"
+description = "엔드필드 공업의 표준 한손검. 균형이 좋아 다루기 쉽다."
+weapon_type = &"sword"
+rarity = 3
+model_path = "res://assets/weapons/tarr_11.glb"
+external_file = "weapons/tarr_11.glb"
+attack_bonus = 0.0

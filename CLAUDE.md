@@ -28,25 +28,27 @@
 |---|---|---|
 | M0 정리 | 완료 | 이름 변경(설치된 게임의 자동 업데이트 유지), 옛 게임 코드 삭제. 메뉴·설정·자동 업데이트·협동 연결·캐릭터 모델 처리·만화풍 셰이더는 다시 씀 |
 | M1 첫 전투 방 | 검수 대기 | 관리자(여·남) 검 5연속·대시 공격·처형·배틀 스킬(원석 결정)·궁극기(결정 파쇄)·회피(완벽한 회피)·경직, 적 3종(임시 도형 몸), 웨이브, HUD, 협동, 캐릭터 고르기 (`docs/dev/review/m1.md`) |
-| M2 적 모델 | 모델 기다림 | 사용자가 적 모델을 추출해 주면 넣는다 |
+| M2 적 모델 | 작업 예정 | 본 크러셔 적 17종 꾸러미를 받음(`!File/Bonekrusher_Complete_Assets.zip`) |
 | **M3 한 판** | **검수 대기** | 로비(캐릭터 화면 C, 출발 Enter), 방 다섯 개(배치 둘 + 보스 방), 보상 12종, 중간·최종 보스(격노), 원작 무기 타르 11·소리·보이스, 검기, 카메라 확대·축소 (`docs/dev/review/m3.md`) |
 | 원작 동작·무기 자리 | 검수 대기 | 전투 무기는 오른손(wep_R)으로 고침, 싸우는 동작에서만 무기가 나타남(칼날이 차오르고 지워짐), 무기 꺼내기·거두기, 쉬는 자세·특수 대기, 멈추기, 무거운 착지, 가벼운 피격(윗몸), 캐릭터 화면 동작·무기 보기 (`docs/dev/review/motions.md`) |
-| 시점·이펙트 다듬기 (3차 포함) | 검수 대기 | 기본 시점(3인칭 고정 거리, V로 1인칭: 팔과 칼만 보임), 자유 시점(`, 얼굴까지 확대), 벽에서 천천히 되돌리기·싸울 때 물러나기, 충격파 고리·화면 왜곡·방사 흐림, 궁극기·대시 공격 이펙트, Shift 짧게 회피·누르고 있으면 질주, Ctrl 걷기, 원작 낙하 공격, 캐릭터 화면 원작 구도 (`docs/dev/review/camera.md`) |
+| 시점·이펙트 다듬기 (3차 포함) | 검수 대기 | 기본 시점(3인칭 고정 거리, V로 1인칭), 자유 시점(`, 얼굴까지 확대), 벽에서 천천히 되돌리기·싸울 때 물러나기, 충격파 고리·화면 왜곡·방사 흐림, 궁극기·대시 공격 이펙트, Shift 짧게 회피·누르고 있으면 질주, Ctrl 걷기, 원작 낙하 공격, 캐릭터 화면 원작 구도 (`docs/dev/review/camera.md`) |
 | 원작 이펙트 | 검수 대기 | 사이트 자료로 원작 셰이더(VFXBaseV2)와 파티클 시스템을 다시 만듦: 기본 공격·처형·배틀 스킬의 칼빛·빛·연기·불꽃 (`docs/dev/effects.md`, 체크리스트는 `docs/dev/review/motions.md`) |
 | 아케쿠리 추가 (M5 일부) | 검수 대기 | 원작 아케쿠리(chr_0019_karin) 모델·동작 47개·무기(엣지 오브 라이트)·소리·보이스·이펙트·카메라, 기본 공격 4연속·배틀 스킬·궁극기(동료 SP 회복 `rally_sp`)·처형·낙하 공격 (`docs/dev/review/akekuri.md`) |
+| 1인칭·무기·캐릭터 고르기 (6차) | 검수 대기 | 1인칭에서 내 몸(머리·목·옷깃을 뺀 사본)과 손이 보이고 시점은 각 캐릭터의 눈동자(내려다보면 고개·윗몸을 숙임, 옆·뒤로 가면 다리만 돌림), 공식 초상화 아이콘으로 캐릭터 고르기, 같은 무기군 안에서 무기 고르기, 무기는 싸우는 동작에서만, 대시 공격 = 원작 연계 스킬, 아케쿠리 꼬리·귀 물리, 1인칭 이펙트 흐림 (`docs/dev/review/fp_loadout.md`) |
+| 진천우·아크라이트·포그라니치니크 (M5) | 작업 예정 | 꾸러미를 받음(`!File/Chen_Arclight_Pogranichnik_Complete_Assets.zip`: chr_0005_chen, chr_0007_ikut, chr_0029_pograni, 한손검 셋). 이름은 '첸'이 아니라 진천우 |
 | M4 거점·영구 성장 ~ M6 다듬기 | 예정 | 구상서 §6 |
 
 ### 지금 구조
 - `src/player/player.gd`: 3인칭 액션 조작. 카메라(CameraRig, 몸과 따로 돈다. `CameraMode`: 3인칭·1인칭·자유 시점), 카메라 기준 이동, 공격 연속·스킬·회피·대상 고정·쓰러짐·동료 일으키기. 동작은 `action_id`/`action_count`, 회피는 `dodge_count`로 동기화
 - `src/player/player_body.gd`: 모델·만화풍 재질·옷자락·발 IK, 이동 동작 고르기(서 있을 때는 전투 대기·쉬는 자세·캐릭터 화면 대기), 동작 층(공격·스킬·회피·맞음·쓰러짐과 대기 연출), 윗몸만 움찔하는 가벼운 피격, 무기 자리(오른손·등 뒤·왼손)와 나타나고 사라지기(`weapon.gdshader`)
-- `src/combat/`: `KitData`(캐릭터 전투 구성) → `AttackData`(동작 하나: 길이, 이어지는 시각, 내디딤 거리) → `HitData`(타격 하나: 시각, 배율, 경직, 범위, 원석 결정 효과). `Health`, `Hitbox`, `CombatQuery.melee`, `DamageNumber`, `HitSpark`
+- `src/combat/`: `KitData`(캐릭터 전투 구성) → `AttackData`(동작 하나: 길이, 이어지는 시각, 내디딤 거리) → `HitData`(타격 하나: 시각, 배율, 경직, 범위, 원석 결정 효과). `Health`, `Hitbox`, `CombatQuery.melee`, `DamageNumber`, `HitSpark`. `WeaponData`/`Weapons`(`data/weapons/*.tres`: 무기군, 모델, 공격력 보너스)
 - `src/enemies/`: `Enemy`(호스트가 판단: 쫓기 → 예고 → 맞히기 → 쉬기, 움찔·경직·원석 결정), `EnemyBody`(예고 표시, 모델 또는 도형 몸), `EnemyProjectile`, `EnemyData`/`EnemyAttackData`(`data/enemies/*.tres`)
 - `src/zones/combat_room/`: 웨이브, 방 정리, 전멸. 적은 방 안의 `EnemySpawner`가 복제한다. 씬 세 개(방 A·B, 보스 방)는 `tools/gen_combat_room.py`로 만든다
 - `src/zones/lobby/`: 로비(격납고, `tools/gen_lobby.py`). `src/run/`: 작전(`Run`, 세션의 자식): 방 차례, 보상 고르기(`RewardPool`, `data/rewards/pool.tres`), 작전 완료·실패 뒤 로비. 작전 구성은 `data/runs/first_run.tres`
 - `src/player/character_fx.gd`: 동작에 맞춘 원작 소리·보이스·이펙트(캐릭터마다 zip, `tools/extract_character_fx.py`). `weapon_trail.gd`: 원작 이펙트가 없는 동작의 임시 검기
 - `src/fx/`: 원작 이펙트. `EffectLibrary`(zip에서 읽기) → `FxEffect`(이벤트대로 놓고 재생) → `FxSystem`(파티클 계산, MultiMesh) + `FxMaterial`/`vfx_base.gdshaderinc`(원작 셰이더). 설명은 `docs/dev/effects.md`
 - `src/dev/`: `AutoPilot`(--autoplay, --autoplay=combo 제자리 연속 공격), `FrameCapture`(--capture=프레임들: 그 화면만 PNG로 저장)
-- `src/ui/character_screen.gd`(로비 캐릭터 화면), `reward_panel.gd`(보상 고르기), `hud.gd`(보스 체력, 작전 진행)
+- `src/ui/character_screen.gd`(로비 캐릭터 화면: 아래쪽 초상화 아이콘으로 캐릭터 고르기, 같은 무기군 안에서 무기 고르기), `reward_panel.gd`(보상 고르기), `hud.gd`(보스 체력, 작전 진행)
 - `src/player/characters.gd` + `data/characters/<이름>/`(character, appearance, kit): 고를 수 있는 캐릭터
 - `src/core/roster.gd`: 같은 3D 세계의 플레이어·적 목록
 
@@ -69,6 +71,8 @@ python3 tools/extract_character.py <원본_Animated.glb> <결과.glb>   # 캐릭
 python3 tools/extract_character.py "!File/Akekuri_Assets/models/Akekuri_Animated.glb" assets/characters/akekuri/akekuri.glb
 python3 tools/extract_character_fx.py "!File/Akekuri_Assets" Akekuri assets/characters/akekuri/akekuri_fx.zip
 godot --path . -- --single --autoplay=combo   # 확인용: combo(연속 공격·스킬·궁극기), plunge(낙하 공격), finisher(처형), run(달리기)
+tools/capture.sh build/screenshots/fp 120 --single --first-person --pitch=-60   # 1인칭에서 내려다보기 (--third-person: 저장된 1인칭을 무시)
+python tools/make_icons.py   # 공식 초상화(!File/Portraits/)에서 캐릭터 고르기 아이콘 만들기 (Pillow가 있는 python)
 python3 tools/measure_attack_clips.py <원본_Animated.glb> attack_01:1.4   # 공격 동작의 타격 시각과 내디딤 거리 재기
 python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장소에 올리기 (게임이 자동으로 받음)
 ```
@@ -142,7 +146,11 @@ python3 tools/publish_assets.py   # 캐릭터 모델을 비공개 에셋 저장�
 - **Python -I:** `-I`는 `PYTHONIOENCODING` 같은 환경 변수를 무시한다. 한자·한글을 콘솔에 찍을 때는 스크립트에서 `sys.stdout.reconfigure(encoding="utf-8")`를 부른다.
 - **도구 쓸 때(Claude 세션):** Bash의 heredoc 안 Python 문자열에 백슬래시(줄바꿈 표시 등)를 쓰면 실행 도구를 거치며 지워진다. 백슬래시가 든 스크립트는 Write로 파일을 만들어 실행하고, 이미 있는 파일은 Edit로 고친다.
 - **에셋 자동 업데이트:** 모델은 비공개 에셋 저장소(`RoastedBeer24/CPGP-assets`)의 릴리스 `assets`에만 올린다. 파일 목록은 `tools/publish_assets.py`의 `FILES`. 그 도구는 저장소가 공개면 거부한다. 게임은 설정의 에셋 키(GitHub 토큰)로 받는데, 키는 GitHub API에만 보낸다. 실제 파일은 다른 호스트로 넘겨받으므로 `max_redirects = 0`으로 직접 따라가며 키를 뺀다(`AssetUpdater._download`). 모델의 동작 이름이 바뀌면 옛 게임이 새 모델을 받아 깨질 수 있으니 **게임 푸시와 에셋 올리기를 함께** 한다.
-- **1인칭:** 머리 메시만 숨기면 목·후드·옷깃이 카메라 앞을 가린다(외투 메시 하나에 몸 전체가 들어 있다). 머리 뼈를 줄이는 방법은 머리카락 옷자락 물리를 망가뜨린다. 그래서 1인칭은 몸 전체를 그림자만 남기고, 팔 뼈(위팔 아래)를 따르는 삼각형만 남긴 메시 사본을 그린다(`PlayerBody._build_arm_meshes`, 처음 1인칭이 될 때 약 50ms). 카메라가 눈 위치 자체를 늦게 따라가면 달릴 때 머리 뒤로 처진다: 몸에서 눈까지의 거리만 부드럽게 따라간다(`_pivot_offset`). 1인칭에서는 몸이 카메라 방향을 보고, 공격도 보는 쪽으로 한다.
+- **1인칭:** 머리 메시만 숨기면 목·후드·옷깃이 카메라 앞을 가린다(외투 메시 하나에 몸 전체가 들어 있다). 머리 뼈를 줄이는 방법은 머리카락 옷자락 물리를 망가뜨린다. 그래서 1인칭은 원래 몸을 그림자만 남기고, 목 아래 뼈와 목 높이에 붙은 팔 밖의 뼈(후드·옷깃·집게)를 따르는 삼각형을 뺀 메시 사본을 그린다(`PlayerBody._build_view_meshes`, 처음 1인칭이 될 때 한 번). 이 모델은 쇄골이 목이 아니라 등뼈(Spine2)에 붙어 있다. 카메라는 그 캐릭터의 두 눈동자 가운데다(눈 뼈 + 눈동자 뼈 `iris_bones`로 잰 깊이, 사용자 지시: 각 캐릭터의 눈에 맞춘다). 눈 자리 그대로 내려다보면 가슴이 발을 가려서, 내려다보면 고개와 윗몸을 숙이고(`_bend_to_look`, 내 화면만) 숙인 자세의 눈을 덧입힐 때 적어 둔다. 몸 기준으로 적어야 한 프레임 늦은 값이 달릴 때 뒤처지지 않는다. 카메라를 눈 앞으로 내미는 방법은 시점이 눈에서 벗어나서 쓰지 않았다. 몸에서 눈까지의 거리만 부드럽게 따라간다(`_pivot_offset`). 1인칭에서는 몸이 카메라 방향을 보고 공격도 보는 쪽으로 한다. 옆·뒤로 가면 골반만 가는 쪽으로 돌리고 등뼈로 되돌리며, 뒤로 가면 이동 동작을 거꾸로 튼다(`_twist_legs`, `Player.strafing`이 동기화되어 원격 몸도).
+- **이펙트와 1인칭:** 이펙트가 카메라 가까이에서 흐려지는 거리는 셰이더 전역 값 `fx_camera_fade`(project.godot의 `shader_globals`)다. 1인칭은 카메라가 이펙트 한가운데(몸)에 있어서 낙하 공격 착지 섬광이 화면을 하얗게 덮었다. `Player._apply_view`가 1인칭이면 더 멀리서부터 흐리게 바꾼다.
+- **꼬리·귀 물리:** 옷자락은 뼈대 기준으로 계산해서(세상 기준이면 돌 때마다 휘날림) 몸이 달리거나 돌아도 관성이 없다. 짧은 꼬리·귀는 그러면 원작 동작의 작은 흔들림만 받아 굳어 있었다(±3mm). `spring_chains`는 따로 세상 기준(`CENTER_FROM_WORLD_ORIGIN`)으로 계산한다(충돌을 쓰지 않아 기준 노드 문제와 상관없다). 원작 이동 동작에는 꼬리·귀·머리카락 움직임이 없고 공격·스킬에는 있다.
+- **화면 확인과 저장된 1인칭:** 캡처도 사용자 설정을 읽어서, 사용자가 1인칭으로 해 두면 캡처가 1인칭으로 시작한다(앞을 보면 몸이 안 보여 캐릭터가 사라진 것처럼 보였다). 3인칭이 필요하면 `--third-person`, 1인칭에서 내려다본 모습은 `--pitch=-60`.
+- **무기 고르기와 아이콘:** 무기 모델은 캐릭터 모습이 아니라 `WeaponData`에 있다. 고른 무기는 `Player.weapon_id`(동기화, 설정의 `[loadout]`)이고, 무기군이 다르거나 없는 무기면 캐릭터의 처음 무기(`CharacterData.default_weapon`)를 든다. 캐릭터 고르기 아이콘은 사용자가 준 공식 초상화에서 자른 그림이라 모델처럼 비공개 에셋 저장소에만 올린다(`tools/make_icons.py`).
 - **낙하 공격:** 원작 시작 동작(`battle_air_atk_start`)은 몸(뿌리 뼈)이 공중 1.8m에서 1.6m 더 뛰어올랐다가 7m 아래로 내리꽂는다(원작은 이 움직임으로 캐릭터를 옮긴다). 추출할 때 뿌리 높이를 떨어지는 동작 높이로 고정하고(`ROOT_HEIGHT_FROM`), 잰 높이 곡선을 `AttackData.rise`에 넣어 캡슐이 직접 뛰어오른 뒤 `plunge_dive_speed`로 내리꽂는다. 상태는 `Player.State.PLUNGE`(시작 → 떨어지기), 땅에 닿으면 착지 동작(`plunge_land`)은 보통 공격(ACTION)으로 돈다. `tools/measure_attack_clips.py`가 높이도 찍는다.
 - **공격의 몸 회전:** 원작 공격 동작은 몸(뿌리 뼈)을 크게 돌리며 휘두르고 돌아간 채 끝나기도 한다(관리자 5타 180도, 아케쿠리 처형 두 바퀴 넘게). 원작은 이 회전으로 캐릭터를 돌린다. 동작 안에 두면 동작이 끝날 때 몸이 원래 방향으로 튀어서(사용자가 "마무리 공격이 이상하다"고 함) 추출할 때 뿌리 뼈의 좌우 회전(위쪽 축 twist)을 빼고(`TURN_LOCKED`), 같은 각도를 `AttackData.turn`에 넣어 플레이어가 직접 돈다(`tools/measure_attack_clips.py`가 `turn = ...` 줄을 찍는다). 타격과 내디딤은 시작할 때 노린 방향(`Player.action_forward`)으로 간다. 동작을 새로 뽑으면 회전도 다시 잰다.
 - **원작 이펙트 자리:** 이벤트의 `pose` 위치는 원작에서 몸이 그 시각까지 나아간 자리다. 이 게임은 플레이어가 직접 나아가므로 위치는 쓰지 않고 발밑(또는 붙일 뼈)에 놓는다(`FxEffect._place`). 이어지는 동작(낙하 공격 떨어지기·착지)은 앞 동작의 아직 나지 않은 이펙트를 버리지 않는다(`PlayerBody.CONTINUING_CLIPS`): 점프 높이에서 내리꽂으면 시작 동작의 칼빛(0.6초)보다 먼저 땅에 닿는다.

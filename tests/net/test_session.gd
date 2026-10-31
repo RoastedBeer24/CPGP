@@ -67,6 +67,26 @@ func test_host_movement_and_look_replicate_to_client() -> void:
 	assert_almost_eq(mirror.rotation.y, own.rotation.y, 0.001, "몸이 보는 방향")
 
 
+func test_first_person_and_weapon_replicate_to_client() -> void:
+	# 1인칭(시선 쪽을 보며 옆·뒤로 감)인지와 고른 무기가 다른 피어에도 가야 그 몸이 다리를 돌리고 같은 무기를 든다.
+	var host := new_peer("Host")
+	var client := new_peer("Client")
+	host.host(port)
+	client.join("127.0.0.1", port)
+	await wait_until(func() -> bool: return player_counts([host, client]) == [2, 2])
+	var own := host.get_player(1)
+	var mirror := client.get_player(1)
+	var other: WeaponData = null
+	for weapon in Weapons.of_type(Characters.find(own.character_id).weapon_type):
+		if weapon.id != own.weapon().id:
+			other = weapon
+	own.set_camera_mode(Player.CameraMode.FIRST_PERSON, false)
+	assert_true(own.set_weapon(other.id), "같은 무기군의 다른 무기")
+	assert_true(await wait_until(func() -> bool: return mirror.strafing), "1인칭인지")
+	assert_true(await wait_until(func() -> bool: return mirror.weapon().id == other.id), "고른 무기")
+	GameSettings.reset_to_defaults()
+
+
 func test_three_players_can_play_together() -> void:
 	var host := new_peer("Host")
 	var first := new_peer("ClientA")

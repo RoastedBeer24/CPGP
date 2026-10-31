@@ -111,6 +111,44 @@ hits = Array[ExtResource("3_hit")]([SubResource("hit_a4")])
 energy_per_hit = 4.0
 sp_per_hit = 10.0
 
+[sub_resource type="Resource" id="hit_dash1"]
+script = ExtResource("3_hit")
+time = 0.74
+damage = 1.5
+stagger = 20
+reach = 3
+arc = 90
+knockback = 0.6
+hit_stop = 0.07
+shake = 0.3
+
+[sub_resource type="Resource" id="hit_dash2"]
+script = ExtResource("3_hit")
+time = 1.05
+damage = 1.5
+stagger = 20
+reach = 3.2
+arc = 180
+knockback = 0.8
+hit_stop = 0.07
+shake = 0.35
+
+[sub_resource type="Resource" id="dash_attack"]
+script = ExtResource("2_attack")
+id = &"dash_attack"
+display_name = "대시 공격: 섬광 돌진"
+description = "회피 직후 공격하면 원작 연계 스킬로 힘을 모았다가 5.7m를 순간 돌진하며 두 번 벤다."
+clip = &"dash_attack"
+turn = PackedVector2Array(0, -0, 0.0333, -25.9, 0.0667, -55.3, 0.1, -93.1, 0.1333, -133, 0.1667, -168, 0.2, -198.8, 0.2333, -229.2, 0.2667, -257, 0.3, -280.6, 0.3333, -297.6, 0.3667, -309, 0.4, -317.3, 0.4333, -323.1, 0.4667, -326.8, 0.5, -329.1, 0.5333, -330.3, 0.5667, -331.2, 0.6, -332.1, 0.6333, -333.5, 0.6667, -308.2, 0.7, -188.6, 0.7333, -150.2, 0.7667, -199.5, 0.8, -247.9, 0.8333, -286.9, 0.8667, -317.1, 0.9, -339.2, 0.9333, -355.5, 0.9667, -369.1, 1, -382.7, 1.0333, -402.1, 1.0667, -438.8, 1.1, -517.1, 1.1333, -556.2, 1.1667, -586.4, 1.2, -607.6, 1.2333, -621, 1.2667, -630.1, 1.3, -637, 1.3333, -641.6, 1.3667, -644.5, 1.4, -646.6, 1.4333, -648, 1.4667, -648.9, 1.5, -649.4)
+duration = 1.35
+chain_from = 1.15
+move_cancel_from = 1.2
+turn_until = 0.15
+advance = PackedVector2Array(0, 0, 0.3, 0, 0.4, 0.09, 0.5, 0.18, 0.6, 0.3, 0.65, 0.55, 0.7, 1.13, 0.75, 3.83, 0.8, 4.88, 0.85, 5.34, 0.9, 5.6, 0.95, 5.72, 1, 5.75)
+stop_short = 1.2
+hits = Array[ExtResource("3_hit")]([SubResource("hit_dash1"), SubResource("hit_dash2")])
+energy_per_hit = 2.0
+
 [sub_resource type="Resource" id="hit_fin1"]
 script = ExtResource("3_hit")
 time = 0.47
@@ -297,6 +335,7 @@ display_name = "아케쿠리"
 max_health = 1200.0
 attack_power = 100.0
 basic_chain = Array[ExtResource("2_attack")]([SubResource("attack_1"), SubResource("attack_2"), SubResource("attack_3"), SubResource("attack_4")])
+dash_attack = SubResource("dash_attack")
 finisher = SubResource("finisher")
 battle_skill = SubResource("battle_skill")
 ultimate = SubResource("ultimate")

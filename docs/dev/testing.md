@@ -102,6 +102,8 @@ tools/screenshot.sh "" 30 build/screenshots/game.png --single   # 4번째 인자
 tools/screenshot.sh "" 330 build/screenshots/fight.png --single --autoplay --no-update   # 싸우는 화면
 tools/capture.sh build/screenshots/fx 60,90,120 --single --autoplay=combo   # 정한 프레임들만 저장 (이펙트 확인)
 tools/capture.sh build/screenshots/cam 120 --single --free-face             # 자유 시점으로 얼굴 앞 (또는 --first-person)
+tools/capture.sh build/screenshots/fp 120 --single --first-person --pitch=-60   # 1인칭으로 내려다보기 (몸·다리 확인)
+tools/capture.sh build/screenshots/run 120 --single --third-person --autoplay=run   # 설정에 1인칭이 저장돼 있어도 3인칭으로
 ```
 - 씬을 정해진 프레임 수만큼 실행하고 PNG로 저장합니다. 화면이 없는 리눅스에서는 가상 화면(Xvfb)을 씁니다.
 - **PC를 쓰는 사람을 방해하지 않습니다:** 창은 아주 작게 떴다가 곧바로 화면 밖으로 옮겨지고(포커스를 뺏지 않음), 소리를 내지 않고, 마우스를 가두지 않고, 저장된 창 설정(전체 화면 등)을 적용하지 않습니다. 그래서 화면 확인은 이 두 도구로만 하고 `godot`를 창 모드로 직접 띄우지 않습니다.

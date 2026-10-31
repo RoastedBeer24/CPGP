@@ -66,7 +66,8 @@ ROLES = {
     "attack_3": ["A_actor_{char}_battle_attack_03"],
     "attack_4": ["A_actor_{char}_battle_attack_04"],
     "attack_5": ["A_actor_{char}_battle_attack_05"],
-    "dash_attack": ["A_actor_{char}_battle_dash_attack"],
+    # 대시 공격(회피 직후 공격)은 원작 연계 스킬(크게 내달리며 베기, 소리·보이스·이펙트가 있다)을 쓴다.
+    "dash_attack": ["A_actor_{char}_battle_combo_skill"],
     "finisher": ["A_actor_{char}_battle_power_attack"],
     "skill": ["A_actor_{char}_battle_normal_skill"],
     "ultimate": ["A_actor_{char}_battle_skill_ult"],
@@ -105,7 +106,7 @@ TRIMS = {
     "attack_3": (0.0, 1.2),
     "attack_4": (0.0, 1.3),
     "attack_5": (0.0, 1.45),
-    "dash_attack": (0.0, 1.3),
+    "dash_attack": (0.0, 1.3),  # 연계 스킬
     "finisher": (0.0, 1.6),
     "skill": (0.0, 1.3),
     "ultimate": (0.0, 3.9),
@@ -120,7 +121,7 @@ TRIM_OVERRIDES = {
     "endminm": {"ultimate": (0.0, 3.3)},
     # 아케쿠리: 4타가 마무리 일격(0.6초에 3.9m 내닫기), 궁극기는 세 번째 폭발(3.97초) 뒤까지
     "karin": {"attack_1": (0.0, 1.0), "attack_2": (0.0, 1.1), "attack_3": (0.0, 1.2), "attack_4": (0.0, 1.4),
-              "finisher": (0.0, 1.7), "skill": (0.0, 1.3), "ultimate": (0.0, 4.4)},
+              "finisher": (0.0, 1.7), "skill": (0.0, 1.3), "ultimate": (0.0, 4.4), "dash_attack": (0.0, 1.5)},
 }
 
 # 제자리 동작으로 바꿀 것. 원본 공격·회피는 내디디며 몸(뿌리 뼈)이 앞으로 1~4m 나가지만,

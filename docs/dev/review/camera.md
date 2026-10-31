@@ -44,6 +44,7 @@
 - [ ] 협동: 동료가 궁극기를 쓸 때 내 카메라는 그대로인가
 
 ## 1인칭 다시 만들기 (3차)
+> 6차에서 1인칭을 다시 만들었습니다(내 몸이 보이고 시점이 각 캐릭터의 눈). 지금 확인할 것은 [fp_loadout.md](fp_loadout.md)에 있습니다.
 > 예전 1인칭은 카메라가 눈을 늦게 따라가서 달리면 머리 뒤로 처졌고, 숨긴 머리 아래로 목·후드·옷깃이 화면을
 > 가렸습니다. 공격 동작이 몸을 크게 돌리면 외투가 화면을 덮었습니다.
 - [ ] 1인칭에서 달리거나 질주해도 목·옷깃·머리카락이 화면에 보이지 않는가
@@ -114,9 +115,9 @@
 | 3인칭 거리 | 평소 4.2m, 싸우는 중 5.0m(천천히 바뀜), 어깨 높이 1.45m | `data/player/default_movement.tres` |
 | 벽에서 돌아오기 | 막히면 바로 당기고, 풀리면 초속 3m로 되돌림 | `camera_return_speed` |
 | 자유 시점 범위 | 0.18m(얼굴 앞)~18m, 0.8m보다 가까우면 얼굴 중심, 3m보다 멀면 몸 가운데 | `camera_min_distance` 등 |
-| 1인칭 | 처음 자세의 두 눈 사이(몸을 따라 바로 움직이고, 높이만 동작을 부드럽게 따름)에서 보고, 몸은 그림자만 남기고 팔(위팔부터 손끝)과 손에 든 칼만 그림 | `CharacterAppearance.eye_bones`, `PlayerBody._build_arm_meshes` |
+| 1인칭 | (6차에서 바뀜) 지금 동작의 두 눈동자 가운데에서 보고, 머리·목·후드·옷깃을 뺀 몸을 그림 | `CharacterAppearance.eye_bones`·`iris_bones`, `PlayerBody._build_view_meshes` |
 | 1인칭 조준 | 몸이 늘 카메라가 보는 쪽을 보고, 자동으로 노리는 적은 좌우 45도 안. 처형만 그 적 쪽으로 시선이 돎 | `Player.FIRST_PERSON_TARGET_ANGLE` |
-| 1인칭 가까운 곳 지우기 | 팔은 카메라 0.22m 안부터 점점이 지워 0.1m에서 다 지움, 이펙트는 0.5m 안부터 흐려져 0.15m에서 사라짐 | `PlayerBody.ARM_NEAR_FADE_*`, `vfx_base.gdshaderinc`의 `camera_fade_*` |
+| 1인칭 가까운 곳 지우기 | (6차에서 바뀜) 몸은 카메라 0.18m 안부터 점점이 지워 0.08m에서 다 지움, 이펙트는 1인칭에서 2.2m 안부터 흐려져 0.5m에서 사라짐 | `PlayerBody.VIEW_NEAR_FADE_*`, `Player.FIRST_PERSON_FX_CAMERA_FADE` |
 | 캐릭터 화면 구도 | 원작 카메라 자리(첫 화면 overview: 앞 3.5m·시야각 20도, 무기 보기 weapon: 시야각 45도) 그대로, 0.6초에 걸쳐 옮겨 감. 첫 화면만 카메라를 옆으로 옮겨 소개 칸 왼쪽 빈 곳 가운데에 둠(방향은 그대로) | `fx.json`의 `camera_poses`, `Player.SHOWCASE_*` |
 | 캐릭터 화면 휠 | 끝까지 다가가면 얼굴 앞 0.9m, 끝까지 물러나면 원작 자리에서 3m 더 뒤 | `Player.SHOWCASE_FACE_DISTANCE`, `SHOWCASE_BACK_DISTANCE` |
 | 바이저와 눈썹 | 바이저를 쓰면 눈썹·속눈썹을 앞머리 위로 당기는 것(3.5cm)을 끔 | `CharacterAppearance.depth_biases` |
@@ -124,10 +125,10 @@
 | 낙하 공격 높이 | 원작 동작의 몸 높이 그대로: 0.1초 웅크림 → 0.35초에 1.6m(남 1.9m) 위 → 0.55초부터 내리꽂음 | `kit.tres`의 `plunge_start.rise` |
 | 낙하 공격 속도·타격 | 내리꽂는 속도 초속 24m(원작은 30~50m), 착지 타격은 둘레 3.2m·배율 2.2·경직 25, 착지 동작 1초 | `plunge_dive_speed`, `kit.tres`의 `hit_plunge`·`plunge_land` |
 | 낙하 공격 조건 | 땅에서 떨어진 지 0.1초가 지난 공중이면 어디서든(낮아도 먼저 뛰어오름) | `Player._can_plunge` |
-| 1인칭 팔 | 공격 동작 중에만 팔과 칼을 그림(대기·이동·회피·맞음 중에는 숨김), 얼굴 앞 6~14cm에서 점점이 지움 | `PlayerBody._arms_shown`, `ARM_NEAR_FADE_*` |
+| 1인칭 팔 | (6차에서 바뀜) 몸 전체가 늘 보임 | `PlayerBody._build_view_meshes` |
 | 공격의 몸 회전 | 원작 동작의 몸 회전을 캐릭터가 직접 돌고(타격·내디딤은 시작할 때 노린 쪽), 다음 공격은 초속 25라디안(180도 0.13초)으로 돌아섬 | `kit.tres`의 `turn`, `Player.ACTION_TURN_SPEED` |
 | 1타 길이 | 0.85초 → 관리자(여) 1.4초·관리자(남) 1.2초 (이어 치기·이동으로 끊는 시각은 그대로) | `kit.tres`의 `attack_1` |
-| 무기 들고 있기 | 싸우는 동안(공격 뒤 6초)은 이동·회피·맞음에도 오른손, 사라지는 데 0.5초(원작), 거두는 동작 0.7초부터 지움 | `PlayerBody._wanted_weapon_place`, `WEAPON_VANISH_TIME` |
+| 무기 들고 있기 | (6차에서 바뀜) 싸우는 동작에서만 들고, 달리기·걷기에서는 거둠. 사라지는 데 0.5초(원작), 거두는 동작 0.7초부터 지움 | `PlayerBody._wanted_weapon_place`, `WEAPON_VANISH_TIME` |
 | 낙하 공격 착지 흔들림 | 적을 맞히지 않아도 0.45 | `Player.PLUNGE_LAND_SHAKE` |
 | 이펙트 밝기 상한 | 1.5 → 4.0 (빛 번짐이 잘 받게) | `vfx_particle.gdshaderinc`의 `max_brightness` |
 | 화면 왜곡·방사 흐림 | 원작 재질 자료가 비어 있어 비슷하게 만듦(왜곡 세기 0.035, 흐림 0.18) | `vfx_refract.gdshaderinc`, `vfx_blur.gdshaderinc` |

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://src/combat/weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = &"edge_of_lightness"
+display_name = "O.B.J. 엣지 오브 라이트"
+description = "아케쿠리의 전용 한손검. 가볍고 날이 서 있어 공격력이 조금 더 높다."
+weapon_type = &"sword"
+rarity = 4
+model_path = "res://assets/weapons/edge_of_lightness.glb"
+external_file = "weapons/edge_of_lightness.glb"
+attack_bonus = 0.08

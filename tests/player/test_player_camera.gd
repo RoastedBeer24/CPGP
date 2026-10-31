@@ -35,14 +35,45 @@ func test_first_person_puts_camera_at_the_eyes() -> void:
 	assert_eq(player.camera_mode, Player.CameraMode.FIRST_PERSON)
 	assert_true(player.camera_length() < 0.05, "1인칭은 카메라 팔이 없다: %s" % player.camera_length())
 	assert_true(player.camera.global_position.distance_to(player.body.first_person_eye()) < 0.05, "눈 위치에서 본다")
-	assert_true(player.body.first_person(), "내 몸을 숨기고 팔만 보인다")
+	assert_true(player.body.first_person(), "머리를 뺀 내 몸이 보인다")
 	if player.body.has_model:
-		assert_true(player.body.arm_mesh_count() > 0, "팔 메시를 만든다")
+		assert_true(player.body.view_mesh_count() > 0, "1인칭 몸 메시를 만든다")
+		assert_true(player.body.first_person_body_visible(), "서 있어도 내 몸이 보인다")
+		var look := player.body.appearance
+		assert_true(player.body.first_person_hides(look.head_bone), "머리는 숨긴다")
+		for bone: StringName in [look.right_hand_bone, look.left_upper_arm_bone, look.chest_bone, look.left_thigh_bone, look.right_foot_bone]:
+			assert_false(player.body.first_person_hides(bone), "몸·팔·다리는 보인다: %s" % bone)
 	player.toggle_first_person()
 	await _frames(120)
 	assert_eq(player.camera_mode, Player.CameraMode.THIRD_PERSON)
 	assert_false(player.body.first_person())
 	assert_almost_eq(player.camera_length(), player.config.camera_distance, 0.1, "3인칭으로 돌아간다")
+
+
+func test_first_person_camera_sits_at_each_characters_eyes() -> void:
+	# 시점은 캐릭터마다 그 모델의 눈동자 자리다(키가 큰 관리자(남)는 더 높다).
+	var heights: Dictionary[StringName, float] = {}
+	var slot := 0
+	for character in Characters.all():
+		var other := PLAYER_SCENE.instantiate() as Player
+		other.character_id = character.id
+		other.use_device_input = false
+		other.intent_override = PlayerIntent.new()
+		slot += 1
+		other.position = Vector3(slot * 3.0, 0, 6)
+		add_child_autofree(other)
+		await _frames(20)
+		if not other.body.has_model:
+			continue
+		other.toggle_first_person()
+		await _frames(60)
+		var depth := other.body.eye_depth()
+		assert_true(depth > 0.02 and depth < 0.06, "%s: 눈알 가운데에서 눈동자까지 %s m" % [character.id, depth])
+		var eye := other.body.first_person_eye()
+		assert_true(other.camera.global_position.distance_to(eye) < 0.05, "%s: 카메라가 눈에 있다" % character.id)
+		heights[character.id] = eye.y - other.global_position.y
+	if heights.has(&"endministrator_m") and heights.has(&"endministrator_f"):
+		assert_true(heights[&"endministrator_m"] > heights[&"endministrator_f"] + 0.05, "키 큰 캐릭터는 시점이 높다: %s" % heights)
 
 
 func test_first_person_camera_keeps_up_when_running() -> void:
@@ -64,14 +95,35 @@ func test_first_person_body_faces_where_you_look() -> void:
 	intent.move = Vector2(-1, 0)
 	await _frames(10)
 	assert_true(player.facing().dot(Vector3.RIGHT) > 0.99, "옆으로 가도 보는 쪽을 본다: %s" % player.facing())
-	if player.body.animated:
-		assert_false(player.body.first_person_arms_visible(), "걷고 서 있을 때는 팔이 화면 아래에 떠 보이지 않는다")
 	intent.attack_pressed = true
 	await _frames(3)
 	assert_not_null(player.current_action(), "공격한다")
 	assert_true(player.facing().dot(Vector3.RIGHT) > 0.99, "보는 쪽으로 공격한다: %s" % player.facing())
 	if player.body.animated:
-		assert_true(player.body.first_person_arms_visible(), "공격하는 동안은 휘두르는 팔과 칼이 보인다")
+		assert_true(player.body.first_person_body_visible(), "공격하는 동안에도 몸과 휘두르는 팔이 보인다")
+
+
+func test_first_person_legs_follow_movement() -> void:
+	# 1인칭은 몸이 시선 쪽을 본다. 옆으로 가면 다리만 가는 쪽으로 돌리고, 뒤로 가면 이동 동작을 거꾸로 튼다
+	# (예전에는 옆걸음에도 앞으로 뛰는 다리가 보였다).
+	assert_false(player.strafing, "3인칭은 가는 쪽을 본다")
+	player.toggle_first_person()
+	intent.move = Vector2(1, 0)
+	await _frames(40)
+	assert_true(player.strafing, "1인칭은 시선 쪽을 보며 움직인다")
+	if not player.body.animated:
+		return
+	assert_almost_eq(player.body.leg_twist_degrees(), -90.0, 8.0, "오른쪽으로 가면 다리가 오른쪽을 본다")
+	assert_false(player.body.legs_backward())
+	intent.move = Vector2(0, -1)
+	await _frames(40)
+	assert_true(player.body.legs_backward(), "뒤로 가면 이동 동작을 거꾸로 튼다")
+	assert_almost_eq(player.body.leg_twist_degrees(), 0.0, 8.0, "곧장 뒤로 가면 다리는 앞을 본 채 뒷걸음질")
+	intent.move = Vector2.ZERO
+	player.toggle_first_person()
+	await _frames(40)
+	assert_false(player.strafing, "3인칭은 가는 쪽을 본다")
+	assert_almost_eq(player.body.leg_twist_degrees(), 0.0, 2.0, "다리를 바로 놓는다")
 
 
 func test_free_view_zooms_close_to_the_face() -> void:

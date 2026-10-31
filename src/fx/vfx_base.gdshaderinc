@@ -60,9 +60,9 @@ uniform bool soft_enabled = false;
 uniform float soft_bias = 0.0;
 uniform float soft_distance = 1.0;
 uniform sampler2D depth_texture : hint_depth_texture, filter_nearest;
-// 카메라 바로 앞의 판은 흐리게 한다(m): 1인칭이나 얼굴까지 당긴 자유 시점에서 몸에 붙은 이펙트가 화면을 덮지 않게.
-uniform float camera_fade_from = 0.15;
-uniform float camera_fade_to = 0.5;
+// 카메라 바로 앞의 판은 흐리게 한다(m, x에서 다 지우고 y부터 다 보인다): 얼굴까지 당긴 자유 시점에서 몸에 붙은
+// 이펙트가 화면을 덮지 않게. 1인칭은 카메라가 이펙트 한가운데(몸)에 있어서 더 멀리서부터 흐린다(Player._apply_view).
+global uniform vec2 fx_camera_fade;
 
 
 // UV 만들기: 가중치(x 첫 UV, y 둘째 UV, z 극좌표, w 화면 UV)로 섞고, 흐르는 속도·커스텀 데이터로 밀고, 가운데를 축으로
@@ -158,7 +158,7 @@ void fragment() {
 		float scene_depth = -scene.z / scene.w;
 		a *= clamp((scene_depth + VERTEX.z + soft_bias) / max(soft_distance, 0.0001), 0.0, 1.0);
 	}
-	a *= smoothstep(camera_fade_from, camera_fade_to, length(VERTEX));
+	a *= smoothstep(fx_camera_fade.x, fx_camera_fade.y, length(VERTEX));
 	ALBEDO = clamp(rgb, vec3(0.0), vec3(max_brightness));
 	ALPHA = clamp(a, 0.0, 1.0);
 }

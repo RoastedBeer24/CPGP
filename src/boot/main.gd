@@ -15,7 +15,9 @@ extends Node
 ##   godot --path . -- --single --character-weapon   # 캐릭터 화면에서 무기 보기를 켠 채로 시작 (화면 확인용)
 ##   --capture=700,720,740 --capture-dir=폴더    # 그 프레임들의 화면을 PNG로 저장하고 끝냄 (화면 확인용, FrameCapture)
 ##   --first-person / --free-face                # 1인칭으로, 또는 자유 시점으로 얼굴 앞에서 시작 (화면 확인용, 저장 안 함)
-##   --no-update                                 # 자동 업데이트를 하지 않음
+##   --third-person                              # 설정에 1인칭이 저장돼 있어도 3인칭으로 시작 (화면 확인용, 저장 안 함)
+##   --pitch=-50                                 # 카메라 위아래 각도(도)로 시작, --autoplay=run은 이 각도를 지킨다 (화면 확인용)
+##   --no-update                                # 자동 업데이트를 하지 않음
 ##   --update-url=http://127.0.0.1:8000/latest   # 업데이트 확인 주소 바꾸기 (시험용)
 ##
 ## 내보낸 Windows 게임은 켤 때 GitHub 릴리스에서 새 버전을 찾아 받는다(Updater).
@@ -174,21 +176,36 @@ func _on_player_spawned(player: Player) -> void:
 			hud.character_screen.toggle_weapon.call_deferred()
 	if args.has("--first-person") and player.is_multiplayer_authority():
 		player.set_camera_mode(Player.CameraMode.FIRST_PERSON, false)
+	if args.has("--third-person") and player.is_multiplayer_authority():
+		player.set_camera_mode(Player.CameraMode.THIRD_PERSON, false)
 	if args.has("--free-face") and player.is_multiplayer_authority():
 		# 자유 시점으로 얼굴 앞 0.25m에서 본다.
 		player.set_camera_mode(Player.CameraMode.FREE, false)
 		player.camera_distance = 0.25
 		player.camera_yaw = player.rotation.y + PI
 		player.camera_pitch = 0.0
+	var pitch := _command_line_pitch(args)
+	if not is_nan(pitch) and player.is_multiplayer_authority():
+		player.camera_pitch = deg_to_rad(pitch)
 	if autoplay and player.is_multiplayer_authority():
 		var pilot := AutoPilot.new()
 		pilot.name = "AutoPilot"
 		pilot.player = player
+		if not is_nan(pitch):
+			pilot.run_pitch = deg_to_rad(pitch)
 		pilot.combo_only = OS.get_cmdline_user_args().has("--autoplay=combo")
 		pilot.run_only = OS.get_cmdline_user_args().has("--autoplay=run")
 		pilot.plunge_only = OS.get_cmdline_user_args().has("--autoplay=plunge")
 		pilot.finisher_only = OS.get_cmdline_user_args().has("--autoplay=finisher")
 		player.add_child(pilot)
+
+
+## 명령줄로 정한 카메라 위아래 각도(--pitch=도). 없으면 NAN.
+static func _command_line_pitch(args: PackedStringArray) -> float:
+	for arg in args:
+		if arg.begins_with("--pitch="):
+			return float(arg.trim_prefix("--pitch="))
+	return NAN
 
 
 func _on_session_ended(reason: String) -> void:

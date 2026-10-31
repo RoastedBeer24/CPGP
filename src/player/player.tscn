@@ -78,6 +78,12 @@ properties/14/replication_mode = 2
 properties/15/path = NodePath(".:flinch_side")
 properties/15/spawn = true
 properties/15/replication_mode = 2
+properties/16/path = NodePath(".:weapon_id")
+properties/16/spawn = true
+properties/16/replication_mode = 2
+properties/17/path = NodePath(".:strafing")
+properties/17/spawn = true
+properties/17/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_health"]
 properties/0/path = NodePath("Health:current")

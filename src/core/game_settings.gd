@@ -112,6 +112,8 @@ static var first_person := false
 static var free_view_toggle := false
 ## 걷기 키: false면 누르고 있는 동안만(기본), true면 눌러서 켜고 끈다.
 static var walk_toggle := false
+## 캐릭터마다 고른 무기: 캐릭터 이름 → 무기 이름(Weapons). 없으면 캐릭터의 처음 무기.
+static var weapon_choices: Dictionary[StringName, StringName] = {}
 ## 에셋 키: 비공개 에셋 저장소(캐릭터 모델)를 읽는 GitHub 토큰. 비어 있으면 에셋을 받지 않는다(AssetUpdater).
 static var asset_key := ""
 
@@ -138,6 +140,7 @@ static func reset_to_defaults() -> void:
 	first_person = false
 	free_view_toggle = false
 	walk_toggle = false
+	weapon_choices = {}
 	asset_key = ""
 
 
@@ -207,6 +210,9 @@ static func load_settings() -> void:
 	first_person = bool(config.get_value("game", "first_person", first_person))
 	free_view_toggle = bool(config.get_value("controls", "free_view_toggle", free_view_toggle))
 	walk_toggle = bool(config.get_value("controls", "walk_toggle", walk_toggle))
+	if config.has_section("loadout"):
+		for character in config.get_section_keys("loadout"):
+			weapon_choices[StringName(character)] = StringName(str(config.get_value("loadout", character, "")))
 	asset_key = str(config.get_value("game", "asset_key", asset_key)).strip_edges()
 
 
@@ -214,7 +220,7 @@ static func load_settings() -> void:
 static func save() -> Error:
 	var config := ConfigFile.new()
 	config.load(path)
-	for section: String in ["audio", "display", "graphics", "controls", "keys", "game"]:
+	for section: String in ["audio", "display", "graphics", "controls", "keys", "game", "loadout"]:
 		if config.has_section(section):
 			config.erase_section(section)
 	for bus in AUDIO_BUSES:
@@ -233,6 +239,8 @@ static func save() -> Error:
 	config.set_value("controls", "fov", fov)
 	config.set_value("controls", "free_view_toggle", free_view_toggle)
 	config.set_value("controls", "walk_toggle", walk_toggle)
+	for character: StringName in weapon_choices:
+		config.set_value("loadout", String(character), String(weapon_choices[character]))
 	for action: StringName in key_overrides:
 		config.set_value("keys", String(action), key_overrides[action])
 	config.set_value("game", "character_id", String(character_id))
