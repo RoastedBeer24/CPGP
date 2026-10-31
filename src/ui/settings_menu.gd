@@ -219,6 +219,9 @@ func _build_graphics(rows: VBoxContainer) -> void:
 		func(index: int) -> void:
 			GameSettings.shadow_quality = index as GameSettings.ShadowQuality
 			GameSettings.apply_graphics(get_tree().root))
+	_add_options(rows, "이펙트 양", ["낮음", "보통", "높음"], GameSettings.effect_quality,
+		func(index: int) -> void: GameSettings.effect_quality = index as GameSettings.EffectQuality)
+	_add_note(rows, "스킬·궁극기 이펙트의 파티클 수입니다. 궁극기에서 프레임이 떨어지면 낮추세요(다음 이펙트부터 바뀝니다).")
 
 
 func _build_controls(rows: VBoxContainer) -> void:

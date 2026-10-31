@@ -81,6 +81,8 @@ static func _parse(glb: PackedByteArray, particles: PackedByteArray) -> Effect:
 			if node == null or not root.is_ancestor_of(node):
 				continue
 			system["node_path"] = root.get_path_to(node)
+			# 곡선 표는 읽을 때(배경 스레드) 미리 만들어 둔다. 처음 틀 때 만들면 그 프레임이 멈칫한다.
+			FxSystem.compile(system)
 			effect.systems.append(system)
 	for node: Node in root.find_children("*", "", true, false):
 		node.owner = root

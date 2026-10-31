@@ -127,6 +127,8 @@ var strafing := false
 var invulnerable := false
 ## 전투 중이면 몸이 전투 대기 동작을 한다.
 var in_combat := false
+## true면 늘 싸우는 중으로 친다(화면 확인용, 명령줄 --combat: 전투 대기 자세와 무기·소품을 본다)
+var stay_in_combat := false
 ## 쓰러진 동료를 일으키는 중인지 (F를 누르고 있음)
 var reviving := false
 ## 이번 작전에서 고른 보상(RewardData.id). 조종하는 피어가 고르고, 호스트는 피해 계산과 최대 체력에 쓴다.
@@ -582,7 +584,7 @@ func _physics_process(delta: float) -> void:
 	if state == State.GROUND or state == State.AIR:
 		state = State.GROUND if is_on_floor() else State.AIR
 	sp = minf(sp + kit.sp_regen * (1.0 + bonus(&"sp_regen")) * delta, kit.max_sp)
-	if _enemy_alerted_nearby():
+	if _enemy_alerted_nearby() or stay_in_combat:
 		_combat_left = maxf(_combat_left, ALERT_COMBAT_TIME)
 	in_combat = _combat_left > 0.0
 	_update_fov(delta)

@@ -101,6 +101,36 @@ func test_preloader_jobs_keep_their_resources() -> void:
 	preloader.free()
 
 
+func test_spawned_character_effects_go_to_the_background() -> void:
+	# 플레이어가 생기면 그 캐릭터의 꾸러미를 배경 스레드의 맨 앞으로 넘긴다(주 스레드가 이펙트를 한 프레임에 하나씩
+	# 읽으면 프레임마다 수십 ms 멈칫했다). 스레드가 이미 일을 마치고 쉬고 있어도 다시 띄운다.
+	var zip_path := ProjectSettings.globalize_path("user://test_prioritize_fx.zip")
+	var packer := ZIPPacker.new()
+	packer.open(zip_path)
+	packer.start_file("fx.json")
+	packer.write_file(JSON.stringify({"roles": {}}).to_utf8_buffer())
+	packer.close_file()
+	packer.close()
+	CharacterFx._packages.clear()
+	var preloader := AssetPreloader.new()
+	add_child_autofree(preloader)
+	preloader.start([func() -> void: pass])
+	await _until_done(preloader)
+	assert_true(preloader.is_done(), "처음 일을 마치고 쉰다")
+	assert_true(AssetPreloader.prioritize_package(zip_path), "미리 읽기 노드가 받는다")
+	await _until_done(preloader)
+	assert_true(CharacterFx._packages.has(zip_path), "쉬던 스레드가 다시 떠서 꾸러미를 읽었다")
+	CharacterFx._packages.clear()
+	DirAccess.remove_absolute(zip_path)
+
+
+func _until_done(preloader: AssetPreloader) -> void:
+	var deadline := Time.get_ticks_msec() + 10000
+	while not preloader.is_done() and Time.get_ticks_msec() < deadline:
+		OS.delay_msec(5)
+		await tree.process_frame
+
+
 func test_runtime_gltf_textures_get_mipmaps() -> void:
 	# 실행 중에 읽는 glTF의 그림은 텍스처로 만들기 전에 밉맵을 넣는다(다시 꺼내는 호출은 배경 스레드에서 멈출 수 있다).
 	var root := Node3D.new()

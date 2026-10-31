@@ -37,6 +37,7 @@
 | 1인칭·무기·캐릭터 고르기 (6차) | 검수 대기 | 1인칭에서 내 몸(머리·목·옷깃을 뺀 사본)과 손이 보이고 시점은 각 캐릭터의 눈동자(내려다보면 고개·윗몸을 숙임, 옆·뒤로 가면 다리만 돌림), 공식 초상화 아이콘으로 캐릭터 고르기, 같은 무기군 안에서 무기 고르기, 무기는 싸우는 동작에서만, 대시 공격 = 원작 연계 스킬, 아케쿠리 꼬리·귀 물리, 1인칭 이펙트 흐림 (`docs/dev/review/fp_loadout.md`) |
 | 진천우·아크라이트·포그라니치니크 (M5) | 검수 대기 | 원작 chr_0005_chen·chr_0007_ikut·chr_0029_pograni의 모델·동작 49개·전용 한손검(숭배의 시선, 십이문, 끝없는 방랑)·소리·보이스·이펙트·궁극기 카메라. 전투 구성은 `tools/draft_kit.py`가 원작 동작을 재서 만든 초안. 이름은 '첸'이 아니라 진천우 (`docs/dev/review/new_characters.md`) |
 | 렉·적 움직임·소품 (8차) | 검수 대기 | 모델을 BC7 텍스처의 Godot 장면(.scn)으로 구워 올림(그래픽 메모리 약 4분의 1, 읽기 1초 → 0.2초), 게임을 켜면 배경 스레드가 모델·소리·이펙트·소품을 미리 읽음, 적 공격은 원작 몸 이동·회전 곡선대로(맞는 순간 확 튀지 않음), 소품도 칼처럼 차오르고 지워짐, 진천우 쉬는 자세에서 소품 숨김, 포그라니치니크 외투·진천우 치마 옷자락과 꼬리 물리 (`docs/dev/review/new_characters.md`의 8차 항목) |
+| 소품·최적화 (9차) | 검수 대기 | 실행 중에 읽은 모델의 빠진 무기·소품 자리 트랙을 처음 자세로 채움(진천우 칼집 통이 몸 앞으로 솟던 문제), 진천우 꼬리가 땅까지 처지지 않게, 원작 이펙트 파티클 계산을 곡선 표로 바꿔 약 5배 빠르게(포그라니치니크 궁극기 72ms → 16ms), 플레이어가 생기면 그 이펙트를 배경 스레드 맨 앞으로, 설정 "이펙트 양", 성능 기록 도구(`tools/perf.sh`) (`docs/dev/review/new_characters.md`의 9차 항목) |
 | M4 거점·영구 성장 ~ M6 다듬기 | 예정 | 구상서 §6 |
 
 ### 지금 구조
@@ -48,7 +49,7 @@
 - `src/zones/lobby/`: 로비(격납고, `tools/gen_lobby.py`). `src/run/`: 작전(`Run`, 세션의 자식): 방 차례, 보상 고르기(`RewardPool`, `data/rewards/pool.tres`), 작전 완료·실패 뒤 로비. 작전 구성은 `data/runs/first_run.tres`
 - `src/player/character_fx.gd`: 동작에 맞춘 원작 소리·보이스·이펙트(캐릭터마다 zip, `tools/extract_character_fx.py`). `weapon_trail.gd`: 원작 이펙트가 없는 동작의 임시 검기
 - `src/fx/`: 원작 이펙트. `EffectLibrary`(zip에서 읽기) → `FxEffect`(이벤트대로 놓고 재생) → `FxSystem`(파티클 계산, MultiMesh) + `FxMaterial`/`vfx_base.gdshaderinc`(원작 셰이더). 설명은 `docs/dev/effects.md`
-- `src/dev/`: `AutoPilot`(--autoplay, --autoplay=combo 제자리 연속 공격), `FrameCapture`(--capture=프레임들: 그 화면만 PNG로 저장)
+- `src/dev/`: `AutoPilot`(--autoplay, --autoplay=combo 제자리 연속 공격), `FrameCapture`(--capture=프레임들: 그 화면만 PNG로 저장), `PerfLog`(--perf-log=파일: 1초마다 성능, `tools/perf.sh`)
 - `src/ui/character_screen.gd`(로비 캐릭터 화면: 아래쪽 초상화 아이콘으로 캐릭터 고르기, 같은 무기군 안에서 무기 고르기), `reward_panel.gd`(보상 고르기), `hud.gd`(보스 체력, 작전 진행)
 - `src/player/characters.gd` + `data/characters/<이름>/`(character, appearance, kit): 고를 수 있는 캐릭터
 - `src/core/roster.gd`: 같은 3D 세계의 플레이어·적 목록
@@ -79,6 +80,8 @@ tools/capture.sh build/screenshots/fp 120 --single --first-person --pitch=-60   
 python tools/make_icons.py   # 공식 초상화(!File/Portraits/)에서 캐릭터 고르기 아이콘 만들기 (Pillow가 있는 python)
 python3 tools/extract_enemy.py "!File/Bonekrusher_Assets/enemies/eny_0029_lbmob/eny_0029_lbmob_Animated.glb" assets/enemies/lbmob.glb   # 적 모델 (동작은 ENEMIES)
 tools/capture.sh build/screenshots/foe 90,130,170 --single --third-person --spawn-enemy=raider_chief   # 로비에 적을 세워 공격 확인
+tools/capture.sh build/screenshots/low 200 --single --character=chen_qianyu --combat --free-face --camera-distance=2.0 --pitch=35   # 전투 대기 자세를 아래에서
+tools/perf.sh build/perf/combat.tsv 60 --single --autoplay --third-person --character=pogranichnik   # 60초 동안 1초마다 성능 기록(느린 프레임은 상황과 함께)
 python3 tools/measure_attack_clips.py <원본_Animated.glb> attack_01:1.4   # 공격 동작의 타격 시각과 내디딤 거리 재기
 GODOT=... python3 tools/publish_assets.py   # 모델을 .scn으로 구워 비공개 에셋 저장소에 올리기 (바뀐 파일만, 게임이 자동으로 받음)
 ```
@@ -111,7 +114,7 @@ GODOT=... python3 tools/publish_assets.py   # 모델을 .scn으로 구워 비공
 - **저장소는 공개여야 한다:** 게임은 로그인 없이 GitHub API로 릴리스를 받는다. 비공개 저장소면 404가 와서 업데이트가 조용히 멈춘다. 그래서 재배포할 수 없는 에셋은 절대 커밋하지 않는다.
 - **업데이트 실패는 조용히:** `JSON.parse_string`은 실패하면 엔진 오류를 남기므로 `JSON.new().parse()`를 쓴다. 릴리스가 없을 때의 404는 "받을 것 없음"으로 처리한다.
 - **내보내기와 자체 포함 Godot:** 옆에 `_sc_` 파일이 있는 Godot는 템플릿을 자기 폴더에서만 찾는다. `tools/export_windows.sh`가 알아서 표준 Godot를 받아 쓴다.
-- **모델은 exe에 넣지 않는다:** `export_presets.cfg`에서 `assets/characters/*`, `assets/enemies/*`를 뺀다. 내보낸 게임은 exe 옆 `characters/`에서 실행 중에 glTF를 읽는다(`CharacterAppearance.load_gltf_file`).
+- **모델은 exe에 넣지 않는다:** `export_presets.cfg`에서 `assets/characters/*`, `assets/enemies/*`를 뺀다. 내보낸 게임은 exe 옆 `characters/`에서 실행 중에 구운 장면(.scn)이나 glTF를 읽는다(`CharacterAppearance.model_entry`).
 - **사용자 설정:** `GameSettings`는 정적 변수 클래스다(자동 로드 아님). 테스트 러너가 경로를 `user://test_settings.cfg`로 바꾸므로 사용자 설정을 건드리지 않는다. 설정을 바꾸는 테스트는 `after_each`에서 `reset_to_defaults()`로 되돌린다.
 - **정적 함수와 자동 로드:** 정적 함수 안에서는 자동 로드 이름(`InputActions`)을 못 쓴다. 스크립트를 `preload`해서 쓴다.
 - **화면 없는 실행:** `DisplayServer.keyboard_get_keycode_from_physical`, 창 크기·모드 같은 창 기능은 headless에서 오류가 난다. `DisplayServer.get_name() == "headless"`면 건너뛴다.
@@ -131,9 +134,9 @@ GODOT=... python3 tools/publish_assets.py   # 모델을 .scn으로 구워 비공
 - **원본 게임 전용 재질:** 원본은 전용 셰이더로 그린다. 그림자 메시는 마스크의 빨간 채널에 세기를 넣어 두어서 그냥 칠하면 하늘색 줄이 생긴다(`shade_overlay.gdshader`로 곱한다). 얼굴은 얼굴이 보는 방향으로 고르게 비춘다. 캐릭터는 만화풍 재질(`toon.gdshader`/반투명 `toon_alpha.gdshader`, 공통 `toon_common.gdshaderinc`, 외곽선 `outline.gdshader`)로 그리고, 얼굴 그림자 지도(SDF)는 파란 채널을 쓴다. 색 띠·발광 마스크는 `CharacterAppearance.texture(이름)`으로 찾는다. 재질은 플레이어끼리 함께 쓰므로 메시마다 덮어쓰는 재질로 바꾼다. **면이 하나뿐인 메시는 `material_override`로 넣는다**: 실행 중에 읽은 glTF의 눈동자 메시에 면별 재질을 넣으면 화면 없는 실행의 렌더러가 "material is null" 오류를 냈다(`_set_material`).
 - **셰이더에서 POSITION 쓰지 않기:** 정점 단계에서 POSITION을 한 번이라도 쓰면 엔진이 그 재질의 기본 변환을 통째로 건너뛴다. 눈썹을 카메라 쪽으로 당길 때는 VERTEX를 옮긴다(`toon.gdshader`의 depth_bias).
 - **눈:** 흰 마름모 하이라이트는 `hidden_bones`로 그 뼈를 한 점으로 줄여 숨긴다. 원본 동작이 오른쪽 눈 뼈만 움직이므로 추출 도구의 `FROZEN_BONES`로 눈 뼈 트랙을 뺀다.
-- **실행 중에 읽은 glTF 텍스처:** 밉맵이 없다. `CharacterAppearance._add_mipmaps`가 원본 크기 그대로 밉맵만 만든다.
+- **실행 중에 읽은 glTF 텍스처:** 밉맵이 없다. 그림을 풀 때 glTF 확장(`GltfMipmaps`)이 원본 크기 그대로 밉맵만 만든다(텍스처를 만든 뒤 꺼내는 방식은 배경 스레드에서 멈출 수 있다).
 - **프로젝트 안에 스크립트 사본을 두지 않는다:** `build/`도 프로젝트 안이다. `class_name`이 있는 스크립트를 거기 복사해 두면 전역 클래스가 사본으로 바뀌어 엉뚱하게 돈다. 백업은 프로젝트 밖(임시 폴더)에 둔다.
-- **실행 중에 읽는 소리:** `AudioStreamWAV.load_from_buffer`로 zip 안의 WAV를 읽는다. 이 PC에는 소리 인코더(ffmpeg)가 없어서 WAV 그대로 묶는다. 같은 zip은 플레이어끼리 한 번만 읽는다(`CharacterFx._loaded`).
+- **실행 중에 읽는 소리:** `AudioStreamWAV.load_from_buffer`로 zip 안의 WAV를 읽는다. 이 PC에는 소리 인코더(ffmpeg)가 없어서 WAV 그대로 묶는다. 같은 zip은 플레이어끼리 한 번만 읽는다(`CharacterFx._packages`, `SharedCache`).
 - **원작 이펙트:** 이펙트 glb의 노드에는 메시가 없다. 원작은 노드마다 파티클 시스템이 메시·판을 그린다(`assets/data/*.json`). 재질 설정은 glb 재질의 extras(`floats`, `colors`, `vfx`)에 있다. 파티클 JSON은 유니티(왼손) 좌표 그대로라 그릴 때 X를 뒤집는다. 인스턴스 변환 자리에 그리기 정보를 담으므로 MultiMesh의 `custom_aabb`를 직접 줘야 화면 밖으로 잘리지 않는다. 이벤트의 `end`에서 남은 파티클까지 한 번에 지운다(원작과 같다). 원작 강도(최대 100)는 원작 화면에서 하얗게 날아가게 만든 값이라 셰이더에서 밝기를 자른다(`max_brightness`).
 - **카메라 거리:** SpringArm3D의 충돌은 끄고(`collision_mask = 0`) 거리를 직접 정한다(`Player._camera_clearance`). 막히면 바로 당기고 풀리면 천천히 되돌리기 위해서다. 자유 시점은 얼굴을 가까이 보는 것이 목적이라, 카메라가 정말 머리 속(0.1m)에 들어갔을 때만 몸을 숨긴다(3인칭은 0.35m).
 - **연출 카메라 컷(궁극기):** 원작 자료(`characters/*/metadata/camera.json`)를 꾸러미 `fx.json`의 `camera`에 넣는다. 프레임마다 캐릭터 모델 기준 `[x, y, z, qx, qy, qz, qw, 시야각]`(glTF 좌표, 초당 60장)이다. 컷 동안에는 카메라 팔(SpringArm3D) 길이를 바꾸지 말고 카메라 노드만 옮긴다(`Player._apply_shot`). 팔 길이는 물리 프레임에 한 번 늦게 반영되어, 컷이 끝나는 순간 카메라가 한 프레임 몸속으로 튀었다.
@@ -170,6 +173,10 @@ GODOT=... python3 tools/publish_assets.py   # 모델을 .scn으로 구워 비공
 - **배경 스레드와 렌더링 서버:** 렌더링 서버가 답을 돌려주는 호출(`ImageTexture.get_image()` 등)은 배경 스레드에서 쓰지 않는다. 주 스레드가 다음 프레임을 그릴 때까지 기다리는데, 주 스레드가 그 스레드(`SharedCache`의 같은 키, 끝낼 때의 `wait_to_finish`)를 기다리면 둘 다 멈춘다. 밉맵은 그림을 풀 때 넣는다(`GltfMipmaps`, glTF 확장). 텍스처·메시를 만드는 것은 배경 스레드에서 해도 된다.
 - **Callable과 객체 수명:** 객체의 메서드 Callable(`weapon.load_scene`)은 객체를 붙잡지 않는다. 나중에 부를 일 목록에 넣으면 그사이 자원이 풀려 "null instance" 오류로 스레드가 멈췄다. 람다로 감싸 붙잡는다(`AssetPreloader.jobs_for`). 정적 함수 + `bind(인자)`는 인자를 붙잡는다.
 - **미리 읽기와 테스트:** 테스트 러너는 `AssetPreloader.enabled = false`로 메인 장면의 미리 읽기를 끈다(메인 장면 테스트마다 모든 모델을 읽으면 느리고 흔들린다). 미리 읽기는 화면 확인(`is_recording`) 중에도 하지 않는다. 에셋을 받는 중이면 다 받은 뒤 시작한다(읽는 도중의 파일은 바꿔 넣지 못한다).
+- **실행 중에 읽은 모델의 빠진 노드 트랙:** 뼈가 아닌 노드(무기 자리 wep_L·wep_R, 진천우 칼집 자리 outer·inner)를 어떤 동작은 움직이고 어떤 동작(원작 공통 동작: 서기·달리기·회피)은 움직이지 않는다. 엔진은 트랙이 없는 노드를 처음 자세가 아니라 회전 0으로 섞어서 칼집 통이 골반에 눕거나 몸 앞으로 솟았다. 에디터로 가져온 모델은 가져올 때 채워져 있어 개발 중에는 보이지 않았다(사용자 게임은 구운 모델이라 보였다). `CharacterAppearance._fill_missing_tracks`가 읽을 때(굽기 포함) 처음 자세로 채운다. 뼈 트랙은 엔진이 뼈의 처음 자세를 쓰므로 두고 간다. **개발 화면에서 멀쩡해도 구운 모델과 다를 수 있다**: `CharacterAppearance._read_gltf`/`_read_baked`로 읽은 모델도 확인한다.
+- **원작 이펙트 파티클 계산의 빠르기:** 파티클을 GDScript로 하나씩 계산해서, 궁극기처럼 1,000개를 넘으면 그대로 프레임 시간이 된다(포그라니치니크 궁극기에서 프레임당 30~65ms, 2~3초 동안 14~26FPS). 곡선·색 변화는 시스템 설정마다 64칸 표로 펴 두고(`FxSystem.compile`, `FxCurve.compile`·`sample`, 이펙트를 읽을 때 배경 스레드에서), 모듈 설정 사전을 파티클마다 뒤지지 않고, 난수 생성기를 새로 만들지 않고, MultiMesh에는 버퍼 하나로 넘긴다(인스턴스마다 변환 12칸(행 우선 3x4)·색 4칸·사용자 값 4칸). 늦은 프레임에서 1/60초씩 쪼개 따라잡으면 더 늦어지는 악순환이라 최대 두 번으로 나눈다(`MAX_CATCH_UP`). 무한대 고정값(속도 상한 없음)을 섞으면 NaN이 되니 같은 두 값은 그대로 돌려준다. 성능은 `tools/perf.sh`로 잰다.
+- **미리 읽기와 플레이어의 이펙트:** 플레이어·적이 생기면 `CharacterFx.setup`이 그 꾸러미를 배경 스레드 맨 앞으로 넘기고(`AssetPreloader.prioritize_package`) 주 스레드에서는 읽지 않는다(한 프레임에 이펙트 하나씩 읽으며 프레임마다 20~60ms 멈칫했다). 그래서 미리 읽기 노드는 `--single`처럼 바로 시작하는 세션보다 먼저 만든다(`main._create_preloader`). 스레드는 일을 다 마치면 쉬다가 새 일이 들어오면 다시 뜬다(같은 자물쇠 안에서 쉬는지 본다).
+- **긴 꼬리와 물리:** 꼬리·귀 물리(`spring_chains`)의 처지는 힘을 0.3으로 두면 12마디짜리 진천우 꼬리가 막대처럼 땅까지 처졌다(사용자가 "소품"으로 보고 지적). 캐릭터마다 `spring_gravity`로 정한다(진천우 0).
 - **적 공격의 몸 이동·회전:** 원작 적 공격 동작은 몸(뿌리 뼈)이 다가서고 크게 돈다(170도 넘게). 동작은 제자리로 묶고 돌림도 빼며(`tools/extract_enemy.py`), 잰 곡선을 `EnemyAttackData.travel`·`turn`에 넣는다. 적은 동작 재생 위치대로 나아가고(`Enemy._attack_move`), 모델은 돌려 그린 뒤 끝나면 천천히 돌아온다(`EnemyBody._update_turn`). 예전에는 맞는 순간 lunge를 한꺼번에 밀어(돌진은 초속 16m) 순간이동처럼 보였고, 돌림이 동작 안에 있어 끝날 때 0.2초 만에 휙 돌아갔다. `lunge`는 이제 맞힌 뒤 구간의 거리다.
 - **적 모델 동작:** 원작 적 동작도 몸(뿌리 뼈)이 앞으로 2~12m 나가고 돈다. `tools/extract_enemy.py`가 모두 제자리로 묶고 적은 게임이 움직인다(이동 속도, `lunge`). 공격 동작은 예고 동안 `clip_from`에서 `clip_hit`(무기가 가장 빠른 순간, `tools/measure_attack_clips.py --weapon=`)까지를 예고 시간에 맞춘 빠르기로 튼다. 예고가 짧다고 앞부분을 건너뛰면, 로댄의 내려찍기(5.5m 뛰어올랐다 내리꽂음)가 이미 공중에서 시작해 보스가 화면 위로 사라졌다. 저격수(lbhunt)는 무기가 빠르게 움직이지 않는 원거리 적이라 쏘는 반동(작은 속도 봉우리)으로 시각을 찾았다. 사수(hvybow)는 이름과 달리 근접이다.
 - **본 크러셔 꾸러미:** 일반 적에는 소리·이펙트 자료가 없고, 로댄·네파리스(1·2형태)에만 소리가 있다. 적 모델은 기본 재질(StandardMaterial3D)로 그려도 읽기 좋다. 덩치 큰 적이 붙으면 카메라가 몸속에 들어가서 카메라 가까운 곳(0.3~0.9m)은 점점이 지운다.

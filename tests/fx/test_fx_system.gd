@@ -113,8 +113,67 @@ func test_texture_sheet_draws_one_tile_per_particle() -> void:
 	var p := FxSystem.Particle.new()
 	p.rand = PackedFloat32Array()
 	p.rand.resize(FxSystem.R.COUNT)
-	var sheet: Dictionary = (data["modules"] as Dictionary)["UVModule"]
-	assert_eq(FxSystem._sheet_frame(sheet, Vector2i(2, 2), 0.5, p), 2.0, "수명에 따른 칸 번호 (0.6 x 4칸 → 2번째 칸)")
+	var system := FxSystem.new()
+	system.setup(data, effect, emitter, null)
+	add_child_autofree(system)
+	assert_eq(system._sheet_frame(0.5, p), 2.0, "수명에 따른 칸 번호 (0.6 x 4칸 → 2번째 칸)")
+
+
+func test_many_particles_stay_fast() -> void:
+	# 궁극기처럼 파티클이 1,000개를 넘어도 한 프레임 계산이 짧아야 한다(예전에는 포그라니치니크 궁극기에서
+	# 프레임당 30~65ms였다). 힘·속도·크기·회전·색 모듈을 모두 쓰는 시스템 다섯 개, 각 256개.
+	var systems: Array[FxSystem] = []
+	for k in 5:
+		systems.append(_system({"main": {"lengthInSec": 5.0, "looping": true},
+			"initial": {"startLifetime": {"m": 0, "c": 4.0}, "maxNumParticles": 256, "startSpeed": {"m": 3, "min": 1.0, "max": 3.0},
+				"startColor": {"m": 1, "max": {"mode": 0, "c": [[0.0, 1, 0.5, 0.2], [1.0, 0.2, 0.5, 1]], "a": [[0.0, 1.0], [1.0, 0.0]]}}},
+			"modules": {"EmissionModule": {"rateOverTime": {"m": 0, "c": 400.0}},
+				"ForceModule": {"x": {"m": 0, "c": 0.5}, "y": {"m": 1, "max": [[0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0, 0.0]]}},
+				"VelocityModule": {"orbitalY": {"m": 0, "c": 1.0}, "speedModifier": {"m": 0, "c": 1.0}},
+				"ClampVelocityModule": {"magnitude": {"m": 0, "c": 2.0}, "dampen": 0.2},
+				"SizeModule": {"curve": {"m": 1, "max": [[0.0, 0.0, 0.0, 2.0], [1.0, 1.0, 0.0, 0.0]]}},
+				"RotationModule": {"curve": {"m": 0, "c": 3.0}},
+				"ColorModule": {"gradient": {"m": 1, "max": {"mode": 0, "c": [[0.0, 1, 1, 1]], "a": [[0.0, 1.0], [1.0, 0.0]]}}}}}))
+	for k in systems.size():
+		systems[k].advance(1.0)
+	var started := Time.get_ticks_usec()
+	for frame in 10:
+		for system in systems:
+			system.advance(1.0 + (frame + 1) / 60.0)
+	var per_frame := (Time.get_ticks_usec() - started) / 10000.0
+	var particles := 0
+	for system in systems:
+		particles += system.alive()
+	assert_eq(particles, 5 * 256, "상한까지 찬다")
+	print("    파티클 %d개, 프레임당 %.1fms" % [particles, per_frame])
+	assert_true(per_frame < 40.0, "프레임당 %.1fms" % per_frame)
+
+
+func test_effect_amount_setting_reduces_particles() -> void:
+	# 설정의 "이펙트 양"을 낮추면 파티클이 줄되, 하나뿐인 파티클(충격파 고리 등)은 남는다.
+	GameSettings.effect_quality = GameSettings.EffectQuality.LOW
+	var burst := _system({"main": {"lengthInSec": 1.0}, "initial": {"startLifetime": {"m": 0, "c": 1.0}, "maxNumParticles": 100},
+		"modules": {"EmissionModule": {"m_Bursts": [{"time": 0.0, "countCurve": {"m": 0, "c": 30.0}, "cycleCount": 1, "probability": 1.0}]}}})
+	var single := _system({"main": {"lengthInSec": 1.0}, "initial": {"startLifetime": {"m": 0, "c": 1.0}},
+		"modules": {"EmissionModule": {"m_Bursts": [{"time": 0.0, "countCurve": {"m": 0, "c": 1.0}, "cycleCount": 1, "probability": 1.0}]}}})
+	GameSettings.reset_to_defaults()
+	burst.advance(0.01)
+	single.advance(0.01)
+	assert_eq(burst.alive(), roundi(30 * GameSettings.EFFECT_AMOUNTS[GameSettings.EffectQuality.LOW]), "30개 → 약 3분의 1")
+	assert_eq(single.alive(), 1, "하나뿐인 파티클은 남긴다")
+
+
+func test_slow_frame_catches_up_in_few_steps() -> void:
+	# 프레임이 늦어도(0.2초) 따라잡는 계산은 몇 번으로 나누고, 위치는 쪼개 계산한 것과 거의 같다.
+	var data := {"main": {"lengthInSec": 1.0}, "initial": {"startLifetime": {"m": 0, "c": 2.0}, "startSpeed": {"m": 0, "c": 1.0}},
+		"modules": {"EmissionModule": {"m_Bursts": [{"time": 0.0, "countCurve": {"m": 0, "c": 1.0}, "cycleCount": 1, "probability": 1.0}]}}}
+	var fine := _system(data.duplicate(true))
+	var coarse := _system(data.duplicate(true))
+	for i in 31:
+		fine.advance(i / 60.0)
+	coarse.advance(0.0)
+	coarse.advance(0.5)
+	assert_almost_eq(coarse._particles[0].pos.z, fine._particles[0].pos.z, 0.001, "느린 프레임도 같은 자리")
 
 
 func test_original_attack_effect_plays_with_attack() -> void:

@@ -14,12 +14,19 @@ signal finished
 
 ## false면 메인 장면이 미리 읽지 않는다 (테스트 러너가 끈다)
 static var enabled := true
+## 지금 도는 미리 읽기 (없으면 null). 플레이어가 생기면 그 캐릭터의 이펙트를 맨 앞으로 당긴다(prioritize_package).
+static var _running: AssetPreloader
 
 var _thread: Thread
 var _jobs: Array[Callable] = []
 var _mutex := Mutex.new()
 var _stopping := false
-var _done := false
+## 스레드가 할 일을 다 마치고 쉬는 중인지 (처음에도 쉰다). 쉬는 중에 일이 들어오면 스레드를 새로 띄운다.
+var _idle := true
+
+
+func _enter_tree() -> void:
+	_running = self
 
 
 ## 고른 캐릭터를 먼저, 그다음 적, 다른 캐릭터, 무기 순서로 배경 스레드에서 읽는다.
@@ -52,20 +59,49 @@ func jobs_for(character_id: StringName) -> Array[Callable]:
 	return jobs
 
 
-## 할 일(인자 없는 함수들)을 배경 스레드에서 차례로 한다.
+## 할 일(인자 없는 함수들)을 뒤에 붙여 배경 스레드에서 차례로 한다.
 func start(jobs: Array[Callable]) -> void:
-	if _thread != null:
-		return
-	_jobs = jobs
-	_thread = Thread.new()
-	_thread.start(_run, Thread.PRIORITY_LOW)
+	_enqueue(jobs, false)
 
 
+## 이 꾸러미(소리·소품·이펙트)를 다음 차례로 읽게 한다. 미리 읽기 노드가 없으면 false(부른 쪽이 직접 읽는다).
+## 플레이어·적이 생길 때 부른다: 주 스레드가 이펙트를 한 프레임에 하나씩 읽으면 그 프레임마다 수십 ms 멈칫했다.
+static func prioritize_package(zip_path: String) -> bool:
+	var preloader := _running
+	if preloader == null or not is_instance_valid(preloader) or not preloader.is_inside_tree():
+		return false
+	preloader._enqueue([CharacterFx.preload_package.bind(zip_path, preloader._keep_going)], true)
+	return true
+
+
+## 할 일을 다 마쳤는지 (아무 일도 받지 않았으면 true)
 func is_done() -> bool:
 	_mutex.lock()
-	var done := _done
+	var done := _idle and _jobs.is_empty()
 	_mutex.unlock()
 	return done
+
+
+## 일을 맨 뒤(first면 맨 앞)에 넣는다. 스레드가 쉬고 있으면 새로 띄운다.
+func _enqueue(jobs: Array[Callable], first: bool) -> void:
+	_mutex.lock()
+	if _stopping:
+		_mutex.unlock()
+		return
+	if first:
+		for i in range(jobs.size() - 1, -1, -1):
+			_jobs.push_front(jobs[i])
+	else:
+		_jobs.append_array(jobs)
+	var wake := _idle
+	_idle = false
+	_mutex.unlock()
+	if wake:
+		# 쉬는 스레드는 이미 끝났거나 끝나는 중이다(기다림이 짧다).
+		if _thread != null and _thread.is_started():
+			_thread.wait_to_finish()
+		_thread = Thread.new()
+		_thread.start(_run, Thread.PRIORITY_LOW)
 
 
 func _add_character(jobs: Array[Callable], appearance: CharacterAppearance, chosen: bool) -> void:
@@ -92,14 +128,16 @@ func _keep_going() -> bool:
 
 func _run() -> void:
 	var started := Time.get_ticks_msec()
-	for job in _jobs:
-		if not _keep_going():
+	while true:
+		_mutex.lock()
+		if _stopping or _jobs.is_empty():
+			_idle = true
+			_mutex.unlock()
 			break
+		var job: Callable = _jobs.pop_front()
+		_mutex.unlock()
 		if job.is_valid():
 			job.call()
-	_mutex.lock()
-	_done = true
-	_mutex.unlock()
 	print_verbose("미리 읽기 끝: %d ms" % (Time.get_ticks_msec() - started))
 	finished.emit.call_deferred()
 
@@ -112,3 +150,5 @@ func _exit_tree() -> void:
 	if _thread != null and _thread.is_started():
 		_thread.wait_to_finish()
 	_thread = null
+	if _running == self:
+		_running = null

@@ -15,6 +15,9 @@ enum WindowMode { WINDOWED, BORDERLESS, FULLSCREEN }
 enum Antialiasing { OFF, FXAA, MSAA_2X, MSAA_4X }
 ## 그림자 품질
 enum ShadowQuality { LOW, MEDIUM, HIGH }
+## 원작 이펙트의 파티클 양. 사양이 낮은 PC는 줄인다(궁극기는 파티클이 1,500개를 넘는다).
+enum EffectQuality { LOW, MEDIUM, HIGH }
+const EFFECT_AMOUNTS: Array[float] = [0.35, 0.6, 1.0]
 
 ## 소리 버스 이름과 메뉴에 보일 이름. default_bus_layout.tres와 같아야 한다.
 const AUDIO_BUSES: Array[StringName] = [&"Master", &"Music", &"SFX", &"Voice", &"UI"]
@@ -89,6 +92,7 @@ static var brightness := 1.0
 # ---- 그래픽 ----
 static var antialiasing := Antialiasing.FXAA
 static var shadow_quality := ShadowQuality.MEDIUM
+static var effect_quality := EffectQuality.HIGH
 
 # ---- 조작 ----
 static var mouse_sensitivity := 1.0
@@ -129,6 +133,7 @@ static func reset_to_defaults() -> void:
 	brightness = 1.0
 	antialiasing = Antialiasing.FXAA
 	shadow_quality = ShadowQuality.MEDIUM
+	effect_quality = EffectQuality.HIGH
 	mouse_sensitivity = 1.0
 	invert_y = false
 	fov = 70.0
@@ -193,6 +198,7 @@ static func load_settings() -> void:
 	brightness = clampf(float(config.get_value("display", "brightness", brightness)), 0.5, 2.0)
 	antialiasing = clampi(int(config.get_value("graphics", "antialiasing", antialiasing)), 0, Antialiasing.size() - 1) as Antialiasing
 	shadow_quality = clampi(int(config.get_value("graphics", "shadow_quality", shadow_quality)), 0, ShadowQuality.size() - 1) as ShadowQuality
+	effect_quality = clampi(int(config.get_value("graphics", "effect_quality", effect_quality)), 0, EffectQuality.size() - 1) as EffectQuality
 	mouse_sensitivity = clampf(float(config.get_value("controls", "mouse_sensitivity", mouse_sensitivity)), 0.1, 3.0)
 	invert_y = bool(config.get_value("controls", "invert_y", invert_y))
 	fov = clampf(float(config.get_value("controls", "fov", fov)), 50.0, 100.0)
@@ -234,6 +240,7 @@ static func save() -> Error:
 	config.set_value("display", "brightness", brightness)
 	config.set_value("graphics", "antialiasing", antialiasing)
 	config.set_value("graphics", "shadow_quality", shadow_quality)
+	config.set_value("graphics", "effect_quality", effect_quality)
 	config.set_value("controls", "mouse_sensitivity", mouse_sensitivity)
 	config.set_value("controls", "invert_y", invert_y)
 	config.set_value("controls", "fov", fov)

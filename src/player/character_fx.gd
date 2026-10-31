@@ -64,6 +64,9 @@ func setup(zip_path: String) -> bool:
 		for effect: Dictionary in (_roles[role] as Dictionary).get("effects", []):
 			if not EffectLibrary.is_loaded(zip_path, str(effect.get("file", ""))):
 				_preload.append([str(effect.get("file", "")), str(effect.get("particles", ""))])
+	# 배경 스레드가 돌고 있으면 이 꾸러미의 이펙트를 다음 차례로 읽게 하고, 주 스레드에서는 읽지 않는다.
+	if not _preload.is_empty() and AssetPreloader.prioritize_package(zip_path):
+		_preload.clear()
 	return true
 
 

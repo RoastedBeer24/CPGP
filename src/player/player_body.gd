@@ -149,10 +149,9 @@ const HAIR_STIFFNESS := 10.0
 const HAIR_DRAG := 0.5
 const HAIR_GRAVITY := 0.3
 ## 꼬리·귀: 모양을 지키며 몸놀림에 통통 튀고 조금만 처진다(세상 기준으로 계산하므로 옷자락보다 돌아가는 힘이 약해도
-## 관성으로 충분히 움직인다). 끝 뼈 뒤로 늘리는 길이(m)
+## 관성으로 충분히 움직인다). 끝 뼈 뒤로 늘리는 길이(m). 처지는 힘은 캐릭터마다 다르다(CharacterAppearance.spring_gravity).
 const SPRING_STIFFNESS := 3.0
 const SPRING_DRAG := 0.3
-const SPRING_GRAVITY := 0.3
 const SPRING_TAIL := 0.05
 ## 끈과 머리카락 가닥의 두께(m)
 const STRAND_RADIUS := 0.02
@@ -1066,7 +1065,7 @@ func _setup_springs() -> void:
 		_springs.set_center_from(i, SpringBoneSimulator3D.CENTER_FROM_WORLD_ORIGIN)
 		_springs.set_stiffness(i, SPRING_STIFFNESS)
 		_springs.set_drag(i, SPRING_DRAG)
-		_springs.set_gravity(i, SPRING_GRAVITY)
+		_springs.set_gravity(i, appearance.spring_gravity)
 		_springs.set_gravity_direction(i, Vector3.DOWN)
 		_springs.set_radius(i, STRAND_RADIUS)
 		_springs.set_enable_all_child_collisions(i, false)

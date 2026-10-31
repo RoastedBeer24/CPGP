@@ -11,6 +11,143 @@ extends RefCounted
 ## rand는 파티클마다 정해 둔 0~1 값이다(두 값 사이를 고를 때 쓴다).
 
 
+## 미리 만든 표의 칸 수. 파티클 계산(FxSystem)은 곡선을 파티클마다 매 프레임 여러 번 계산한다. 그때마다 설정(사전·배열)을
+## 뒤지면 궁극기처럼 파티클이 1,000개를 넘을 때 프레임당 수십 ms가 걸려서, 곡선을 표로 펴 두고 두 칸 사이만 잇는다.
+const SAMPLES := 64
+
+
+## 값 곡선을 표로 만든다. 고정값·두 값 사이는 [0, 1, 최소, 최대], 곡선은 [1, 곱, 0, 0, 최소 곡선 표, 최대 곡선 표]
+## (표는 SAMPLES + 1칸, 곡선이 하나면 최소·최대가 같다). 설정이 없으면 fallback 고정값. sample로 계산한다.
+static func compile(curve: Variant, fallback: float = 0.0) -> PackedFloat32Array:
+	if typeof(curve) != TYPE_DICTIONARY:
+		return PackedFloat32Array([0.0, 1.0, fallback, fallback])
+	var data: Dictionary = curve
+	match int(data.get("m", 0)):
+		0:
+			var c := float(data.get("c", fallback))
+			return PackedFloat32Array([0.0, 1.0, c, c])
+		1, 2:
+			var high: Variant = data.get("max", [])
+			var low: Variant = data.get("min", []) if int(data.get("m", 0)) == 2 else high
+			var out := PackedFloat32Array([1.0, float(data.get("mul", 1.0)), 0.0, 0.0])
+			out.append_array(_table(low, false))
+			out.append_array(_table(high, false))
+			return out
+		3:
+			return PackedFloat32Array([0.0, 1.0, float(data.get("min", fallback)), float(data.get("max", fallback))])
+	return PackedFloat32Array([0.0, 1.0, fallback, fallback])
+
+
+## compile로 만든 표에서 시각 t(0~1)의 값 (value와 같은 값)
+static func sample(c: PackedFloat32Array, t: float, rand: float) -> float:
+	if c[0] == 0.0:
+		# 같은 두 값(고정값)은 그대로: 무한대(속도 상한 없음)를 섞으면 NaN이 된다.
+		return c[2] if c[2] == c[3] else c[2] + (c[3] - c[2]) * rand
+	var x := clampf(t, 0.0, 1.0) * SAMPLES
+	var i := mini(int(x), SAMPLES - 1)
+	var f := x - i
+	var low := c[4 + i] + (c[5 + i] - c[4 + i]) * f
+	var j := 5 + SAMPLES + i
+	var high := c[j] + (c[j + 1] - c[j]) * f
+	return (low + (high - low) * rand) * c[1]
+
+
+## 적분(0부터 t까지 쌓은 양)을 표로 만든다. 고정값·두 값 사이는 [0, 1, 최소, 최대](값 × t), 곡선은 누적표 둘.
+## sample_integral로 계산한다(integral과 같은 값).
+static func compile_integral(curve: Variant) -> PackedFloat32Array:
+	if typeof(curve) != TYPE_DICTIONARY:
+		return PackedFloat32Array([0.0, 1.0, 0.0, 0.0])
+	var data: Dictionary = curve
+	match int(data.get("m", 0)):
+		0:
+			var c := float(data.get("c", 0.0))
+			return PackedFloat32Array([0.0, 1.0, c, c])
+		1, 2:
+			var high: Variant = data.get("max", [])
+			var low: Variant = data.get("min", []) if int(data.get("m", 0)) == 2 else high
+			var out := PackedFloat32Array([1.0, float(data.get("mul", 1.0)), 0.0, 0.0])
+			out.append_array(_table(low, true))
+			out.append_array(_table(high, true))
+			return out
+		3:
+			return PackedFloat32Array([0.0, 1.0, float(data.get("min", 0.0)), float(data.get("max", 0.0))])
+	return PackedFloat32Array([0.0, 1.0, 0.0, 0.0])
+
+
+static func sample_integral(c: PackedFloat32Array, t: float, rand: float) -> float:
+	t = clampf(t, 0.0, 1.0)
+	if c[0] == 0.0:
+		return (c[2] + (c[3] - c[2]) * rand) * t
+	return sample(c, t, rand)
+
+
+## 열쇠 목록을 SAMPLES칸 표로 편다. cumulative면 0부터 쌓은 양(칸마다 심프슨 공식)이다.
+static func _table(points: Variant, cumulative: bool) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(SAMPLES + 1)
+	var step := 1.0 / SAMPLES
+	var total := 0.0
+	for i in SAMPLES + 1:
+		if not cumulative:
+			out[i] = keys(points, i * step)
+			continue
+		out[i] = total
+		if i < SAMPLES:
+			total += (keys(points, i * step) + 4.0 * keys(points, (i + 0.5) * step) + keys(points, (i + 1) * step)) * step / 6.0
+	return out
+
+
+## 색 설정을 표로 만든다. 고정색·두 색 사이는 [최소, 최대], 색 변화는 [최소 표, 최대 표](표는 SAMPLES + 1칸),
+## "색 변화에서 무작위로 한 점"은 표 뒤에 한 칸을 더 붙여(홀수 길이) 시각 대신 rand로 고른다. sample_color로 계산한다.
+static func compile_color(gradient: Variant) -> PackedColorArray:
+	if typeof(gradient) != TYPE_DICTIONARY:
+		return PackedColorArray([Color.WHITE, Color.WHITE])
+	var data: Dictionary = gradient
+	match int(data.get("m", 0)):
+		0:
+			var c := _color(data.get("c", null))
+			return PackedColorArray([c, c])
+		1:
+			var table := _color_table(data.get("max", {}))
+			table.append_array(table.duplicate())
+			return table
+		2:
+			return PackedColorArray([_color(data.get("min", null)), _color(data.get("max", null))])
+		3:
+			var table := _color_table(data.get("min", {}))
+			table.append_array(_color_table(data.get("max", {})))
+			return table
+		4:
+			var table := _color_table(data.get("max", {}))
+			table.append_array(table.duplicate())
+			table.append(Color.WHITE)
+			return table
+	return PackedColorArray([Color.WHITE, Color.WHITE])
+
+
+## compile_color로 만든 표에서 시각 t의 색 (color와 같은 값)
+static func sample_color(c: PackedColorArray, t: float, rand: float) -> Color:
+	if c.size() == 2:
+		return c[0].lerp(c[1], rand)
+	var random_point := c.size() % 2 == 1
+	var x := clampf(rand if random_point else t, 0.0, 1.0) * SAMPLES
+	var i := mini(int(x), SAMPLES - 1)
+	var f := x - i
+	var low := c[i].lerp(c[i + 1], f)
+	if random_point:
+		return low
+	var j := SAMPLES + 1 + i
+	return low.lerp(c[j].lerp(c[j + 1], f), rand)
+
+
+static func _color_table(gradient: Variant) -> PackedColorArray:
+	var out := PackedColorArray()
+	out.resize(SAMPLES + 1)
+	for i in SAMPLES + 1:
+		out[i] = gradient_at(gradient, float(i) / SAMPLES)
+	return out
+
+
 ## 값을 시각 t(0~1, 수명이나 재생 시간에 대한 비율)에서 계산한다. 설정이 없으면 fallback.
 static func value(curve: Variant, t: float, rand: float, fallback: float = 0.0) -> float:
 	if typeof(curve) != TYPE_DICTIONARY:

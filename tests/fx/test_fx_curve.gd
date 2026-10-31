@@ -22,6 +22,36 @@ func test_curve_keys_follow_tangents() -> void:
 	assert_almost_eq(FxCurve.value(two, 0.3, 0.5), 2.0, 0.0001, "두 곡선 사이")
 
 
+func test_compiled_tables_match_direct_values() -> void:
+	# 파티클 계산은 곡선을 미리 표로 만들어 쓴다(빠르기). 표에서 읽은 값이 곡선을 바로 계산한 값과 같아야 한다.
+	var curves: Array = [
+		null, {"m": 0, "c": 0.15}, {"m": 3, "min": 1.0, "max": 2.0},
+		{"m": 1, "mul": 2.0, "max": [[0.0, 0.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]},
+		{"m": 2, "mul": 1.5, "min": [[0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 0.0, 0.0]], "max": [[0.0, 2.0, 0.0, 0.0], [0.4, 3.0, 0.0, 0.0], [1.0, 1.0, 0.0, 0.0]]},
+	]
+	for curve: Variant in curves:
+		var table := FxCurve.compile(curve, 0.7)
+		var integral := FxCurve.compile_integral(curve)
+		for step in 11:
+			var t := step / 10.0
+			for rand: float in [0.0, 0.3, 1.0]:
+				assert_almost_eq(FxCurve.sample(table, t, rand), FxCurve.value(curve, t, rand, 0.7), 0.01, "값 %s t=%.1f" % [curve, t])
+				assert_almost_eq(FxCurve.sample_integral(integral, t, rand), FxCurve.integral(curve, t, rand), 0.01, "적분 %s t=%.1f" % [curve, t])
+	assert_eq(FxCurve.sample(FxCurve.compile(null, INF), 0.5, 0.5), INF, "무한대(상한 없음)는 그대로")
+	var fade := {"mode": 0, "c": [[0.0, 1.0, 0.5, 0.0], [1.0, 0.0, 0.5, 1.0]], "a": [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]}
+	var gradients: Array = [null, {"m": 0, "c": [0.2, 0.3, 0.4, 0.5]}, {"m": 1, "max": fade},
+		{"m": 2, "min": [0.0, 0.0, 0.0, 1.0], "max": [1.0, 1.0, 1.0, 1.0]}, {"m": 3, "min": fade, "max": fade}, {"m": 4, "max": fade}]
+	for gradient: Variant in gradients:
+		var table := FxCurve.compile_color(gradient)
+		for step in 11:
+			var t := step / 10.0
+			for rand: float in [0.0, 0.6]:
+				var expected := FxCurve.color(gradient, t, rand)
+				var actual := FxCurve.sample_color(table, t, rand)
+				assert_true(Vector4(actual.r, actual.g, actual.b, actual.a).distance_to(Vector4(expected.r, expected.g, expected.b, expected.a)) < 0.02,
+						"색 %s t=%.1f: %s / %s" % [gradient, t, actual, expected])
+
+
 func test_gradients() -> void:
 	var fade := {"mode": 0, "c": [[0.0, 1.0, 0.5, 0.0], [1.0, 1.0, 0.5, 0.0]], "a": [[0.0, 0.0], [0.3, 1.0], [1.0, 0.0]]}
 	var mid := FxCurve.color({"m": 1, "max": fade}, 0.15, 0.0)

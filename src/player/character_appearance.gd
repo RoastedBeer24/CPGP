@@ -77,6 +77,9 @@ static var _icons: Dictionary[String, Texture2D] = {}
 ## 꼬리·귀처럼 모양을 지키며 몸놀림에 통통 튀는 뼈 사슬(예: 아케쿠리 꼬리와 귀). 원본 이동 동작(서기·걷기·달리기)과
 ## 회피에는 이 뼈의 움직임이 없어서 굳어 보였다. 끝 뼈 뒤로 짧게(SPRING_TAIL) 늘려 계산한다.
 @export var spring_chains: PackedStringArray = []
+## 꼬리·귀가 아래로 처지는 힘. 진천우의 긴 꼬리(12마디)는 0.3이면 막대처럼 땅까지 처져서(사용자가 찾음) 처지지 않고
+## 원작 동작의 모양을 지키며 관성으로만 흔들리게 0으로 둔다.
+@export var spring_gravity := 0.3
 
 @export_group("재질")
 ## 얼굴 재질(얼굴, 눈썹, 눈동자). 얼굴 전체를 얼굴이 보는 방향으로 고르게 비춘다(toon.gdshader의 flatness).
@@ -313,10 +316,51 @@ static func read_gltf(path: String) -> Node:
 	for i in mini(image_list.size(), textures.size()):
 		images[str((image_list[i] as Dictionary).get("name", ""))] = textures[i]
 	root.set_meta(&"images", images)
+	_fill_missing_tracks(root)
 	# PackedScene은 owner가 장면 뿌리인 노드만 저장한다.
 	for node: Node in root.find_children("*", "", true, false):
 		node.owner = root
 	return root
+
+
+## 어떤 동작은 움직이고 어떤 동작은 움직이지 않는 노드(뼈가 아닌 무기·소품 자리: wep_L, 진천우 칼집 자리 outer·inner)의
+## 빠진 트랙을 처음 자세로 채운다. 원작 공통 동작(서기·달리기·회피)에는 이 트랙이 없는데, 엔진은 트랙이 없는 노드를
+## 처음 자세가 아니라 회전 0으로 섞어서 칼집 통이 골반에 눕거나 몸 앞으로 솟았다(사용자가 찾음). 에디터로 가져온
+## 모델은 가져올 때 채워져 있어서 개발 중에는 보이지 않았다. 뼈 트랙은 엔진이 뼈의 처음 자세를 쓰므로 두고 간다.
+static func _fill_missing_tracks(root: Node) -> void:
+	const TYPES: Array[int] = [Animation.TYPE_POSITION_3D, Animation.TYPE_ROTATION_3D, Animation.TYPE_SCALE_3D]
+	for found: Node in root.find_children("*", "AnimationPlayer", true, false):
+		var player := found as AnimationPlayer
+		var base := player.get_node_or_null(player.root_node)
+		if base == null:
+			continue
+		var names := player.get_animation_list()
+		var wanted := {}
+		for name in names:
+			var animation := player.get_animation(name)
+			for i in animation.get_track_count():
+				var path := animation.track_get_path(i)
+				if TYPES.has(animation.track_get_type(i)) and path.get_subname_count() == 0:
+					wanted["%s|%d" % [path, animation.track_get_type(i)]] = [path, animation.track_get_type(i)]
+		for key: String in wanted:
+			var path: NodePath = wanted[key][0]
+			var type: Animation.TrackType = wanted[key][1]
+			var target := base.get_node_or_null(path) as Node3D
+			if target == null:
+				continue
+			for name in names:
+				var animation := player.get_animation(name)
+				if animation.find_track(path, type) >= 0:
+					continue
+				var track := animation.add_track(type)
+				animation.track_set_path(track, path)
+				match type:
+					Animation.TYPE_POSITION_3D:
+						animation.position_track_insert_key(track, 0.0, target.position)
+					Animation.TYPE_ROTATION_3D:
+						animation.rotation_track_insert_key(track, 0.0, target.quaternion)
+					Animation.TYPE_SCALE_3D:
+						animation.scale_track_insert_key(track, 0.0, target.scale)
 
 
 static func _read_gltf(path: String) -> Array:

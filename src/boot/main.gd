@@ -17,6 +17,8 @@ extends Node
 ##   --first-person / --free-face                # 1인칭으로, 또는 자유 시점으로 얼굴 앞에서 시작 (화면 확인용, 저장 안 함)
 ##   --third-person                              # 설정에 1인칭이 저장돼 있어도 3인칭으로 시작 (화면 확인용, 저장 안 함)
 ##   --pitch=-50                                 # 카메라 위아래 각도(도)로 시작, --autoplay=run은 이 각도를 지킨다 (화면 확인용)
+##   --combat --camera-distance=2.2              # 늘 싸우는 중(전투 대기 자세·무기·소품), 자유 시점 거리(m) (화면 확인용)
+##   --perf-log=build/perf.tsv                   # 1초마다 성능(프레임·처리·GPU 시간, 그리기 수 등)을 파일에 적음 (PerfLog)
 ##   --spawn-enemy=heavy                         # 로비에서 그 적(data/enemies/<이름>.tres)을 8m 앞에 세운다 (적 모델·공격 확인용)
 ##   --no-update                                # 자동 업데이트를 하지 않음
 ##   --update-url=http://127.0.0.1:8000/latest   # 업데이트 확인 주소 바꾸기 (시험용)
@@ -72,6 +74,8 @@ func _ready() -> void:
 	hud.hide()
 	menu.open()
 	_start_updater()
+	# 미리 읽기 노드는 플레이어보다 먼저 있어야 그 캐릭터의 이펙트를 배경 스레드로 넘긴다(--single은 바로 시작한다).
+	_create_preloader()
 	_apply_command_line()
 	_start_preloading()
 
@@ -191,6 +195,11 @@ func _on_player_spawned(player: Player) -> void:
 	var pitch := _command_line_pitch(args)
 	if not is_nan(pitch) and player.is_multiplayer_authority():
 		player.camera_pitch = deg_to_rad(pitch)
+	if args.has("--combat") and player.is_multiplayer_authority():
+		player.stay_in_combat = true
+	for arg in args:
+		if arg.begins_with("--camera-distance=") and player.is_multiplayer_authority():
+			player.camera_distance = float(arg.trim_prefix("--camera-distance="))
 	for arg in args:
 		if arg.begins_with("--spawn-enemy=") and player.is_multiplayer_authority():
 			_spawn_test_enemy(StringName(arg.trim_prefix("--spawn-enemy=")), player)
@@ -272,14 +281,20 @@ func _start_updater() -> void:
 	asset_updater.check()
 
 
-## 모델·소리 꾸러미·이펙트를 배경 스레드에서 미리 읽는다(캐릭터를 바꿀 때 멈칫하지 않게). 에셋을 받는 중이면 다 받은
-## 뒤에 읽는다(읽는 도중의 파일은 바꿔 넣지 못한다). 화면 확인 중에는 하지 않는다.
-func _start_preloading() -> void:
-	if is_recording() or not AssetPreloader.enabled:
+## 배경 스레드에서 미리 읽는 노드를 만든다. 화면을 찍는 중이거나 테스트(AssetPreloader.enabled)면 만들지 않는다.
+func _create_preloader() -> void:
+	if _captures_frames() or not AssetPreloader.enabled:
 		return
 	preloader = AssetPreloader.new()
 	preloader.name = "AssetPreloader"
 	add_child(preloader)
+
+
+## 모델·소리 꾸러미·이펙트를 배경 스레드에서 미리 읽는다(캐릭터를 바꿀 때 멈칫하지 않게). 에셋을 받는 중이면 다 받은
+## 뒤에 읽는다(읽는 도중의 파일은 바꿔 넣지 못한다). 화면 확인 중에는 하지 않는다.
+func _start_preloading() -> void:
+	if preloader == null:
+		return
 	var character := command_line_character if command_line_character != &"" else GameSettings.character_id
 	if asset_updater != null and asset_updater.state in [AssetUpdater.State.CHECKING, AssetUpdater.State.DOWNLOADING]:
 		asset_updater.finished.connect(func(_updated: Array[String]) -> void: preloader.start_for(character), CONNECT_ONE_SHOT)
@@ -307,8 +322,18 @@ func _install_pending_update(relaunch: bool) -> void:
 		updater.apply(relaunch)
 
 
-## 화면 확인용으로 도는 중인지 (tools/screenshot.sh의 --write-movie, tools/capture.sh의 --capture)
+## 화면 확인용으로 도는 중인지 (tools/screenshot.sh의 --write-movie, tools/capture.sh의 --capture, tools/perf.sh의 --perf-log)
 func is_recording() -> bool:
+	if _captures_frames():
+		return true
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--perf-log="):
+			return true
+	return false
+
+
+## 화면을 찍는 중인지 (성능 기록은 실제 게임처럼 미리 읽기를 하므로 뺀다)
+func _captures_frames() -> bool:
 	if not Engine.get_write_movie_path().is_empty():
 		return true
 	for arg in OS.get_cmdline_user_args():
@@ -335,6 +360,10 @@ func _apply_command_line() -> void:
 	if capture != null:
 		capture.name = "FrameCapture"
 		add_child(capture)
+	var perf := PerfLog.from_command_line(args)
+	if perf != null:
+		perf.name = "PerfLog"
+		add_child(perf)
 	# 화면 확인 중에는 마우스를 가두지 않는다(창이 화면 밖에 있어 커서가 끌려간다).
 	MouseLock.disabled = is_recording()
 	for arg in args:

@@ -287,6 +287,27 @@ func test_runtime_model_is_read_only_once() -> void:
 		break
 
 
+func test_runtime_model_fills_missing_node_tracks() -> void:
+	# 실행 중에 읽은 모델(내보낸 게임)은 동작마다 빠진 무기·소품 자리 트랙을 처음 자세로 채운다. 원작 공통 동작(서기·
+	# 달리기·회피)에는 진천우 칼집 자리(outer) 트랙이 없어서, 엔진이 회전 0으로 섞어 칼집 통이 몸 앞으로 솟았다(사용자가 찾음).
+	var source := ProjectSettings.globalize_path(Characters.find(&"chen_qianyu").appearance().model_path)
+	if not FileAccess.file_exists(source):
+		print("    (진천우 모델이 없어 건너뜀)")
+		return
+	var model := CharacterAppearance.read_gltf(source)
+	var player := model.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+	var outer := model.find_child("outer", true, false) as Node3D
+	var path := player.get_node(player.root_node).get_path_to(outer)
+	var rest := outer.quaternion
+	for name in player.get_animation_list():
+		var animation := player.get_animation(name)
+		assert_true(animation.find_track(path, Animation.TYPE_ROTATION_3D) >= 0, "동작 %s에 칼집 자리 회전이 있다" % name)
+	var idle := player.get_animation(&"idle-loop")
+	var track := idle.find_track(path, Animation.TYPE_ROTATION_3D)
+	assert_true(idle.rotation_track_interpolate(track, 0.5).is_equal_approx(rest), "공통 동작에서는 처음 자세 그대로")
+	model.free()
+
+
 func test_baked_model_next_to_executable() -> void:
 	# 내보낸 게임은 glb 자리에 구운 장면(.scn, tools/bake_models.gd)이 있으면 그것을 읽는다. 큰 텍스처는 BC7로 압축돼 있다.
 	var baked := ProjectSettings.globalize_path("res://build/baked/characters/%s.scn" % Characters.DEFAULT_ID)

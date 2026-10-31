@@ -108,3 +108,12 @@ tools/capture.sh build/screenshots/run 120 --single --third-person --autoplay=ru
 - 씬을 정해진 프레임 수만큼 실행하고 PNG로 저장합니다. 화면이 없는 리눅스에서는 가상 화면(Xvfb)을 씁니다.
 - **PC를 쓰는 사람을 방해하지 않습니다:** 창은 아주 작게 떴다가 곧바로 화면 밖으로 옮겨지고(포커스를 뺏지 않음), 소리를 내지 않고, 마우스를 가두지 않고, 저장된 창 설정(전체 화면 등)을 적용하지 않습니다. 그래서 화면 확인은 이 두 도구로만 하고 `godot`를 창 모드로 직접 띄우지 않습니다.
 - GPU가 없는 환경에서는 OpenGL(Compatibility) 렌더러로 대체됩니다. 배치와 UI는 확인할 수 있지만, 조명과 후처리는 실제 PC 화면과 다를 수 있습니다.
+- `--combat`은 늘 싸우는 중(전투 대기 자세·무기·소품), `--camera-distance=2.2`는 자유 시점 거리입니다. 예: `tools/capture.sh build/screenshots/low 200 --single --character=chen_qianyu --combat --free-face --camera-distance=2.0 --pitch=35`(아래에서 올려다보기).
+
+## 성능 재기
+```bash
+tools/perf.sh build/perf/combat.tsv 60 --single --autoplay --third-person --character=pogranichnik   # 60초 동안 1초마다 기록
+```
+- 화면 밖 창에서 수직 동기화를 끄고 돌리며(`src/dev/perf_log.gd`) 1초마다 FPS, 프레임 시간(평균/최대), 엔진 처리·물리 시간, GPU 시간, 그리기 호출·물체·삼각형 수, 노드·적·이펙트 수, 비디오·일반 메모리를 적습니다. 25ms가 넘은 프레임은 그때 상황(구역, 내 동작, 시간 배율)과 함께 따로 적고, 마지막 줄에 전체 평균을 씁니다.
+- 렌더링 단계별 GPU 시간은 `build/perf.log`(`--gpu-profile`)에 남습니다.
+- 2026-10-31 기준(이 PC): 궁극기 파티클 1,500개 무렵이 가장 무겁습니다. 파티클 계산을 표로 바꾼 뒤 포그라니치니크 궁극기는 프레임 평균 72ms → 16ms, 60초 전투의 느린 프레임은 122개 → 2개.
